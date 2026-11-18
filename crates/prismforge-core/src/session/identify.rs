@@ -1,7 +1,7 @@
+use prismforge_effects::Rgb;
 use serde::{Deserialize, Serialize};
 
 use crate::backend::RgbBackend;
-use crate::color::Rgb;
 use crate::connection::StateReason;
 use crate::device::DeviceRef;
 use crate::error::BackendError;

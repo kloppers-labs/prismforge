@@ -1,9 +1,9 @@
 use std::fmt;
 
+use prismforge_effects::Rgb;
 use serde::{Deserialize, Serialize};
 
 use crate::capabilities::DeviceCapabilities;
-use crate::color::Rgb;
 use crate::identity::{DeviceFingerprint, ZoneShape};
 
 /// Persistent PrismForge reference to a physical device; never a backend runtime ID.

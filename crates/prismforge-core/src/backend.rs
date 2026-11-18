@@ -1,9 +1,9 @@
 use std::future::Future;
 
+use prismforge_effects::Rgb;
 use serde::{Deserialize, Serialize};
 
 use crate::capabilities::DeviceCapabilities;
-use crate::color::Rgb;
 use crate::connection::{ConnectionState, LossCause};
 use crate::device::{BackendOrigin, DeviceRef};
 use crate::error::BackendError;

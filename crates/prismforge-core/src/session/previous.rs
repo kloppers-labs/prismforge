@@ -1,5 +1,6 @@
+use prismforge_effects::Rgb;
+
 use crate::backend::RgbBackend;
-use crate::color::Rgb;
 use crate::device::{DeviceDescriptor, DeviceRef};
 use crate::error::BackendError;
 use crate::inventory::Inventory;
