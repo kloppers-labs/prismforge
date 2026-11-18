@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
 use tokio::sync::{mpsc, watch};
@@ -13,11 +13,13 @@ use crate::inventory::{Inventory, InventoryDevice};
 use crate::session::diagnostics::{
     Counters, Diagnostics, ErrorRecord, EventRing, Operation, SessionEventKind,
 };
-use crate::session::identify::{
-    IdentifyOutcome, IdentifyPlan, RestoreError, RestoreFailure, RestoreOutcome,
-};
-use crate::session::snapshot::{IdentifyTarget, SessionDevice, SessionSnapshot};
-use crate::session::{Command, IdentifyRequest, Reply, SessionConfig, SessionError};
+use crate::session::identify::{IdentifyOutcome, IdentifyPlan, RestoreFailure, RestoreOutcome};
+use crate::session::snapshot::SessionSnapshot;
+use crate::session::{Command, Reply, SessionConfig, SessionError};
+
+mod identifying;
+mod publishing;
+mod restoring;
 
 /// Sole owner of a backend: runs every backend call to completion in one task.
 pub struct Session<B> {
@@ -323,156 +325,6 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         self.link = Link::Idle { reason: None };
     }
 
-    async fn start_identify(&mut self, request: IdentifyRequest, reply: Reply<IdentifyOutcome>) {
-        if self.tainted.is_some() && self.identify.is_none() && matches!(self.link, Link::Connected)
-        {
-            let _ = self.refresh_or_lose(1).await;
-        }
-        let plan = match self.plan_identify(&request) {
-            Ok(plan) => plan,
-            Err(error) => {
-                let _ = reply.send(Err(error));
-                return;
-            }
-        };
-        self.push(SessionEventKind::IdentifyStarted {
-            device: plan.device.clone(),
-            zone: plan.zone,
-        });
-        let Err(failed) = plan.light(&mut self.backend).await else {
-            self.identify = Some(ActiveIdentify {
-                plan,
-                until: Instant::now() + request.duration,
-                reply,
-            });
-            return;
-        };
-        let lost = self.lost_reason();
-        self.record_error(Operation::Identify, &failed.error, lost.clone());
-        let restore = match lost {
-            Some(reason) => not_restored_after_loss(&reason),
-            None if !failed.device_changed => RestoreOutcome::Unchanged,
-            None => self.restore(&plan).await,
-        };
-        self.end_identify(plan, reply, Some(failed.error), restore)
-            .await;
-    }
-
-    fn plan_identify(&self, request: &IdentifyRequest) -> Result<IdentifyPlan, SessionError> {
-        if let Some(active) = &self.identify {
-            return Err(SessionError::IdentifyInProgress {
-                device: active.plan.device.clone(),
-            });
-        }
-        let max = self.config.max_identify_duration;
-        if request.duration.is_zero() || request.duration > max {
-            return Err(SessionError::InvalidDuration {
-                max_ms: max.as_millis() as u64,
-            });
-        }
-        let inventory = match (&self.link, self.backend.inventory()) {
-            (Link::Connected, Some(inventory)) => inventory,
-            _ => return Err(BackendError::NotConnected.into()),
-        };
-        let device = &request.device;
-        let suspect = self.tainted.as_ref() == Some(device)
-            || (self.unrestored.contains(device)
-                && inventory
-                    .device(device)
-                    .is_some_and(|entry| entry.descriptor.capabilities.in_direct_mode()));
-        Ok(IdentifyPlan::new(inventory, device, request.zone, suspect)?)
-    }
-
-    async fn finish_identify(&mut self, active: ActiveIdentify) {
-        let restore = self.restore(&active.plan).await;
-        self.end_identify(active.plan, active.reply, None, restore)
-            .await;
-    }
-
-    /// Re-reads the inventory after any change, so the snapshot and the next identify never keep our own output.
-    async fn end_identify(
-        &mut self,
-        plan: IdentifyPlan,
-        reply: Reply<IdentifyOutcome>,
-        light_failure: Option<BackendError>,
-        restore: RestoreOutcome,
-    ) {
-        let changed = restore != RestoreOutcome::Unchanged;
-        let device = plan.device.clone();
-        self.reply_identify(plan, reply, light_failure, restore);
-        self.lose_if_disconnected();
-        if changed && matches!(self.link, Link::Connected) {
-            self.tainted = Some(device);
-            let _ = self.refresh_or_lose(1).await;
-        }
-    }
-
-    async fn restore(&mut self, plan: &IdentifyPlan) -> RestoreOutcome {
-        let mut attempt = plan.restore(&mut self.backend, 0).await;
-        if let Err(failed) = &attempt
-            && failed.error == BackendError::StaleInventory
-            && self.lost_reason().is_none()
-        {
-            let steps_done = failed.steps_done;
-            attempt = match self.refresh_or_lose(1).await {
-                Err(error) => Err(RestoreError { steps_done, error }),
-                Ok(()) => {
-                    let inventory = self
-                        .inventory
-                        .as_ref()
-                        .expect("refresh stored an inventory");
-                    if let Err(failure) = plan.still_matches(inventory) {
-                        return partial_or_none(steps_done, failure);
-                    }
-                    plan.restore(&mut self.backend, steps_done).await
-                }
-            };
-        }
-        let failed = match attempt {
-            Ok(()) if plan.previous_state_known => return RestoreOutcome::Restored,
-            Ok(()) => {
-                return RestoreOutcome::PartlyRestored {
-                    failure: RestoreFailure::PreviousStateUnknown,
-                };
-            }
-            Err(failed) => failed,
-        };
-        let lost = self.lost_reason();
-        self.record_error(Operation::Restore, &failed.error, lost.clone());
-        let failure = match lost {
-            Some(reason) => RestoreFailure::ConnectionLost { reason },
-            None => RestoreFailure::Refused {
-                error: failed.error,
-            },
-        };
-        partial_or_none(failed.steps_done, failure)
-    }
-
-    fn reply_identify(
-        &mut self,
-        plan: IdentifyPlan,
-        reply: Reply<IdentifyOutcome>,
-        light_failure: Option<BackendError>,
-        restore: RestoreOutcome,
-    ) {
-        match restore {
-            RestoreOutcome::Restored => self.unrestored.retain(|device| device != &plan.device),
-            RestoreOutcome::Unchanged => {}
-            _ if self.unrestored.contains(&plan.device) => {}
-            _ => self.unrestored.push(plan.device.clone()),
-        }
-        let outcome = IdentifyOutcome {
-            device: plan.device,
-            zone: plan.zone,
-            light_failure,
-            restore,
-        };
-        self.push(SessionEventKind::IdentifyFinished {
-            outcome: outcome.clone(),
-        });
-        let _ = reply.send(Ok(outcome));
-    }
-
     fn lose_if_disconnected(&mut self) {
         if let (Link::Connected, Some(reason)) = (&self.link, self.lost_reason()) {
             self.connection_lost(reason, 1);
@@ -510,80 +362,9 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
     fn elapsed_ms(&self) -> u64 {
         self.started.elapsed().as_millis() as u64
     }
-
-    fn publish(&self) {
-        let connection = match &self.link {
-            Link::Idle { reason } => ConnectionState::Disconnected {
-                reason: reason.clone(),
-            },
-            Link::Connecting => ConnectionState::Connecting,
-            Link::Connected => self.backend.connection_state().clone(),
-            Link::Retrying {
-                attempt, reason, ..
-            } => ConnectionState::Retrying {
-                attempt: *attempt,
-                reason: reason.clone(),
-            },
-        };
-        let next = SessionSnapshot {
-            connection,
-            backend: self.backend.info(),
-            devices: self.devices(),
-            issues: self
-                .inventory
-                .as_ref()
-                .map(|inventory| inventory.issues.clone())
-                .unwrap_or_default(),
-            identify: self.identify.as_ref().map(|active| IdentifyTarget {
-                device: active.plan.device.clone(),
-                zone: active.plan.zone,
-            }),
-            diagnostics: Diagnostics {
-                last_error: self.last_error.clone(),
-                counters: self.counters,
-                events: self.events.to_vec(),
-            },
-        };
-        let refused = self.refused_busy.load(Ordering::Relaxed);
-        self.snapshot.send_modify(|snapshot| {
-            let published = snapshot.diagnostics.counters.commands_refused_busy;
-            *snapshot = next;
-            snapshot.diagnostics.counters.commands_refused_busy = published.max(refused);
-        });
-    }
-
-    fn devices(&self) -> Vec<SessionDevice> {
-        let Some(inventory) = &self.inventory else {
-            return Vec::new();
-        };
-        let available = matches!(self.link, Link::Connected);
-        let current = inventory.devices.iter().map(|device| (device, available));
-        let missing = inventory.missing.iter().filter_map(|reference| {
-            self.seen
-                .iter()
-                .find(|seen| seen.identity.reference() == Some(reference))
-                .map(|device| (device, false))
-        });
-        current
-            .chain(missing)
-            .map(|(device, available)| SessionDevice {
-                identity: device.identity.clone(),
-                descriptor: device.descriptor.clone(),
-                available,
-            })
-            .collect()
-    }
 }
 
-fn partial_or_none(steps_done: usize, failure: RestoreFailure) -> RestoreOutcome {
-    if steps_done == 0 {
-        RestoreOutcome::NotRestored { failure }
-    } else {
-        RestoreOutcome::PartlyRestored { failure }
-    }
-}
-
-fn not_restored_after_loss(reason: &StateReason) -> RestoreOutcome {
+pub(super) fn not_restored_after_loss(reason: &StateReason) -> RestoreOutcome {
     RestoreOutcome::NotRestored {
         failure: RestoreFailure::ConnectionLost {
             reason: reason.clone(),

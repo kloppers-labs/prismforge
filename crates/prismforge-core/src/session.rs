@@ -1,5 +1,6 @@
 mod diagnostics;
 mod identify;
+mod previous;
 mod reconnect;
 mod runner;
 mod snapshot;

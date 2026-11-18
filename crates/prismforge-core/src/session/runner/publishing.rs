@@ -1,0 +1,72 @@
+use std::sync::atomic::Ordering;
+
+use crate::backend::RgbBackend;
+use crate::connection::ConnectionState;
+use crate::session::diagnostics::Diagnostics;
+use crate::session::runner::{Link, Session};
+use crate::session::snapshot::{IdentifyTarget, SessionDevice, SessionSnapshot};
+
+impl<B: RgbBackend + Send + 'static> Session<B> {
+    pub(super) fn publish(&self) {
+        let connection = match &self.link {
+            Link::Idle { reason } => ConnectionState::Disconnected {
+                reason: reason.clone(),
+            },
+            Link::Connecting => ConnectionState::Connecting,
+            Link::Connected => self.backend.connection_state().clone(),
+            Link::Retrying {
+                attempt, reason, ..
+            } => ConnectionState::Retrying {
+                attempt: *attempt,
+                reason: reason.clone(),
+            },
+        };
+        let next = SessionSnapshot {
+            connection,
+            backend: self.backend.info(),
+            devices: self.devices(),
+            issues: self
+                .inventory
+                .as_ref()
+                .map(|inventory| inventory.issues.clone())
+                .unwrap_or_default(),
+            identify: self.identify.as_ref().map(|active| IdentifyTarget {
+                device: active.plan.device.clone(),
+                zone: active.plan.zone,
+            }),
+            diagnostics: Diagnostics {
+                last_error: self.last_error.clone(),
+                counters: self.counters,
+                events: self.events.to_vec(),
+            },
+        };
+        let refused = self.refused_busy.load(Ordering::Relaxed);
+        self.snapshot.send_modify(|snapshot| {
+            let published = snapshot.diagnostics.counters.commands_refused_busy;
+            *snapshot = next;
+            snapshot.diagnostics.counters.commands_refused_busy = published.max(refused);
+        });
+    }
+
+    fn devices(&self) -> Vec<SessionDevice> {
+        let Some(inventory) = &self.inventory else {
+            return Vec::new();
+        };
+        let available = matches!(self.link, Link::Connected);
+        let current = inventory.devices.iter().map(|device| (device, available));
+        let missing = inventory.missing.iter().filter_map(|reference| {
+            self.seen
+                .iter()
+                .find(|seen| seen.identity.reference() == Some(reference))
+                .map(|device| (device, false))
+        });
+        current
+            .chain(missing)
+            .map(|(device, available)| SessionDevice {
+                identity: device.identity.clone(),
+                descriptor: device.descriptor.clone(),
+                available,
+            })
+            .collect()
+    }
+}
