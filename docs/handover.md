@@ -57,7 +57,7 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18,
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 173 tests. 29 in `prismforge-effects`, 72 in `prismforge-core` (31 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 175 tests. 29 in `prismforge-effects`, 74 in `prismforge-core` (33 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 25 interface tests |
@@ -116,8 +116,8 @@ Not done:
 - **No effects screen yet.** The engine, the scheduler and ownership exist only as session commands. Task 4b adds the interface.
 - **No real-machine evidence for effects.** All scheduler numbers come from simulated time. Real frame timing and CPU use are not measured.
 - **Colour frames are not confirmed.** The client does not read the acknowledgement of a colour write. "Frames written" counts frames sent without an error, not frames OpenRGB applied.
-- **Direct mode may be enabled more often than needed.** After each inventory refresh, PrismForge enables direct mode again on each effect device that does not report Direct Mode. If OpenRGB does not report it after "set custom mode", this repeats after every refresh. The fake server never reports it.
-- **A backend call in progress still delays a command.** A command waits at most for the one call in progress, also inside a tick: direct mode and each frame are separate calls. A hung call waits for the client timeout (2 seconds by default).
+- **Direct mode may be enabled more often than needed.** After each inventory refresh, PrismForge enables direct mode again on each effect device that does not report Direct Mode. If OpenRGB does not report it after "set custom mode", this repeats after every refresh. The fake server never reports it. On such a server, a fresh capture of a device in a per-LED mode would also remember PrismForge's own last frame as the colours to restore, and a later stop would report "restored" for that frame.
+- **A backend call in progress still delays a command.** While effects run, a command waits at most for the one output call in progress: direct mode and each frame are separate calls. Other work still runs several calls before the next command: the end of an identify (restore steps and a refresh) and a reconnect (connect and a refresh). A hung call waits for the client timeout (2 seconds by default).
 - **Shutdown restore stops after 5 seconds.** Devices not restored by then keep the last effect frame. The session keeps their remembered state for the next take-over until the inventory reports another mode than Direct Mode. Until then, identify reports "previous state unknown" for them.
 - **External control is only the user's statement.** PrismForge cannot see the Effects plugin or any other writer. While the user declares a device external, PrismForge sends it nothing: effects, identify and hardware-mode selection are refused.
 - **Ownership and the scene are in memory only.** They end with the session. Profiles come later.
