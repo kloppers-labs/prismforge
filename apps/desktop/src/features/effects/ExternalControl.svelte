@@ -12,7 +12,7 @@
   let label = $derived(ref === null ? null : declaredBy(session, ref));
   let identifying = $derived(ref !== null && session.identify?.device === ref);
   let program = $state("");
-  let feedback = $derived(effects.externalFeedback);
+  let problem = $derived(effects.externalProblem);
 
   function declare(event: SubmitEvent) {
     event.preventDefault();
@@ -56,8 +56,8 @@
       <p id="external-blocked" class="hint">Off while an identify runs on this device.</p>
     {/if}
   {/if}
-  {#if feedback?.kind === "failed"}
-    <FailureNotice error={feedback.error} />
+  {#if problem}
+    <FailureNotice error={problem} />
   {/if}
 </section>
 

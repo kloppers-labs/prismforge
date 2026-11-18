@@ -75,7 +75,7 @@ test("applies_the_instance_the_user_configured", async () => {
       },
     },
   ]);
-  expect(await screen.findByText(/^PrismForge now runs Breathing on Addressable Header 1\./)).toBeTruthy();
+  expect(await screen.findByText(/^PrismForge accepted Breathing for Addressable Header 1\./)).toBeTruthy();
 });
 
 test("palette_colours_can_be_added_moved_and_removed_within_the_limits", async () => {
@@ -315,7 +315,7 @@ test("selects_a_hardware_mode_and_records_declarations", async () => {
   await chooseTarget("Demo Graphics Card");
 
   await fireEvent.click(button("Use Breathing"));
-  expect(await screen.findByText(/^Hardware mode Breathing selected\. The demo backend accepted the request\./)).toBeTruthy();
+  expect(await screen.findByText(/^The demo backend accepted the request to use hardware mode Breathing\./)).toBeTruthy();
   await type(screen.getByRole("textbox", { name: /Program name/ }), "OpenRGB Effects plugin");
   await fireEvent.click(button("Another program controls this device"));
   await chooseTarget("Demo Memory Module", "Whole device", 1);
@@ -339,5 +339,5 @@ test("sets_the_frame_rate_within_the_range_from_rust", async () => {
   await fireEvent.click(button("Set frame rate"));
 
   expect(commandsNamed(shell, "set_frame_rate")[0]?.args).toEqual({ frameRate: 75 });
-  expect(await screen.findByText(/PrismForge uses 60 frames per second, the nearest allowed rate\./)).toBeTruthy();
+  expect(await screen.findByText(/^You asked for 75 frames per second\. PrismForge set the nearest allowed rate, 60\./)).toBeTruthy();
 });

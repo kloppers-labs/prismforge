@@ -23,7 +23,7 @@
         onchange={() => onchoose(effect.id)}
       />
       <label class="name" for="effect-{effect.id}">{effect.label}</label>
-      {#if effect.id === running}<span class="tag">Runs here now</span>{/if}
+      {#if effect.id === running}<span class="tag">On this target</span>{/if}
       <p id="effect-{effect.id}-about" class="about">{effect.description}</p>
     </div>
   {/each}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
-  import { serverName } from "../connection/wording";
+  import { capitalise, serverName } from "../connection/wording";
   import { reference } from "../devices/present";
   import FailureNotice from "./FailureNotice.svelte";
   import { modeBlocked, outputOf } from "./present";
@@ -57,7 +57,9 @@
     <FailureNotice error={feedback.error} />
   {/if}
   <div class="result" role="status" aria-label="Hardware mode result">
-    {#if feedback?.kind === "done"}<p>{feedback.text}</p>{/if}
+    {#if feedback?.kind === "selected"}
+      <p>{capitalise(feedback.server)} accepted the request to use hardware mode {feedback.name}. PrismForge cannot confirm what the device shows.</p>
+    {/if}
   </div>
 </section>
 

@@ -24,7 +24,7 @@ export class AppState {
   selected = $state<string | null>(null);
   diagnosticsOpen = $state(false);
   screen = $state<Screen>("devices");
-  readonly effects = new EffectsState(() => this.session);
+  readonly effects = new EffectsState(() => this.view);
 
   get session() {
     return this.view.session;
@@ -54,6 +54,7 @@ export class AppState {
   }
 
   disconnect() {
+    this.effects.leave();
     return this.run("disconnect", api.disconnect);
   }
 

@@ -1,4 +1,9 @@
 import { fireEvent, screen, within } from "@testing-library/svelte";
+import type { EffectInstance } from "../lib/api/bindings/EffectInstance";
+import type { OutputCondition } from "../lib/api/bindings/OutputCondition";
+import type { OutputOwner } from "../lib/api/bindings/OutputOwner";
+import type { OutputTarget } from "../lib/api/bindings/OutputTarget";
+import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import { catalog } from "./fixtures/catalog";
 import { solidPreview } from "./fixtures/previews";
 
@@ -38,4 +43,24 @@ export function button(name: string | RegExp) {
 
 export function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function withoutEffectsOn(session: SessionSnapshot, device: string): SessionSnapshot {
+  const next = structuredClone(session);
+  next.output.scene.assignments = next.output.scene.assignments.filter((assignment) => assignment.target.device !== device);
+  next.output.devices = next.output.devices.filter((output) => output.device !== device);
+  return next;
+}
+
+export function withOwner(session: SessionSnapshot, device: string, owner: OutputOwner): SessionSnapshot {
+  const next = withoutEffectsOn(session, device);
+  next.output.devices.push({ device, owner, condition: "Idle" });
+  return next;
+}
+
+export function withEffect(session: SessionSnapshot, target: OutputTarget, effect: EffectInstance, condition: OutputCondition): SessionSnapshot {
+  const next = withoutEffectsOn(session, target.device);
+  next.output.scene.assignments.push({ target, effect });
+  next.output.devices.push({ device: target.device, owner: "Effect", condition });
+  return next;
 }

@@ -20,6 +20,7 @@
 
   onMount(() => {
     effects.load();
+    return () => effects.leave();
   });
 </script>
 

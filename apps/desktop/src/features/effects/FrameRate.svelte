@@ -52,8 +52,12 @@
     <p id="frame-rate-problem" class="problem">{problem}</p>
   {/if}
   <div class="result" role="status" aria-label="Frame rate result">
-    {#if feedback?.kind === "done"}
-      <p>{feedback.text}</p>
+    {#if feedback?.kind === "set"}
+      <p>
+        {feedback.used === feedback.requested
+          ? `PrismForge set the frame rate to ${feedback.used} frames per second.`
+          : `You asked for ${feedback.requested} frames per second. PrismForge set the nearest allowed rate, ${feedback.used}.`}
+      </p>
     {:else if feedback?.kind === "failed"}
       <p>{failureText(feedback.error)}</p>
     {/if}

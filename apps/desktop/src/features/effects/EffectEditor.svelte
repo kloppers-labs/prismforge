@@ -6,7 +6,7 @@
   import ControlField from "./controls/ControlField.svelte";
   import EffectPicker from "./EffectPicker.svelte";
   import FailureNotice from "./FailureNotice.svelte";
-  import { applyBlocked, runningOn, stopBlocked, stopText, targetLeds } from "./present";
+  import { applyBlocked, stopBlocked, stopText, targetLeds } from "./present";
   import PreviewPanel from "./PreviewPanel.svelte";
   import type { EffectsState } from "./state.svelte";
 
@@ -19,12 +19,12 @@
   }: { effects: EffectsState; catalog: EffectCatalog; session: SessionSnapshot; device: SessionDevice; zone: number | null } = $props();
 
   let target = $derived(effects.target);
-  let running = $derived(target ? runningOn(session, target) : null);
+  let running = $derived(effects.running);
   let runningLabel = $derived(catalog.effects.find((effect) => effect.id === running?.effect.effect)?.label ?? null);
   let blocked = $derived(applyBlocked(session, device, zone));
   let stopReason = $derived(target ? stopBlocked(session, target) : null);
   let checked = $derived(effects.checked);
-  let live = $derived(running !== null && running.effect.effect === effects.effect);
+  let assigned = $derived(running !== null && running.effect.effect === effects.effect);
   let server = $derived(serverName(session));
   let feedback = $derived(effects.feedback);
 </script>
@@ -58,10 +58,12 @@
       connected. Closing the window quits PrismForge and stops its effects. PrismForge then asks {server} to put back the
       earlier lighting. Nothing is saved yet. After PrismForge starts again, no effect runs until you apply it again.
     </p>
-    {#if live}
-      <p class="hint">This effect runs here now. Changes apply as you make them, and the animation keeps its timing.</p>
-    {:else if runningLabel && effects.effect}
-      <p class="hint">{runningLabel} runs here now. Apply effect replaces it.</p>
+    {#if effects.canAutoApply}
+      <p class="hint">This is the effect on this target. Changes apply as you make them, and the animation keeps its timing.</p>
+    {:else if assigned && blocked === null}
+      <p class="hint">This is the effect on this target. Press Apply effect to send your changes.</p>
+    {:else if runningLabel && effects.effect && !assigned && blocked === null}
+      <p class="hint">{runningLabel} is the effect on this target. Apply effect replaces it.</p>
     {/if}
     <div class="buttons">
       <button
@@ -96,7 +98,7 @@
     {/if}
     <div class="result" role="status" aria-label="Effect result">
       {#if feedback?.kind === "applied"}
-        <p class="outcome">PrismForge now runs {feedback.effect} on {feedback.target}. It stops when PrismForge closes.</p>
+        <p class="outcome">PrismForge accepted {feedback.label} for {feedback.targetLabel}. The Output line above shows whether it runs.</p>
       {:else if feedback?.kind === "stopped"}
         {@const text = stopText(feedback.outcome, server)}
         <div class="outcome" class:unsettled={!text.settled}>
