@@ -89,7 +89,7 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 ## Matching on load, apply and import
 
-1. **The registry is the identity source.** At start the backend is seeded with `devices.json`. The session publishes the registry after each refresh that changes it, and the store writes it. A device with a serial keeps its `DeviceRef` after a restart even when its location changed.
+1. **The registry is the identity source.** At start the backend is seeded with `devices.json`. The session publishes the registry after each refresh that changes it. `keep_registry` writes the current registry as soon as it starts and then every change, so it may start before or after the connect. A device with a serial keeps its `DeviceRef` after a restart even when its location changed.
 2. **A profile device is matched with the registry rules.** Its identifying fields go through the same `reconcile` as the registry: the full fields first, then serial without location. PrismForge never matches by runtime ID or list position.
 3. **An exported device has no serial and no location.** It is matched on kind, vendor, model and zones only.
 4. **Each stored device gets one status.** Resolved, unavailable (known in this session but not present now), missing, or ambiguous. Two current devices that look the same make every candidate ambiguous. Two stored devices that would match one current device are both ambiguous.
@@ -104,18 +104,30 @@ A test checks the exported bytes for the serial, the location, the user's device
 5. **Apply changes only what the profile names.** Other devices keep their owner.
 6. **Not connected:** apply is refused with `ApplyError::NotConnected`, unless the profile is the one marked to apply on connect. Then the result is "waiting for connection".
 
-## Capture
+## Capture and update
 
-Capture reads the snapshot: the scene, hardware modes, external statements and the frame rate. A device label is the user's name from the registry, or the model.
+Capture reads the snapshot: the scene, hardware modes, external statements and the frame rate. A device label is the user's name from the registry, or the stored label, or the model.
 
-When capture updates a profile, or when the user creates a profile after applying one, it keeps from the stored profile:
+**One rule for updates: an update never removes what the user did not remove.** An update may replace or remove a stored setting only where the session shows that the user changed its target in this session: the user applied another effect, stopped the effect, chose a hardware mode, or declared or handed back another program.
 
-- every device that is missing or ambiguous now, with all its settings, unchanged;
-- every unavailable device the session has no owner for, with all its settings;
-- the settings of a present device that this version cannot run (unknown effect or control, changed mode list), where the session has nothing of its own;
-- unknown fields of every setting that the session still has unchanged.
+1. **The active profile.** The profile last applied, created or updated in a session is the active profile of that session. `StoreSummary::active` shows it. A new session has none.
+2. **Update needs the active profile.** `update_from_session` refuses any other profile with `StoreError::NotActive`, which names the active one. A profile that was never applied in this session would otherwise take the whole session state, so the user would lose settings without seeing why. To save the session state under a new name, the user creates a profile instead.
+3. **The session history.** After an apply, PrismForge remembers which settings ran, which were skipped and why, and the owners and effects of every device right after the apply. After each create or update it remembers the session state again.
+4. **Per stored setting:**
 
-For a present device the session is the truth. An effect the user stopped is gone from the profile after an update.
+| Situation | Result |
+|---|---|
+| The device is missing or ambiguous | Kept unchanged (`Kept`, reason missing or ambiguous) |
+| The session runs exactly this setting | Kept as stored, with its unknown fields (`Unchanged`) |
+| Nothing on the device changed since the apply or the last save | Kept unchanged (`Kept`, reason unavailable, or not running with the skip reason) |
+| The user changed the device and the session has another state on this target | Removed from the profile (`Replaced`); the new state is `Added` |
+| The user changed the device, the session has nothing on this target, and the setting ran from this profile | Removed (`Removed`) |
+| The user changed the device, the session has nothing on this target, and the setting never ran | Kept (`Kept`, not running) |
+
+5. **Every skip reason keeps the setting.** Missing, ambiguous, unavailable, declared external, no Direct Mode, mode list changed, not available in this version, and refused by the session. A state that already blocked a setting when it was applied (for example a program the user declared before the apply) does not replace it, and is not added on top of it.
+6. **The result lists every setting.** `Saved { id, changes }` says for each setting: unchanged, added, replaced, removed, or kept with its reason. The interface can show it before or after the save.
+7. **Create from the session** uses the active profile as its base in the same way, so its unresolved and skipped settings move into the new profile.
+8. **Unknown fields stay.** A kept or unchanged setting keeps all its unknown fields. A linked device keeps its unknown fields and the unknown fields of each zone with the same name and position; it gets today's identifying fields.
 
 ## Durable writes and recovery
 
@@ -124,6 +136,8 @@ Every write:
 1. writes the new content to `<file>.tmp` and syncs it to disk;
 2. if the current file is valid, copies it to `<file>.bak` the same way (temporary file, sync, rename);
 3. renames `<file>.tmp` over `<file>`. On Unix the folder is synced after the rename. Windows cannot open a folder this way, so that step is skipped there.
+
+**The store never writes a file its loader would refuse.** It checks the encoded size against the 4 MiB limit before it writes anything and returns `StoreError::TooLarge`; the old file stays. The same check covers profiles, the registry, settings and an export. An import that fits the 1 MiB import limit but would grow past 4 MiB in the stored form is refused the same way, before anything is stored. The registry is checked before it is written.
 
 If any step fails, the temporary file is removed and the old file stays in place. The store keeps the old content in memory and returns `StoreError::Write` with the step. The temporary file has a fixed name, so failed writes never pile up.
 

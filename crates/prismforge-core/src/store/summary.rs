@@ -14,6 +14,8 @@ pub struct StoreSummary {
     /// Profiles that need a newer PrismForge; their files are left as they are.
     pub unreadable: Vec<UnreadableProfile>,
     pub apply_on_connect: Option<ProfileId>,
+    /// The profile applied or saved in the session the summary was asked for; updates need it.
+    pub active: Option<ProfileId>,
     /// What the store did to damaged or missing files since it opened, and failed background writes.
     pub notices: Vec<StoreNotice>,
 }

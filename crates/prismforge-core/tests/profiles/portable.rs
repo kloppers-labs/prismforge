@@ -83,7 +83,8 @@ async fn export_contains_no_private_machine_data() {
     let id = profiles
         .create_from_session(&handle, "Shared")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     let local = dir.read(&format!("profiles/{id}.json"));
     let destination = dir.file("Shared.prismforge.json");
 
@@ -127,7 +128,8 @@ async fn import_matches_by_model_and_never_picks_one_of_two_identical_devices() 
     let id = profiles
         .create_from_session(&first, "Twin")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     let file = source.file("twin.json");
     profiles.export_to(&id, file.clone()).await.expect("export");
     drop(first);
@@ -305,7 +307,8 @@ async fn loading_and_importing_write_nothing_to_hardware() {
     let id = profiles
         .create_from_session(&first, "Marked")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     profiles
         .set_apply_on_connect(Some(id.clone()))
         .await

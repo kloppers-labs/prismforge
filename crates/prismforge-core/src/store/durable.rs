@@ -42,6 +42,16 @@ pub(crate) struct StoreFile {
     pub name: String,
 }
 
+/// Why `write` left the file as it was.
+pub(crate) enum Unwritten {
+    /// The new content is larger than the loader accepts, so nothing was written.
+    TooLarge {
+        file: String,
+        bytes: u64,
+    },
+    Failed(WriteFailure),
+}
+
 pub(crate) enum Loaded<T> {
     Absent,
     Ready(T),
@@ -83,6 +93,21 @@ impl StoreFile {
 
 /// Writes a temporary file, syncs it, keeps the current file as backup if `valid`, then replaces it.
 pub(crate) fn write(
+    ops: &dyn FileOps,
+    file: &StoreFile,
+    bytes: &[u8],
+    valid: &dyn Fn(&[u8]) -> bool,
+) -> Result<(), Unwritten> {
+    if bytes.len() as u64 > STORE_FILE_LIMIT {
+        return Err(Unwritten::TooLarge {
+            file: file.name.clone(),
+            bytes: bytes.len() as u64,
+        });
+    }
+    replace_durably(ops, file, bytes, valid).map_err(Unwritten::Failed)
+}
+
+fn replace_durably(
     ops: &dyn FileOps,
     file: &StoreFile,
     bytes: &[u8],

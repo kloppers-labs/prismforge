@@ -150,9 +150,15 @@ pub struct SessionHandle {
     snapshot: Arc<watch::Sender<SessionSnapshot>>,
     known: Arc<watch::Sender<Vec<KnownDevice>>>,
     refused_busy: Arc<AtomicU64>,
+    id: u64,
 }
 
 impl SessionHandle {
+    /// Unique per session in this process; clones of one handle share it.
+    pub fn session_id(&self) -> u64 {
+        self.id
+    }
+
     pub fn snapshot(&self) -> SessionSnapshot {
         self.snapshot.borrow().clone()
     }
@@ -293,12 +299,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
     pub fn new(backend: B, config: SessionConfig) -> (SessionHandle, Self) {
         let (commands, receiver) = mpsc::channel(config.command_capacity.max(1));
         let refused_busy = Arc::new(AtomicU64::new(0));
+        static SESSIONS: AtomicU64 = AtomicU64::new(0);
         let session = Self::start(backend, config, receiver, refused_busy.clone());
         let handle = SessionHandle {
             commands,
             snapshot: session.publisher(),
             known: session.registry(),
             refused_busy,
+            id: SESSIONS.fetch_add(1, Ordering::Relaxed),
         };
         (handle, session)
     }

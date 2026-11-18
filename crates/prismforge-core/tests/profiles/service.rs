@@ -64,7 +64,8 @@ async fn apply_on_connect_is_off_by_default_and_applies_once_per_connect() {
     let id = profiles
         .create_from_session(&setup, "Bar")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     drop(setup);
 
     let (unmarked, controls) = demo().await;
@@ -232,7 +233,7 @@ async fn file_io_does_not_stall_frame_output() {
         "{command_latency:?}"
     );
     assert_eq!(
-        profiles.profile(&saved).await.expect("stored").name,
+        profiles.profile(&saved.id).await.expect("stored").name,
         "Slow disk"
     );
 }
@@ -373,7 +374,8 @@ async fn friendly_names_are_kept_and_label_captured_devices() {
     let id = profiles
         .create_from_session(&handle, "Named")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     drop(profiles);
     let reopened = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
 

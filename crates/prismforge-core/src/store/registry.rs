@@ -65,7 +65,7 @@ impl Registry {
             match self.device_mut(&device.reference) {
                 Some(entry) if entry.identity.fingerprint() == device.fingerprint => {}
                 Some(entry) => {
-                    entry.identity = keep_zone_extras(&entry.identity, identity);
+                    entry.identity = entry.identity.refreshed(&device.fingerprint);
                     changed = true;
                 }
                 None => {
@@ -125,13 +125,4 @@ impl RegistryDevice {
             .find(|entry| entry.zone == zone)
             .map(|entry| entry.name.as_str())
     }
-}
-
-fn keep_zone_extras(old: &StoredIdentity, mut new: StoredIdentity) -> StoredIdentity {
-    for (zone, previous) in new.zones.iter_mut().zip(&old.zones) {
-        if zone.name == previous.name {
-            zone.extra = previous.extra.clone();
-        }
-    }
-    new
 }

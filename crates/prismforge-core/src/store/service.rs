@@ -7,7 +7,10 @@ use tokio::sync::watch;
 use crate::connection::ConnectionState;
 use crate::device::DeviceRef;
 use crate::identity::KnownDevice;
-use crate::profile::{ApplyError, ApplyReport, Profile, ProfileId, apply, is_live};
+use crate::profile::{
+    ApplyError, ApplyReport, Captured, Profile, ProfileId, SessionHistory, SettingChange, apply,
+    is_live,
+};
 use crate::session::{SessionDevice, SessionEventKind, SessionHandle, SessionSnapshot};
 use crate::store::notice::{NoticeEvent, StoreNotice};
 use crate::store::summary::{
@@ -23,11 +26,27 @@ pub enum ApplyOutcome {
     WaitingForConnection,
 }
 
+/// A profile written from the session, with what happened to each setting.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct Saved {
+    pub id: ProfileId,
+    pub changes: Vec<SettingChange>,
+}
+
 /// The store for async callers: every file operation runs on a blocking thread, never in the session task.
 #[derive(Clone)]
 pub struct Profiles {
     store: Arc<Mutex<ProfileStore>>,
-    active: Arc<Mutex<Option<ProfileId>>>,
+    active: Arc<Mutex<Option<Active>>>,
+}
+
+/// The profile last applied or written from one session, with what it put into that session.
+#[derive(Debug, Clone)]
+struct Active {
+    session: u64,
+    profile: ProfileId,
+    history: SessionHistory,
 }
 
 impl Profiles {
@@ -43,8 +62,14 @@ impl Profiles {
 
     pub async fn summary(&self, handle: Option<&SessionHandle>) -> StoreSummary {
         let devices = handle.map(|handle| handle.snapshot().devices);
-        self.with(move |store| store.summary(devices.as_deref()))
-            .await
+        let active = handle
+            .and_then(|handle| self.active_in(handle))
+            .map(|active| active.profile);
+        let mut summary = self
+            .with(move |store| store.summary(devices.as_deref()))
+            .await;
+        summary.active = active;
+        summary
     }
 
     pub async fn details(
@@ -62,37 +87,53 @@ impl Profiles {
         self.with(move |store| store.profile(&id).cloned()).await
     }
 
-    /// Captures the session as a new profile; devices of the last applied profile that are not here now stay in it.
+    /// Captures the session as a new profile; settings of the active profile that are not running stay in it.
     pub async fn create_from_session(
         &self,
         handle: &SessionHandle,
         name: &str,
-    ) -> Result<ProfileId, StoreError> {
+    ) -> Result<Saved, StoreError> {
         let snapshot = handle.snapshot();
         let name = name.to_owned();
-        let active = self.active();
-        self.with(move |store| {
-            let base = active.and_then(|id| store.profile(&id).ok().cloned());
-            let profile = capture(store, &snapshot, &name, base.as_ref());
-            store.create(profile)
-        })
-        .await
+        let active = self.active_in(handle);
+        let (id, captured) = self
+            .with(move |store| {
+                let base = active
+                    .as_ref()
+                    .and_then(|active| store.profile(&active.profile).ok().cloned());
+                let history = active.map(|active| active.history).unwrap_or_default();
+                let captured = capture(store, &snapshot, &name, base.as_ref(), &history);
+                let id = store.create(captured.profile.clone())?;
+                Ok::<_, StoreError>((id, captured))
+            })
+            .await?;
+        Ok(self.activate(handle, id, captured))
     }
 
-    /// Captures the session into profile `id`, keeping its devices that are not here now.
+    /// Writes the session into the active profile `id`; only targets the user changed in this session change.
     pub async fn update_from_session(
         &self,
         handle: &SessionHandle,
         id: &ProfileId,
-    ) -> Result<(), StoreError> {
+    ) -> Result<Saved, StoreError> {
+        let active = self.active_in(handle);
+        let Some(active) = active.filter(|active| &active.profile == id) else {
+            return Err(StoreError::NotActive {
+                id: id.clone(),
+                active: self.active_in(handle).map(|active| active.profile),
+            });
+        };
         let snapshot = handle.snapshot();
-        let id = id.clone();
-        self.with(move |store| {
-            let base = store.profile(&id)?.clone();
-            let profile = capture(store, &snapshot, &base.name, Some(&base));
-            store.update(&id, profile)
-        })
-        .await
+        let key = id.clone();
+        let captured = self
+            .with(move |store| {
+                let base = store.profile(&key)?.clone();
+                let captured = capture(store, &snapshot, &base.name, Some(&base), &active.history);
+                store.update(&key, captured.profile.clone())?;
+                Ok::<_, StoreError>(captured)
+            })
+            .await?;
+        Ok(self.activate(handle, id.clone(), captured))
     }
 
     /// Replaces the content of profile `id`; its name stays.
@@ -112,8 +153,10 @@ impl Profiles {
     }
 
     pub async fn delete(&self, id: &ProfileId) -> Result<(), StoreError> {
-        let id = id.clone();
-        self.with(move |store| store.delete(&id)).await
+        let key = id.clone();
+        self.with(move |store| store.delete(&key)).await?;
+        self.lock_active().take_if(|active| &active.profile == id);
+        Ok(())
     }
 
     pub async fn set_apply_on_connect(&self, id: Option<ProfileId>) -> Result<(), StoreError> {
@@ -137,7 +180,11 @@ impl Profiles {
             return Ok(ApplyOutcome::WaitingForConnection);
         }
         let report = apply(handle, &profile).await?;
-        *self.active.lock().unwrap_or_else(PoisonError::into_inner) = Some(id.clone());
+        *self.lock_active() = Some(Active {
+            session: handle.session_id(),
+            profile: id.clone(),
+            history: SessionHistory::after_apply(&report, &handle.snapshot()),
+        });
         Ok(ApplyOutcome::Applied(report))
     }
 
@@ -209,9 +256,8 @@ impl Profiles {
 
     /// Writes the session's registry each time it changes, until the session stops.
     pub async fn keep_registry(&self, mut known: watch::Receiver<Vec<KnownDevice>>) {
-        known.mark_unchanged();
+        let mut ended = false;
         loop {
-            let ended = known.changed().await.is_err();
             let devices = known.borrow_and_update().clone();
             if let Err(StoreError::Write(failure)) = self.record_known_devices(devices).await {
                 self.with(move |store| {
@@ -225,14 +271,30 @@ impl Profiles {
             if ended {
                 return;
             }
+            ended = known.changed().await.is_err();
         }
     }
 
-    fn active(&self) -> Option<ProfileId> {
-        self.active
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+    fn active_in(&self, handle: &SessionHandle) -> Option<Active> {
+        self.lock_active()
             .clone()
+            .filter(|active| active.session == handle.session_id())
+    }
+
+    fn activate(&self, handle: &SessionHandle, id: ProfileId, captured: Captured) -> Saved {
+        *self.lock_active() = Some(Active {
+            session: handle.session_id(),
+            profile: id.clone(),
+            history: captured.history,
+        });
+        Saved {
+            id,
+            changes: captured.changes,
+        }
+    }
+
+    fn lock_active(&self) -> std::sync::MutexGuard<'_, Option<Active>> {
+        self.active.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     async fn with<T: Send + 'static>(
@@ -282,10 +344,11 @@ fn capture(
     snapshot: &SessionSnapshot,
     name: &str,
     base: Option<&Profile>,
-) -> Profile {
+    history: &SessionHistory,
+) -> Captured {
     let registry = store.registry();
     let names = |device: &DeviceRef| registry.device(device).and_then(|entry| entry.name.clone());
-    Profile::capture(snapshot, name, base, &names)
+    Profile::capture(snapshot, name, base, history, &names)
 }
 
 fn devices_of(handle: Option<&SessionHandle>) -> Vec<SessionDevice> {

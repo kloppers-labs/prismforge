@@ -23,7 +23,7 @@ use crate::profile::{
     encode_export, encode_local,
 };
 use crate::session::SessionDevice;
-use crate::store::durable::{Loaded, StoreFile};
+use crate::store::durable::{Loaded, StoreFile, Unwritten};
 
 pub use durable::{STORE_FILE_LIMIT, WriteFailure, WriteStep};
 pub use envelope::{
@@ -33,7 +33,7 @@ pub use envelope::{
 pub use files::{FileOps, StdFileOps};
 pub use notice::{NoticeEvent, StoreNotice};
 pub use registry::{Registry, RegistryDevice, ZoneName};
-pub use service::{ApplyOutcome, ConnectTrigger, Profiles};
+pub use service::{ApplyOutcome, ConnectTrigger, Profiles, Saved};
 pub use settings::Settings;
 pub use summary::{
     ExportReport, ExportedProfile, ImportError, ImportReport, ProfileDetails, ProfileSummary,
@@ -66,12 +66,39 @@ pub enum StoreError {
     UnknownZone { device: DeviceRef, zone: usize },
     #[error("the profile is not valid: {problem}")]
     InvalidProfile { problem: FileProblem },
+    #[error("the device list is not valid: {problem}")]
+    InvalidRegistry { problem: FileProblem },
+    /// An update needs the profile applied or saved in this session; `active` is the one that is.
+    #[error("profile {id} was not applied in this session")]
+    NotActive {
+        id: ProfileId,
+        active: Option<ProfileId>,
+    },
+    #[error("{file} would have {bytes} bytes; the limit is {limit}")]
+    TooLarge {
+        file: String,
+        bytes: u64,
+        limit: u64,
+    },
     #[error(transparent)]
     Write(#[from] WriteFailure),
     #[error("{file} could not be removed: {detail}")]
     Remove { file: String, detail: String },
     #[error("the store folder could not be prepared: {detail}")]
     Folder { detail: String },
+}
+
+impl From<Unwritten> for StoreError {
+    fn from(unwritten: Unwritten) -> Self {
+        match unwritten {
+            Unwritten::TooLarge { file, bytes } => Self::TooLarge {
+                file,
+                bytes,
+                limit: STORE_FILE_LIMIT,
+            },
+            Unwritten::Failed(failure) => Self::Write(failure),
+        }
+    }
 }
 
 /// Profiles, the known-device registry and settings in one folder; one file each, written durably.
@@ -363,6 +390,7 @@ impl ProfileStore {
                 })
                 .collect(),
             apply_on_connect: self.settings.apply_on_connect.clone(),
+            active: None,
             notices: self.notices.clone(),
         }
     }
@@ -453,6 +481,9 @@ impl ProfileStore {
     fn write_registry(&mut self, registry: Registry) -> Result<(), StoreError> {
         let file = self.registry_file();
         self.unlocked(&file, self.registry_lock.as_ref())?;
+        registry
+            .validate()
+            .map_err(|problem| StoreError::InvalidRegistry { problem })?;
         let bytes = envelope::seal(REGISTRY_FORMAT, Map::new(), &registry);
         durable::write(self.ops.as_ref(), &file, &bytes, &|bytes| {
             decode_registry(bytes).is_ok()

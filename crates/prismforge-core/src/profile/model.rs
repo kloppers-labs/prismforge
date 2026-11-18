@@ -172,6 +172,17 @@ impl StoredIdentity {
         }
     }
 
+    /// Today's identifying fields; unknown fields of a zone with the same name and position stay.
+    pub fn refreshed(&self, fingerprint: &DeviceFingerprint) -> Self {
+        let mut identity = Self::from_fingerprint(fingerprint);
+        for (zone, previous) in identity.zones.iter_mut().zip(&self.zones) {
+            if zone.name == previous.name {
+                zone.extra = previous.extra.clone();
+            }
+        }
+        identity
+    }
+
     /// True when the identity carries neither a serial nor a location, as in an exported profile.
     pub fn is_portable(&self) -> bool {
         self.serial.is_none() && self.location.is_none()

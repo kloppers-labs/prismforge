@@ -87,7 +87,8 @@ async fn preserves_missing_device_settings() {
     let id = profiles
         .create_from_session(&first, "Desk")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     let stored = profiles.profile(&id).await.expect("stored");
     drop(first);
     drop(profiles);
@@ -153,7 +154,8 @@ async fn applying_a_profile_skips_a_device_declared_external() {
     let id = profiles
         .create_from_session(&handle, "Gaming")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     handle.stop_effect(whole(&gpu)).await.expect("stop");
     handle
         .declare_external(gpu.clone(), PLUGIN.into())
@@ -195,7 +197,8 @@ async fn reused_runtime_ids_after_a_server_restart_keep_each_setting_on_its_devi
     let id = profiles
         .create_from_session(&first, "Pair")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     drop(first);
     drop(profiles);
     sleep(Duration::from_millis(100)).await;
@@ -247,7 +250,8 @@ async fn indistinguishable_devices_stay_unresolved_and_get_nothing() {
     let id = profiles
         .create_from_session(&first, "Twin")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     drop(first);
     sleep(Duration::from_millis(100)).await;
 
@@ -292,7 +296,8 @@ async fn a_changed_mode_list_or_lost_direct_mode_is_reported_not_misapplied() {
     let id = profiles
         .create_from_session(&first, "Modes")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     drop(first);
     sleep(Duration::from_millis(100)).await;
 
@@ -339,7 +344,8 @@ async fn an_effect_this_version_does_not_know_is_reported_and_kept() {
     let id = profiles
         .create_from_session(&handle, "Future")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     handle.stop_effect(whole(&gpu)).await.expect("stop");
     let mut edited = profiles.profile(&id).await.expect("stored");
     edited.assignments[0].effect = effect("fire", &[("heat", ControlValue::Number(3))]);
@@ -380,7 +386,8 @@ async fn applying_while_not_connected_is_refused_unless_marked_for_connect() {
     let id = profiles
         .create_from_session(&handle, "Any")
         .await
-        .expect("capture");
+        .expect("capture")
+        .id;
     handle.disconnect().await.expect("disconnect");
     wait_until(&handle, |snapshot| !is_connected(snapshot)).await;
 

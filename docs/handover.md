@@ -65,7 +65,7 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18,
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 220 tests at the end of Task 3a. 36 in `prismforge-effects` (5 for the preview), 103 in `prismforge-core` (35 of them for output and ownership, 26 for profiles and the store, 1 for the registry seed), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 228 tests at the end of Task 3a fix round 1. 36 in `prismforge-effects` (5 for the preview), 111 in `prismforge-core` (35 of them for output and ownership, 34 for profiles and the store, 1 for the registry seed), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 70 interface tests (22 for the effects screen, 10 for automatic re-apply, 6 for result texts, 6 for the preview) |
@@ -122,7 +122,7 @@ Not done:
 3. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
 4. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
 5. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
-6. Task 3b: Tauri commands and a profile screen on top of `Profiles`. The shell seeds each backend with `known_devices`, runs `keep_registry` and a `ConnectTrigger` watcher beside each session, and passes its per-user configuration folder.
+6. Task 3b: Tauri commands and a profile screen on top of `Profiles`. Order for each session: seed the backend with `Profiles::known_devices`, create the session, start `keep_registry` with `handle.known_devices()` (before or after connect; it writes the current registry at once), then connect. Run a `ConnectTrigger` watcher beside the session. The keeper holds only a receiver and ends with the session; the watcher holds a handle, so abort it before the session ends. Show the `changes` of create and update, and use `StoreSummary::active` to offer update only for the active profile. Pass the per-user configuration folder.
 
 ## Known issues
 
@@ -138,7 +138,7 @@ Not done:
 - **The desktop app does not save the list of known devices yet.** The store, the seeding and the read-back exist in Rust (Task 3a). Until the shell uses them (Task 3b), a device with a serial number that moved to a new location gets a new reference after an application restart.
 - **Profiles are not in the app yet.** The Rust core can save, apply, export and import them. The screen and the commands come with Task 3b.
 - **An export cannot tell identical devices apart.** It has no serial numbers or locations. On the importing computer, two devices of the same model with the same zones stay unresolved.
-- **A profile update replaces the settings of present devices with the session.** It keeps missing devices, devices the session has nothing for, and settings this version cannot run. An effect the user stopped on a present device is gone after the update.
+- **A profile update changes only what the user changed in this session.** It needs the active profile (the one applied or saved in this session) and refuses any other. Settings that apply skipped stay. An effect the user stopped after the apply is removed. The update returns a change list.
 - **Power loss is not tested.** The store syncs the temporary file before the rename, and the tests fail each write step, but no test cuts power.
 - **Native screenshots are incomplete.** `docs/screenshots/connection.png` is a capture of the native macOS window. The demo inventory, identify outcome, diagnostics and connection failure screenshots are missing: Stage Manager kept the background window as a thumbnail, and later the screen was locked. The window must be in front to capture it, which needs the owner's consent.
 - **The retry number is the next retry.** The session counts retries from 1 after each loss. The interface says "retry N comes next" and never counts failed attempts. The counters in Diagnostics count all connects of the session.

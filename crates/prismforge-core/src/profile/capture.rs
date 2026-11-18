@@ -1,292 +1,250 @@
 use crate::device::{DeviceDescriptor, DeviceRef};
 use crate::ownership::OutputOwner;
+use crate::profile::apply::ProfileItem;
+use crate::profile::changes::{Change, KeepReason, SettingChange};
+use crate::profile::history::{SessionHistory, Target};
 use crate::profile::model::{
     ExternalControl, Extra, ModeSelection, Profile, ProfileAssignment, ProfileDevice, StoredEffect,
     StoredIdentity,
 };
 use crate::profile::resolve::{DeviceStatus, resolve};
-use crate::scene::OutputTarget;
 use crate::session::SessionSnapshot;
 
+/// A profile built from the session, what happened to each setting, and the history for the next update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Captured {
+    pub profile: Profile,
+    pub changes: Vec<SettingChange>,
+    pub history: SessionHistory,
+}
+
 impl Profile {
-    /// The session's scene, hardware modes, declarations and frame rate as a profile named `name`.
-    /// From `base` it keeps devices that do not resolve now and stored settings this version cannot run.
+    /// The session's scene, modes, declarations and frame rate; a stored setting of `base` is only
+    /// replaced or removed where the user changed its target in this session, as `history` shows.
     pub fn capture(
         snapshot: &SessionSnapshot,
         name: &str,
         base: Option<&Profile>,
+        history: &SessionHistory,
         names: &dyn Fn(&DeviceRef) -> Option<String>,
-    ) -> Profile {
+    ) -> Captured {
+        let empty = Profile {
+            name: name.to_owned(),
+            frame_rate: snapshot.output.frame_rate,
+            devices: Vec::new(),
+            assignments: Vec::new(),
+            modes: Vec::new(),
+            external: Vec::new(),
+            extra: Extra::new(),
+        };
+        let base = base.unwrap_or(&empty);
         let mut capture = Capture {
             snapshot,
+            history,
             names,
-            profile: Profile {
-                name: name.to_owned(),
-                frame_rate: snapshot.output.frame_rate,
-                devices: Vec::new(),
-                assignments: Vec::new(),
-                modes: Vec::new(),
-                external: Vec::new(),
-                extra: base.map(|base| base.extra.clone()).unwrap_or_default(),
-            },
+            base,
+            statuses: resolve(base, &snapshot.devices)
+                .into_iter()
+                .map(|resolution| (resolution.reference, resolution.status))
+                .collect(),
+            session: session_settings(snapshot),
+            used: Vec::new(),
+            kept: Vec::new(),
+            keys: Vec::new(),
+            settings: Vec::new(),
+            changes: Vec::new(),
         };
-        capture.session_items();
-        if let Some(base) = base {
-            capture.keep_from(base);
+        capture.used = vec![false; capture.session.len()];
+        for setting in settings_of(base) {
+            capture.decide(setting);
         }
-        capture.profile
+        capture.add_session_settings();
+        let live = capture.session.iter().map(Setting::target).collect();
+        Captured {
+            profile: capture.build(name, base),
+            changes: capture.changes,
+            history: history.after_capture(snapshot, live),
+        }
     }
+}
+
+/// One stored setting of any kind; its `device` is a key in the profile it belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Setting {
+    Effect(ProfileAssignment),
+    Mode(ModeSelection),
+    External(ExternalControl),
 }
 
 struct Capture<'a> {
     snapshot: &'a SessionSnapshot,
+    history: &'a SessionHistory,
     names: &'a dyn Fn(&DeviceRef) -> Option<String>,
-    profile: Profile,
+    base: &'a Profile,
+    statuses: Vec<(DeviceRef, DeviceStatus)>,
+    session: Vec<Setting>,
+    used: Vec<bool>,
+    kept: Vec<Target>,
+    keys: Vec<(DeviceRef, DeviceRef)>,
+    settings: Vec<Setting>,
+    changes: Vec<SettingChange>,
 }
 
 impl Capture<'_> {
-    fn session_items(&mut self) {
-        let snapshot = self.snapshot;
-        for assignment in &snapshot.output.scene.assignments {
-            if self.list(&assignment.target.device) {
-                self.profile.assignments.push(ProfileAssignment {
-                    device: assignment.target.device.clone(),
-                    zone: assignment.target.zone,
-                    effect: StoredEffect::from_instance(&assignment.effect),
+    fn decide(&mut self, stored: Setting) {
+        let device = stored.device().clone();
+        let status = self
+            .statuses
+            .iter()
+            .find(|(reference, _)| reference == &device)
+            .map_or(DeviceStatus::Missing, |(_, status)| status.clone());
+        let linked = match &status {
+            DeviceStatus::Resolved { device } | DeviceStatus::Unavailable { device } => device,
+            DeviceStatus::Missing => return self.keep(stored, KeepReason::Missing, None),
+            DeviceStatus::Ambiguous => return self.keep(stored, KeepReason::Ambiguous, None),
+        };
+        let here = stored.with_device(linked);
+        let target = here.target();
+        if let Some(index) = self.unused_equal(&here) {
+            self.used[index] = true;
+            return self.keep_as(stored, Some(linked), Change::Unchanged);
+        }
+        let covered = self
+            .session
+            .iter()
+            .any(|setting| setting.target().overlaps(&target));
+        let untouched = self.history.untouched(linked, self.snapshot);
+        let change = match (untouched, covered) {
+            (false, true) => Change::Replaced,
+            (false, false) if self.history.was_live(&target) => Change::Removed,
+            _ => {
+                let reason = match status {
+                    DeviceStatus::Unavailable { .. } => KeepReason::Unavailable,
+                    _ => KeepReason::NotRunning {
+                        skipped: self.history.skip_reason(&target),
+                    },
+                };
+                self.kept.push(target);
+                return self.keep(stored, reason, Some(linked));
+            }
+        };
+        let label = self.stored_label(&device);
+        self.changes.push(SettingChange {
+            device,
+            label,
+            item: stored.item(),
+            change,
+        });
+    }
+
+    fn keep(&mut self, stored: Setting, reason: KeepReason, linked: Option<&DeviceRef>) {
+        self.keep_as(stored, linked, Change::Kept { reason });
+    }
+
+    fn keep_as(&mut self, stored: Setting, linked: Option<&DeviceRef>, change: Change) {
+        let key = self.key_for(stored.device(), linked);
+        let label = self.stored_label(stored.device());
+        self.changes.push(SettingChange {
+            device: key.clone(),
+            label,
+            item: stored.item(),
+            change,
+        });
+        self.settings.push(stored.with_device(&key));
+    }
+
+    /// Adds what the session runs that no stored setting kept; a state that blocked a kept setting stays out.
+    fn add_session_settings(&mut self) {
+        for (index, setting) in self.session.clone().into_iter().enumerate() {
+            let target = setting.target();
+            if self.used[index] || self.kept.iter().any(|kept| kept.overlaps(&target)) {
+                continue;
+            }
+            let device = setting.device().clone();
+            let label = (self.names)(&device)
+                .or_else(|| {
+                    self.descriptor(&device)
+                        .map(|descriptor| descriptor.name.clone())
+                })
+                .unwrap_or_default();
+            self.changes.push(SettingChange {
+                device,
+                label,
+                item: setting.item(),
+                change: Change::Added,
+            });
+            self.settings.push(setting);
+        }
+    }
+
+    fn build(&self, name: &str, base: &Profile) -> Profile {
+        let mut profile = Profile {
+            name: name.to_owned(),
+            frame_rate: self.snapshot.output.frame_rate,
+            devices: Vec::new(),
+            assignments: Vec::new(),
+            modes: Vec::new(),
+            external: Vec::new(),
+            extra: base.extra.clone(),
+        };
+        for stored in &base.devices {
+            let Some((_, key)) = self.keys.iter().find(|(from, _)| from == &stored.reference)
+            else {
+                continue;
+            };
+            if self.uses(key) {
+                profile.devices.push(self.refreshed(stored, key));
+            }
+        }
+        for setting in &self.settings {
+            let device = setting.device();
+            if profile.device(device).is_none()
+                && let Some(descriptor) = self.descriptor(device)
+            {
+                profile.devices.push(ProfileDevice {
+                    reference: device.clone(),
+                    label: (self.names)(device).unwrap_or_else(|| descriptor.name.clone()),
+                    identity: StoredIdentity::from_fingerprint(&descriptor.fingerprint()),
                     extra: Extra::new(),
                 });
             }
-        }
-        for output in &snapshot.output.devices {
-            match &output.owner {
-                OutputOwner::HardwareMode { mode } => {
-                    let name = self
-                        .descriptor(&output.device)
-                        .and_then(|descriptor| descriptor.capabilities.modes.get(*mode))
-                        .map(|descriptor| descriptor.name.clone());
-                    if let Some(name) = name.filter(|_| self.list(&output.device)) {
-                        self.profile.modes.push(ModeSelection {
-                            device: output.device.clone(),
-                            index: *mode,
-                            name,
-                            extra: Extra::new(),
-                        });
-                    }
-                }
-                OutputOwner::External { label } if self.list(&output.device) => {
-                    self.profile.external.push(ExternalControl {
-                        device: output.device.clone(),
-                        label: label.clone(),
-                        extra: Extra::new(),
-                    });
-                }
-                OutputOwner::External { .. } | OutputOwner::Effect => {}
+            match setting.clone() {
+                Setting::Effect(assignment) => profile.assignments.push(assignment),
+                Setting::Mode(mode) => profile.modes.push(mode),
+                Setting::External(external) => profile.external.push(external),
             }
         }
+        profile
     }
 
-    fn keep_from(&mut self, base: &Profile) {
-        for resolution in resolve(base, &self.snapshot.devices) {
-            let Some(stored) = base.device(&resolution.reference) else {
-                continue;
-            };
-            match &resolution.status {
-                DeviceStatus::Resolved { device } => self.keep_unrunnable(base, stored, device),
-                DeviceStatus::Unavailable { device } if !self.owns(device) => {
-                    self.keep_all(base, stored, Some(device));
-                }
-                DeviceStatus::Unavailable { device } => self.keep_unrunnable(base, stored, device),
-                DeviceStatus::Missing | DeviceStatus::Ambiguous => {
-                    self.keep_all(base, stored, None)
-                }
-            }
-        }
-    }
-
-    /// Keeps the stored settings this version cannot run where the session has nothing of its own.
-    fn keep_unrunnable(&mut self, base: &Profile, stored: &ProfileDevice, device: &DeviceRef) {
-        self.carry_extras(base, stored, device);
-        let descriptor = self.descriptor(device).cloned();
-        for assignment in base.items_of(&stored.reference) {
-            let target = OutputTarget {
-                device: device.clone(),
-                zone: assignment.zone,
-            };
-            if assignment.effect.instance().is_err() && !self.covers(&target) {
-                self.list(device);
-                self.profile.assignments.push(ProfileAssignment {
-                    device: device.clone(),
-                    ..assignment.clone()
-                });
-            }
-        }
-        for mode in base
-            .modes
-            .iter()
-            .filter(|mode| mode.device == stored.reference)
-        {
-            let current = descriptor
-                .as_ref()
-                .and_then(|descriptor| descriptor.capabilities.modes.get(mode.index));
-            let runnable = current.is_some_and(|current| current.name == mode.name);
-            if !runnable && !self.owns(device) {
-                self.list(device);
-                self.profile.modes.push(ModeSelection {
-                    device: device.clone(),
-                    ..mode.clone()
-                });
-            }
-        }
-        if let Some(listed) = self
-            .profile
-            .devices
-            .iter_mut()
-            .find(|listed| &listed.reference == device)
-        {
-            listed.extra = stored.extra.clone();
-        }
-    }
-
-    /// Unknown fields of a stored setting stay with the captured setting when both are the same.
-    fn carry_extras(&mut self, base: &Profile, stored: &ProfileDevice, device: &DeviceRef) {
-        for old in base.items_of(&stored.reference) {
-            if let Some(new) = self.profile.assignments.iter_mut().find(|new| {
-                &new.device == device
-                    && new.zone == old.zone
-                    && same_effect(&new.effect, &old.effect)
-            }) {
-                new.extra = old.extra.clone();
-                new.effect.extra = old.effect.extra.clone();
-            }
-        }
-        for old in base
-            .modes
-            .iter()
-            .filter(|mode| mode.device == stored.reference)
-        {
-            if let Some(new) =
-                self.profile.modes.iter_mut().find(|new| {
-                    &new.device == device && new.index == old.index && new.name == old.name
-                })
-            {
-                new.extra = old.extra.clone();
-            }
-        }
-        for old in base
-            .external
-            .iter()
-            .filter(|external| external.device == stored.reference)
-        {
-            if let Some(new) = self
-                .profile
-                .external
-                .iter_mut()
-                .find(|new| &new.device == device && new.label == old.label)
-            {
-                new.extra = old.extra.clone();
-            }
-        }
-    }
-
-    /// Keeps the stored device and all its settings unchanged, under a key no captured device uses.
-    fn keep_all(&mut self, base: &Profile, stored: &ProfileDevice, linked: Option<&DeviceRef>) {
-        let key = match linked {
-            Some(device) => device.clone(),
-            None => self.free_key(&stored.reference),
-        };
+    /// A stored device under its key now; a linked device gets today's identifying fields and the user's name.
+    fn refreshed(&self, stored: &ProfileDevice, key: &DeviceRef) -> ProfileDevice {
         let mut device = stored.clone();
         device.reference = key.clone();
-        self.profile.devices.push(device);
-        for assignment in base.items_of(&stored.reference) {
-            self.profile.assignments.push(ProfileAssignment {
-                device: key.clone(),
-                ..assignment.clone()
-            });
-        }
-        for mode in base
-            .modes
-            .iter()
-            .filter(|mode| mode.device == stored.reference)
-        {
-            self.profile.modes.push(ModeSelection {
-                device: key.clone(),
-                ..mode.clone()
-            });
-        }
-        for external in base
-            .external
-            .iter()
-            .filter(|external| external.device == stored.reference)
-        {
-            self.profile.external.push(ExternalControl {
-                device: key.clone(),
-                ..external.clone()
-            });
-        }
-    }
-
-    /// Lists the session device once; false when the session has no description of it.
-    fn list(&mut self, device: &DeviceRef) -> bool {
-        if self.profile.device(device).is_some() {
-            return true;
-        }
-        let Some(descriptor) = self.descriptor(device) else {
-            return false;
-        };
-        let label = (self.names)(device).unwrap_or_else(|| descriptor.name.clone());
-        let identity = StoredIdentity::from_fingerprint(&descriptor.fingerprint());
-        self.profile.devices.push(ProfileDevice {
-            reference: device.clone(),
-            label,
-            identity,
-            extra: Extra::new(),
-        });
-        true
-    }
-
-    fn descriptor(&self, device: &DeviceRef) -> Option<&DeviceDescriptor> {
-        self.snapshot
-            .devices
-            .iter()
-            .find(|candidate| candidate.identity.reference() == Some(device))
-            .map(|candidate| &candidate.descriptor)
-    }
-
-    fn owns(&self, device: &DeviceRef) -> bool {
-        self.profile
-            .assignments
-            .iter()
-            .any(|assignment| &assignment.device == device)
-            || self.profile.modes.iter().any(|mode| &mode.device == device)
-            || self
-                .profile
-                .external
-                .iter()
-                .any(|external| &external.device == device)
-    }
-
-    fn covers(&self, target: &OutputTarget) -> bool {
-        self.profile.assignments.iter().any(|assignment| {
-            OutputTarget {
-                device: assignment.device.clone(),
-                zone: assignment.zone,
+        if let Some(descriptor) = self.descriptor(key) {
+            device.identity = stored.identity.refreshed(&descriptor.fingerprint());
+            if let Some(name) = (self.names)(key) {
+                device.label = name;
             }
-            .overlaps(target)
-        }) || self
-            .profile
-            .modes
-            .iter()
-            .any(|mode| mode.device == target.device)
-            || self
-                .profile
-                .external
-                .iter()
-                .any(|external| external.device == target.device)
+        }
+        device
+    }
+
+    fn key_for(&mut self, stored: &DeviceRef, linked: Option<&DeviceRef>) -> DeviceRef {
+        if let Some((_, key)) = self.keys.iter().find(|(from, _)| from == stored) {
+            return key.clone();
+        }
+        let key = match linked {
+            Some(device) => device.clone(),
+            None => self.free_key(stored),
+        };
+        self.keys.push((stored.clone(), key.clone()));
+        key
     }
 
     fn free_key(&self, wanted: &DeviceRef) -> DeviceRef {
         let taken = |key: &DeviceRef| {
-            self.profile.device(key).is_some()
+            self.keys.iter().any(|(_, used)| used == key)
                 || self
                     .snapshot
                     .devices
@@ -301,23 +259,149 @@ impl Capture<'_> {
             .find(|key| !taken(key))
             .expect("some number is free")
     }
+
+    fn unused_equal(&self, stored: &Setting) -> Option<usize> {
+        self.session
+            .iter()
+            .enumerate()
+            .find(|(index, setting)| !self.used[*index] && setting.runs(stored))
+            .map(|(index, _)| index)
+    }
+
+    fn uses(&self, key: &DeviceRef) -> bool {
+        self.settings.iter().any(|setting| setting.device() == key)
+    }
+
+    fn stored_label(&self, device: &DeviceRef) -> String {
+        self.base
+            .device(device)
+            .map(|stored| stored.label.clone())
+            .unwrap_or_default()
+    }
+
+    fn descriptor(&self, device: &DeviceRef) -> Option<&DeviceDescriptor> {
+        self.snapshot
+            .devices
+            .iter()
+            .find(|candidate| candidate.identity.reference() == Some(device))
+            .map(|candidate| &candidate.descriptor)
+    }
 }
 
-fn same_effect(new: &StoredEffect, old: &StoredEffect) -> bool {
-    new.effect == old.effect
-        && old
+impl Setting {
+    fn device(&self) -> &DeviceRef {
+        match self {
+            Self::Effect(assignment) => &assignment.device,
+            Self::Mode(mode) => &mode.device,
+            Self::External(external) => &external.device,
+        }
+    }
+
+    fn with_device(&self, device: &DeviceRef) -> Self {
+        let mut copy = self.clone();
+        match &mut copy {
+            Self::Effect(assignment) => assignment.device = device.clone(),
+            Self::Mode(mode) => mode.device = device.clone(),
+            Self::External(external) => external.device = device.clone(),
+        }
+        copy
+    }
+
+    fn item(&self) -> ProfileItem {
+        match self {
+            Self::Effect(assignment) => ProfileItem::Effect {
+                zone: assignment.zone,
+                effect: assignment.effect.effect.clone(),
+            },
+            Self::Mode(mode) => ProfileItem::HardwareMode {
+                index: mode.index,
+                name: mode.name.clone(),
+            },
+            Self::External(external) => ProfileItem::External {
+                label: external.label.clone(),
+            },
+        }
+    }
+
+    fn target(&self) -> Target {
+        Target::of(&self.item(), self.device())
+    }
+
+    /// True when this session setting is the stored setting `stored`, ignoring unknown fields.
+    fn runs(&self, stored: &Self) -> bool {
+        match (self, stored) {
+            (Self::Effect(now), Self::Effect(stored)) => {
+                now.device == stored.device
+                    && now.zone == stored.zone
+                    && same_effect(&now.effect, &stored.effect)
+            }
+            (Self::Mode(now), Self::Mode(stored)) => {
+                now.device == stored.device && now.index == stored.index && now.name == stored.name
+            }
+            (Self::External(now), Self::External(stored)) => {
+                now.device == stored.device && now.label == stored.label
+            }
+            _ => false,
+        }
+    }
+}
+
+fn same_effect(now: &StoredEffect, stored: &StoredEffect) -> bool {
+    now.effect == stored.effect
+        && stored
             .values
             .iter()
-            .all(|(control, value)| new.values.get(control) == Some(value))
+            .all(|(control, value)| now.values.get(control) == Some(value))
 }
 
-impl Profile {
-    fn items_of<'a>(
-        &'a self,
-        device: &'a DeviceRef,
-    ) -> impl Iterator<Item = &'a ProfileAssignment> {
-        self.assignments
+fn settings_of(profile: &Profile) -> Vec<Setting> {
+    let effects = profile.assignments.iter().cloned().map(Setting::Effect);
+    let modes = profile.modes.iter().cloned().map(Setting::Mode);
+    let external = profile.external.iter().cloned().map(Setting::External);
+    effects.chain(modes).chain(external).collect()
+}
+
+fn session_settings(snapshot: &SessionSnapshot) -> Vec<Setting> {
+    let described = |device: &DeviceRef| {
+        snapshot
+            .devices
             .iter()
-            .filter(move |assignment| &assignment.device == device)
-    }
+            .find(|candidate| candidate.identity.reference() == Some(device))
+            .map(|candidate| &candidate.descriptor)
+    };
+    let effects = snapshot
+        .output
+        .scene
+        .assignments
+        .iter()
+        .filter(|assignment| described(&assignment.target.device).is_some())
+        .map(|assignment| {
+            Setting::Effect(ProfileAssignment {
+                device: assignment.target.device.clone(),
+                zone: assignment.target.zone,
+                effect: StoredEffect::from_instance(&assignment.effect),
+                extra: Extra::new(),
+            })
+        });
+    let owners = snapshot.output.devices.iter().filter_map(|output| {
+        let descriptor = described(&output.device)?;
+        match &output.owner {
+            OutputOwner::HardwareMode { mode } => {
+                let name = descriptor.capabilities.modes.get(*mode)?.name.clone();
+                Some(Setting::Mode(ModeSelection {
+                    device: output.device.clone(),
+                    index: *mode,
+                    name,
+                    extra: Extra::new(),
+                }))
+            }
+            OutputOwner::External { label } => Some(Setting::External(ExternalControl {
+                device: output.device.clone(),
+                label: label.clone(),
+                extra: Extra::new(),
+            })),
+            OutputOwner::Effect => None,
+        }
+    });
+    effects.chain(owners).collect()
 }
