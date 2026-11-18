@@ -8,10 +8,10 @@ use crate::connection::ConnectionState;
 use crate::device::DeviceRef;
 use crate::identity::KnownDevice;
 use crate::profile::{
-    ApplyError, ApplyReport, Captured, Profile, ProfileId, SessionHistory, SettingChange, apply,
-    is_live,
+    ApplyError, ApplyReport, FrameRateChange, Profile, ProfileId, SettingChange, Updated,
+    all_added, apply, is_live, update,
 };
-use crate::session::{SessionDevice, SessionEventKind, SessionHandle, SessionSnapshot};
+use crate::session::{IntentLog, SessionDevice, SessionEventKind, SessionHandle, SessionSnapshot};
 use crate::store::notice::{NoticeEvent, StoreNotice};
 use crate::store::summary::{
     ExportReport, ImportError, ImportReport, ProfileDetails, StoreSummary,
@@ -32,6 +32,7 @@ pub enum ApplyOutcome {
 pub struct Saved {
     pub id: ProfileId,
     pub changes: Vec<SettingChange>,
+    pub frame_rate: Option<FrameRateChange>,
 }
 
 /// The store for async callers: every file operation runs on a blocking thread, never in the session task.
@@ -41,12 +42,12 @@ pub struct Profiles {
     active: Arc<Mutex<Option<Active>>>,
 }
 
-/// The profile last applied or written from one session, with what it put into that session.
+/// The profile last applied or written from one session; user records after `baseline` are not in it yet.
 #[derive(Debug, Clone)]
 struct Active {
     session: u64,
     profile: ProfileId,
-    history: SessionHistory,
+    baseline: u64,
 }
 
 impl Profiles {
@@ -60,15 +61,23 @@ impl Profiles {
         })
     }
 
+    /// With `handle`, also counts against its devices and reports its active profile and unsaved user changes.
     pub async fn summary(&self, handle: Option<&SessionHandle>) -> StoreSummary {
         let devices = handle.map(|handle| handle.snapshot().devices);
-        let active = handle
-            .and_then(|handle| self.active_in(handle))
-            .map(|active| active.profile);
+        let active = handle.and_then(|handle| self.active_in(handle));
+        let unsaved = match (handle, &active) {
+            (Some(handle), Some(active)) => handle
+                .intents_after(active.baseline)
+                .await
+                .ok()
+                .map(|log| commands_in(&log)),
+            _ => None,
+        };
         let mut summary = self
             .with(move |store| store.summary(devices.as_deref()))
             .await;
-        summary.active = active;
+        summary.active = active.map(|active| active.profile);
+        summary.unsaved_changes = unsaved;
         summary
     }
 
@@ -87,35 +96,83 @@ impl Profiles {
         self.with(move |store| store.profile(&id).cloned()).await
     }
 
-    /// Captures the session as a new profile; settings of the active profile that are not running stay in it.
+    /// Saves the session as a new profile: the active profile plus the user's changes since, or what runs now.
     pub async fn create_from_session(
         &self,
         handle: &SessionHandle,
         name: &str,
     ) -> Result<Saved, StoreError> {
+        let active = self.active_in(handle);
+        let log = intents(
+            handle,
+            active.as_ref().map_or(u64::MAX, |active| active.baseline),
+        )
+        .await?;
         let snapshot = handle.snapshot();
         let name = name.to_owned();
-        let active = self.active_in(handle);
-        let (id, captured) = self
+        let sequence = log.sequence;
+        let (id, updated) = self
             .with(move |store| {
-                let base = active
-                    .as_ref()
-                    .and_then(|active| store.profile(&active.profile).ok().cloned());
-                let history = active.map(|active| active.history).unwrap_or_default();
-                let captured = capture(store, &snapshot, &name, base.as_ref(), &history);
-                let id = store.create(captured.profile.clone())?;
-                Ok::<_, StoreError>((id, captured))
+                let updated = match active {
+                    Some(active) => {
+                        let stored = store.profile(&active.profile)?.clone();
+                        let mut profile =
+                            updated_from(store, &stored, &log, &snapshot.devices).profile;
+                        profile.name = name;
+                        Updated {
+                            changes: all_added(&profile),
+                            frame_rate: None,
+                            profile,
+                        }
+                    }
+                    None => {
+                        let profile = Profile::capture(&snapshot, &name, &names_in(store));
+                        Updated {
+                            changes: all_added(&profile),
+                            frame_rate: None,
+                            profile,
+                        }
+                    }
+                };
+                let id = store.create(updated.profile.clone())?;
+                Ok::<_, StoreError>((id, updated))
             })
             .await?;
-        Ok(self.activate(handle, id, captured))
+        Ok(self.activate(handle, id, sequence, updated))
     }
 
-    /// Writes the session into the active profile `id`; only targets the user changed in this session change.
+    /// Adds the user's changes since the apply or the last save to the active profile `id`; nothing else changes.
     pub async fn update_from_session(
         &self,
         handle: &SessionHandle,
         id: &ProfileId,
     ) -> Result<Saved, StoreError> {
+        let (log, updated) = self.pending(handle, id).await?;
+        let key = id.clone();
+        let profile = updated.profile.clone();
+        self.with(move |store| store.update(&key, profile)).await?;
+        Ok(self.activate(handle, id.clone(), log.sequence, updated))
+    }
+
+    /// What `update_from_session` would save now, without writing anything.
+    pub async fn preview_update(
+        &self,
+        handle: &SessionHandle,
+        id: &ProfileId,
+    ) -> Result<Saved, StoreError> {
+        let (_, updated) = self.pending(handle, id).await?;
+        Ok(Saved {
+            id: id.clone(),
+            changes: updated.changes,
+            frame_rate: updated.frame_rate,
+        })
+    }
+
+    async fn pending(
+        &self,
+        handle: &SessionHandle,
+        id: &ProfileId,
+    ) -> Result<(IntentLog, Updated), StoreError> {
         let active = self.active_in(handle);
         let Some(active) = active.filter(|active| &active.profile == id) else {
             return Err(StoreError::NotActive {
@@ -123,17 +180,15 @@ impl Profiles {
                 active: self.active_in(handle).map(|active| active.profile),
             });
         };
-        let snapshot = handle.snapshot();
+        let log = intents(handle, active.baseline).await?;
+        let devices = handle.snapshot().devices;
         let key = id.clone();
-        let captured = self
-            .with(move |store| {
-                let base = store.profile(&key)?.clone();
-                let captured = capture(store, &snapshot, &base.name, Some(&base), &active.history);
-                store.update(&key, captured.profile.clone())?;
-                Ok::<_, StoreError>(captured)
-            })
-            .await?;
-        Ok(self.activate(handle, id.clone(), captured))
+        self.with(move |store| {
+            let stored = store.profile(&key)?.clone();
+            let updated = updated_from(store, &stored, &log, &devices);
+            Ok((log, updated))
+        })
+        .await
     }
 
     /// Replaces the content of profile `id`; its name stays.
@@ -180,10 +235,10 @@ impl Profiles {
             return Ok(ApplyOutcome::WaitingForConnection);
         }
         let report = apply(handle, &profile).await?;
-        *self.lock_active() = Some(Active {
+        *self.lock_active() = intents(handle, u64::MAX).await.ok().map(|log| Active {
             session: handle.session_id(),
             profile: id.clone(),
-            history: SessionHistory::after_apply(&report, &handle.snapshot()),
+            baseline: log.sequence,
         });
         Ok(ApplyOutcome::Applied(report))
     }
@@ -281,15 +336,22 @@ impl Profiles {
             .filter(|active| active.session == handle.session_id())
     }
 
-    fn activate(&self, handle: &SessionHandle, id: ProfileId, captured: Captured) -> Saved {
+    fn activate(
+        &self,
+        handle: &SessionHandle,
+        id: ProfileId,
+        baseline: u64,
+        updated: Updated,
+    ) -> Saved {
         *self.lock_active() = Some(Active {
             session: handle.session_id(),
             profile: id.clone(),
-            history: captured.history,
+            baseline,
         });
         Saved {
             id,
-            changes: captured.changes,
+            changes: updated.changes,
+            frame_rate: updated.frame_rate,
         }
     }
 
@@ -339,16 +401,32 @@ impl ConnectTrigger {
     }
 }
 
-fn capture(
-    store: &ProfileStore,
-    snapshot: &SessionSnapshot,
-    name: &str,
-    base: Option<&Profile>,
-    history: &SessionHistory,
-) -> Captured {
+fn names_in(store: &ProfileStore) -> impl Fn(&DeviceRef) -> Option<String> + '_ {
     let registry = store.registry();
-    let names = |device: &DeviceRef| registry.device(device).and_then(|entry| entry.name.clone());
-    Profile::capture(snapshot, name, base, history, &names)
+    move |device: &DeviceRef| registry.device(device).and_then(|entry| entry.name.clone())
+}
+
+fn updated_from(
+    store: &ProfileStore,
+    stored: &Profile,
+    log: &IntentLog,
+    devices: &[SessionDevice],
+) -> Updated {
+    update(stored, &log.records, devices, &names_in(store))
+}
+
+async fn intents(handle: &SessionHandle, after: u64) -> Result<IntentLog, StoreError> {
+    handle
+        .intents_after(after)
+        .await
+        .map_err(|error| StoreError::SessionUnavailable { error })
+}
+
+/// The number of user commands behind `log`; one command can leave several records.
+fn commands_in(log: &IntentLog) -> usize {
+    let mut sequences: Vec<u64> = log.records.iter().map(|record| record.sequence).collect();
+    sequences.dedup();
+    sequences.len()
 }
 
 fn devices_of(handle: Option<&SessionHandle>) -> Vec<SessionDevice> {

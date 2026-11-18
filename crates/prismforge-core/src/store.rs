@@ -22,7 +22,7 @@ use crate::profile::{
     NAME_LIMIT, NameProblem, Profile, ProfileId, clean_name, decode_export, decode_local,
     encode_export, encode_local,
 };
-use crate::session::SessionDevice;
+use crate::session::{SessionDevice, SessionError};
 use crate::store::durable::{Loaded, StoreFile, Unwritten};
 
 pub use durable::{STORE_FILE_LIMIT, WriteFailure, WriteStep};
@@ -74,6 +74,9 @@ pub enum StoreError {
         id: ProfileId,
         active: Option<ProfileId>,
     },
+    /// The session did not answer, so the user's changes could not be read; nothing was written.
+    #[error("the session could not be asked for the user's changes: {error}")]
+    SessionUnavailable { error: SessionError },
     #[error("{file} would have {bytes} bytes; the limit is {limit}")]
     TooLarge {
         file: String,
@@ -391,6 +394,7 @@ impl ProfileStore {
                 .collect(),
             apply_on_connect: self.settings.apply_on_connect.clone(),
             active: None,
+            unsaved_changes: None,
             notices: self.notices.clone(),
         }
     }

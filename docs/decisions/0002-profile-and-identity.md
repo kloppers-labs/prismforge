@@ -106,28 +106,41 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 ## Capture and update
 
-Capture reads the snapshot: the scene, hardware modes, external statements and the frame rate. A device label is the user's name from the registry, or the stored label, or the model.
+**One rule for updates: an update never removes what the user did not remove.** PrismForge does not guess what the user did from a change of state. The session records it.
 
-**One rule for updates: an update never removes what the user did not remove.** An update may replace or remove a stored setting only where the session shows that the user changed its target in this session: the user applied another effect, stopped the effect, chose a hardware mode, or declared or handed back another program.
+### User intent records
 
-1. **The active profile.** The profile last applied, created or updated in a session is the active profile of that session. `StoreSummary::active` shows it. A new session has none.
-2. **Update needs the active profile.** `update_from_session` refuses any other profile with `StoreError::NotActive`, which names the active one. A profile that was never applied in this session would otherwise take the whole session state, so the user would lose settings without seeing why. To save the session state under a new name, the user creates a profile instead.
-3. **The session history.** After an apply, PrismForge remembers which settings ran, which were skipped and why, and the owners and effects of every device right after the apply. After each create or update it remembers the session state again.
-4. **Per stored setting:**
+1. **The session records each successful user command for output.** One record per slot: an effect target (device and zone), the hardware mode of a device, the external owner of a device, and the frame rate. A new command on a slot replaces the older record, so the store never grows past the slots in use. Each command gets the next sequence number.
+2. **What each command records:**
 
-| Situation | Result |
+| User command | Records |
 |---|---|
-| The device is missing or ambiguous | Kept unchanged (`Kept`, reason missing or ambiguous) |
-| The session runs exactly this setting | Kept as stored, with its unknown fields (`Unchanged`) |
-| Nothing on the device changed since the apply or the last save | Kept unchanged (`Kept`, reason unavailable, or not running with the skip reason) |
-| The user changed the device and the session has another state on this target | Removed from the profile (`Replaced`); the new state is `Added` |
-| The user changed the device, the session has nothing on this target, and the setting ran from this profile | Removed (`Removed`) |
-| The user changed the device, the session has nothing on this target, and the setting never ran | Kept (`Kept`, not running) |
+| Apply an effect | the target: the complete validated instance; the device's mode: ended, if a hardware mode owned the device |
+| Stop an effect | the target: stopped |
+| Select a hardware mode | the whole device: effects stopped; the mode: index and name |
+| Declare another program | the whole device: effects stopped; the mode: ended; the external owner: the label |
+| Hand back | the external owner: handed back (only if the device was declared) |
+| Set the frame rate | the frame rate in use |
 
-5. **Every skip reason keeps the setting.** Missing, ambiguous, unavailable, declared external, no Direct Mode, mode list changed, not available in this version, and refused by the session. A state that already blocked a setting when it was applied (for example a program the user declared before the apply) does not replace it, and is not added on top of it.
-6. **The result lists every setting.** `Saved { id, changes }` says for each setting: unchanged, added, replaced, removed, or kept with its reason. The interface can show it before or after the save.
-7. **Create from the session** uses the active profile as its base in the same way, so its unresolved and skipped settings move into the new profile.
-8. **Unknown fields stay.** A kept or unchanged setting keeps all its unknown fields. A linked device keeps its unknown fields and the unknown fields of each zone with the same name and position; it gets today's identifying fields.
+3. **Nothing else creates a record.** Disconnect, reconnect, a device that becomes unavailable, a refused or paused write, identify and its restore, the release at disconnect or shutdown, and the scheduler change no record. A command that fails creates no record.
+4. **A profile apply is not a user edit.** Its commands carry the profile origin and create no record. When the apply ends, the session loop returns its current sequence number in command order. That number is the profile's baseline.
+5. **Replies come after the snapshot.** The session publishes the snapshot that shows a command's result before it sends the reply, for every command. A caller that sees a reply also sees its result.
+
+### Update
+
+1. **The active profile.** The profile last applied, created or updated in a session is that session's active profile. `StoreSummary::active` names it. `StoreSummary::unsaved_changes` counts the user commands after its baseline. A new session has none.
+2. **Update needs the active profile.** `update_from_session` refuses any other profile with `StoreError::NotActive`, which names the active one. Saving the session under a new name is `create_from_session`.
+3. **An update is the stored profile plus the user's records after the baseline, applied in order.** An applied effect replaces the stored effect on that target, or is added, with the complete instance. A stop removes the effect on that target; a stop of the whole device removes every effect on the device, as in the session. A selected mode replaces the device's effects and external owner. A declaration replaces the device's effects and mode. A hand-back removes the declaration. A frame-rate record sets the frame rate.
+4. **Nothing else changes.** Every other setting, every unresolved or absent device, every skipped setting, and all unknown fields stay as loaded. The device and zone entries of a replaced setting stay as stored. A setting replaced on the same target keeps its own unknown fields; its effect keeps its unknown fields only when the effect id is the same.
+5. **The baseline moves only after a successful write.** A second update with no new user command changes nothing.
+6. **The report comes from the same computation.** `Saved { id, changes, frame_rate }` lists each setting the update adds, replaces (with what it was) or removes. Everything not listed is unchanged. `preview_update` runs the same computation without writing, so the interface can show it before the save.
+7. **Records are linked to stored devices with the matching rules.** A record for a device that resolves to a stored device changes that device's settings. A record for a device the profile does not have adds a device entry from the current inventory.
+
+### Create from the session
+
+- **With an active profile:** the new profile is the active profile plus the pending user records, under the new name and id. Skipped and unresolved settings move into it.
+- **Without an active profile:** the new profile is what runs now: the scene, the hardware modes, the external statements and the frame rate. A device label is the user's name from the registry, or the model.
+- The new profile becomes the active profile, with the sequence number read before the save as its baseline.
 
 ## Durable writes and recovery
 

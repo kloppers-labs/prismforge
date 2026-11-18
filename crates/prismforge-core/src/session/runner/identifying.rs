@@ -21,7 +21,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         let plan = match self.plan_identify(&request) {
             Ok(plan) => plan,
             Err(error) => {
-                let _ = reply.send(Err(error));
+                self.answer(reply, Err(error));
                 return;
             }
         };
@@ -108,6 +108,6 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         self.push(SessionEventKind::IdentifyFinished {
             outcome: outcome.clone(),
         });
-        let _ = reply.send(Ok(outcome));
+        self.answer(reply, Ok(outcome));
     }
 }

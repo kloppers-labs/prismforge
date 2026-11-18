@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use prismforge_core::profile::{Change, KeepReason, Profile, SettingChange, SkipReason};
-use prismforge_core::session::{OutputError, SessionError, SessionHandle};
+use prismforge_core::profile::{Change, Profile, ProfileId, ProfileItem, SettingChange};
+use prismforge_core::session::SessionHandle;
 use prismforge_core::store::{
     ApplyOutcome, ImportError, ProfileStore, Profiles, STORE_FILE_LIMIT, StdFileOps, StoreError,
 };
-use prismforge_core::{DeviceRef, Rgb};
+use prismforge_core::{DeviceRef, OutputTarget, Rgb};
 use prismforge_effects::{ControlValue, EffectInstance};
 use prismforge_testkit::{FakeServer, FixtureDevice, FixtureMode};
 use serde_json::json;
@@ -17,6 +17,7 @@ use crate::support::{TempDir, effect, extra, golden};
 const PLUGIN: &str = "OpenRGB Effects plugin";
 const GPU: &str = "demo-graphics-card";
 const MEMORY: &str = "demo-memory-1";
+const LIGHT_BAR: &str = "demo-light-bar";
 
 fn solid(color: Rgb) -> EffectInstance {
     EffectInstance {
@@ -25,11 +26,18 @@ fn solid(color: Rgb) -> EffectInstance {
     }
 }
 
-fn rainbow() -> EffectInstance {
+fn rainbow(values: &[(&str, ControlValue)]) -> EffectInstance {
     EffectInstance {
         effect: "rainbow-wave".into(),
-        values: Default::default(),
+        values: values
+            .iter()
+            .map(|(control, value)| ((*control).to_owned(), value.clone()))
+            .collect(),
     }
+}
+
+fn gpu() -> DeviceRef {
+    DeviceRef::new(GPU)
 }
 
 async fn open(dir: &TempDir) -> Profiles {
@@ -38,31 +46,17 @@ async fn open(dir: &TempDir) -> Profiles {
         .expect("open store")
 }
 
-async fn apply(
-    profiles: &Profiles,
-    handle: &SessionHandle,
-    id: &prismforge_core::profile::ProfileId,
-) {
+async fn apply(profiles: &Profiles, handle: &SessionHandle, id: &ProfileId) {
     match profiles.apply(handle, id).await.expect("apply") {
         ApplyOutcome::Applied(_) => {}
         other => panic!("{other:?}"),
     }
 }
 
-fn change_of(changes: &[SettingChange], label: &str) -> Change {
-    changes
-        .iter()
-        .find(|change| change.label == label)
-        .unwrap_or_else(|| panic!("no change for {label}: {changes:?}"))
-        .change
-        .clone()
-}
-
-fn not_running(reason: SkipReason) -> Change {
-    Change::Kept {
-        reason: KeepReason::NotRunning {
-            skipped: Some(reason),
-        },
+fn effect_item(zone: Option<usize>, effect: &str) -> ProfileItem {
+    ProfileItem::Effect {
+        zone,
+        effect: effect.into(),
     }
 }
 
@@ -76,6 +70,29 @@ fn modes() -> Vec<FixtureMode> {
 
 fn twin(label: &str) -> FixtureDevice {
     FixtureDevice::new(label, "Twin strip").zone("Strip", 2)
+}
+
+/// A demo session with a solid effect on the graphics card, saved as the active profile `Base`.
+async fn active_profile(
+    dir: &TempDir,
+) -> (
+    Profiles,
+    SessionHandle,
+    prismforge_testkit::DemoControls,
+    ProfileId,
+) {
+    let profiles = open(dir).await;
+    let (handle, controls) = demo().await;
+    handle
+        .apply_effect(whole(&gpu()), solid(Rgb::new(9, 9, 9)))
+        .await
+        .expect("gpu");
+    let id = profiles
+        .create_from_session(&handle, "Base")
+        .await
+        .expect("create")
+        .id;
+    (profiles, handle, controls, id)
 }
 
 #[tokio::test(start_paused = true)]
@@ -122,11 +139,7 @@ async fn update_keeps_a_setting_that_apply_skipped() {
         .expect("update");
 
     assert_eq!(profiles.profile(&id).await.expect("saved"), stored);
-    assert_eq!(change_of(&saved.changes, "Strip alpha"), Change::Unchanged);
-    assert_eq!(
-        change_of(&saved.changes, "Strip beta"),
-        not_running(SkipReason::NoDirectMode)
-    );
+    assert_eq!(saved.changes, []);
 }
 
 #[tokio::test(start_paused = true)]
@@ -244,109 +257,406 @@ async fn update_keeps_the_setting_for_every_skip_reason() {
     identify.abort();
 
     assert_eq!(profiles.profile(&id).await.expect("saved"), stored);
-    let changes = &saved.changes;
-    assert_eq!(change_of(changes, "Strip alpha"), Change::Unchanged);
-    assert_eq!(
-        change_of(changes, "Strip beta"),
-        not_running(SkipReason::NoDirectMode)
-    );
-    assert_eq!(
-        change_of(changes, "Strip gamma"),
-        not_running(SkipReason::ModeListChanged {
-            found: Some("Static".into())
+    assert_eq!(saved.changes, []);
+    assert_eq!(saved.frame_rate, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_setting_that_never_ran_survives_an_update_after_an_update() {
+    let dir = TempDir::new("update-twice");
+    let (profiles, handle, _, id) = active_profile(&dir).await;
+    let mut stored = profiles.profile(&id).await.expect("stored");
+    let light_bar = handle
+        .snapshot()
+        .devices
+        .iter()
+        .find(|device| device.identity.reference().map(DeviceRef::as_str) == Some(LIGHT_BAR))
+        .map(|device| prismforge_core::profile::ProfileDevice {
+            reference: DeviceRef::new(LIGHT_BAR),
+            label: "Demo Light Bar".into(),
+            identity: prismforge_core::profile::StoredIdentity::from_fingerprint(
+                &device.descriptor.fingerprint(),
+            ),
+            extra: Default::default(),
         })
+        .expect("light bar");
+    stored.devices.push(light_bar);
+    stored
+        .assignments
+        .push(prismforge_core::profile::ProfileAssignment {
+            device: DeviceRef::new(LIGHT_BAR),
+            zone: None,
+            effect: prismforge_core::profile::StoredEffect::from_instance(&solid(Rgb::new(
+                1, 1, 1,
+            ))),
+            extra: Default::default(),
+        });
+    profiles.replace(&id, stored.clone()).await.expect("edit");
+    apply(&profiles, &handle, &id).await;
+
+    let first = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("first");
+    handle.stop_effect(whole(&gpu())).await.expect("stop");
+    let second = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("second");
+    let third = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("third");
+
+    assert_eq!(first.changes, []);
+    assert_eq!(
+        second.changes,
+        [SettingChange {
+            device: gpu(),
+            label: "Demo Graphics Card".into(),
+            change: Change::Removed {
+                was: effect_item(None, "solid")
+            },
+        }]
+    );
+    assert_eq!(third.changes, []);
+    let saved = profiles.profile(&id).await.expect("saved");
+    assert_eq!(saved.assignments.len(), 1);
+    assert_eq!(saved.assignments[0].device.as_str(), LIGHT_BAR);
+    assert_eq!(saved.devices, stored.devices);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_disconnect_or_reconnect_is_not_a_change() {
+    let dir = TempDir::new("update-disconnect");
+    let (profiles, handle, controls, id) = active_profile(&dir).await;
+    let stored = profiles.profile(&id).await.expect("stored");
+    apply(&profiles, &handle, &id).await;
+
+    handle.disconnect().await.expect("disconnect");
+    let while_down = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("down");
+    handle.connect().await.expect("connect");
+    controls.lose_connection(prismforge_core::LossCause::ServerClosed);
+    wait_until(&handle, |snapshot| {
+        snapshot.diagnostics.counters.connect_attempts >= 3
+            && snapshot.connection == prismforge_core::ConnectionState::Connected
+    })
+    .await;
+    let after = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("after");
+
+    assert_eq!(while_down.changes, []);
+    assert_eq!(after.changes, []);
+    assert_eq!(profiles.profile(&id).await.expect("saved"), stored);
+}
+
+#[tokio::test(start_paused = true)]
+async fn what_prismforge_does_by_itself_is_not_a_change() {
+    let dir = TempDir::new("update-internal");
+    let (profiles, handle, controls, id) = active_profile(&dir).await;
+    let stored = profiles.profile(&id).await.expect("stored");
+    apply(&profiles, &handle, &id).await;
+
+    controls.refuse_writes(&gpu());
+    sleep(Duration::from_secs(3)).await;
+    handle
+        .identify(DeviceRef::new(MEMORY), None, Duration::from_secs(1))
+        .await
+        .expect("identify");
+    controls.change_inventory();
+    handle.refresh().await.expect("refresh");
+    sleep(Duration::from_secs(1)).await;
+    let summary = profiles.summary(Some(&handle)).await;
+    let saved = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("update");
+
+    assert_eq!(summary.unsaved_changes, Some(0));
+    assert_eq!(saved.changes, []);
+    assert_eq!(profiles.profile(&id).await.expect("saved"), stored);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unavailable_device_is_not_a_change() {
+    let dir = TempDir::new("update-unavailable");
+    let server = FakeServer::new();
+    server.add_device(0, crate::session::strip("alpha", 3));
+    server.add_device(1, crate::session::strip("beta", 2));
+    let profiles = open(&dir).await;
+    let handle = connected(&server, Vec::new()).await;
+    let beta = reference(&handle.snapshot(), "SN-beta");
+    handle
+        .apply_effect(whole(&beta), solid(Rgb::new(0, 0, 255)))
+        .await
+        .expect("beta");
+    let id = profiles
+        .create_from_session(&handle, "Pair")
+        .await
+        .expect("capture")
+        .id;
+    let stored = profiles.profile(&id).await.expect("stored");
+
+    server.restart(vec![(0, crate::session::strip("alpha", 3).into())]);
+    wait_until(&handle, |snapshot| {
+        snapshot.connection == prismforge_core::ConnectionState::Connected
+            && snapshot
+                .devices
+                .iter()
+                .any(|device| device.identity.reference() == Some(&beta) && !device.available)
+    })
+    .await;
+    let saved = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("update");
+
+    assert_eq!(saved.changes, []);
+    assert_eq!(profiles.profile(&id).await.expect("saved"), stored);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_control_change_saves_the_complete_new_values() {
+    let dir = TempDir::new("update-control");
+    let (profiles, handle, _, id) = active_profile(&dir).await;
+    let mut stored = profiles.profile(&id).await.expect("stored");
+    stored.assignments[0].effect = effect("rainbow-wave", &[]);
+    profiles.replace(&id, stored).await.expect("edit");
+    apply(&profiles, &handle, &id).await;
+
+    let bright = rainbow(&[("brightness", ControlValue::Number(37))]);
+    handle
+        .apply_effect(whole(&gpu()), bright)
+        .await
+        .expect("brightness");
+    let saved = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("update");
+
+    let profile = profiles.profile(&id).await.expect("saved");
+    let complete =
+        prismforge_effects::prepare(&rainbow(&[("brightness", ControlValue::Number(37))]))
+            .expect("valid")
+            .instance()
+            .clone();
+    assert_eq!(
+        profile.assignments[0].effect,
+        prismforge_core::profile::StoredEffect::from_instance(&complete)
     );
     assert_eq!(
-        change_of(changes, "Strip delta"),
-        Change::Kept {
-            reason: KeepReason::Missing
-        }
+        saved.changes,
+        [SettingChange {
+            device: gpu(),
+            label: "Demo Graphics Card".into(),
+            change: Change::Replaced {
+                was: effect_item(None, "rainbow-wave"),
+                now: effect_item(None, "rainbow-wave"),
+            },
+        }]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stop_then_a_new_apply_saves_the_new_effect() {
+    let dir = TempDir::new("update-reapply");
+    let (profiles, handle, _, id) = active_profile(&dir).await;
+    apply(&profiles, &handle, &id).await;
+
+    handle.stop_effect(whole(&gpu())).await.expect("stop");
+    handle
+        .apply_effect(whole(&gpu()), solid(Rgb::new(200, 100, 50)))
+        .await
+        .expect("again");
+    let saved = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("update");
+
+    let profile = profiles.profile(&id).await.expect("saved");
+    assert_eq!(
+        profile.assignments[0].effect.values["color"],
+        json!({"Color": {"r": 200, "g": 100, "b": 50}})
     );
     assert_eq!(
-        change_of(changes, "Strip eps"),
-        not_running(SkipReason::DeclaredExternal {
-            label: PLUGIN.into()
-        })
-    );
-    assert!(matches!(
-        change_of(changes, "Strip zeta"),
-        Change::Kept {
-            reason: KeepReason::NotRunning {
-                skipped: Some(SkipReason::NotAvailable { .. })
-            }
-        }
-    ));
-    assert_eq!(
-        change_of(changes, "Strip eta"),
-        not_running(SkipReason::Refused {
-            error: OutputError::Session(SessionError::IdentifyInProgress {
-                device: reference(&snapshot, "SN-eta")
-            })
-        })
-    );
-    assert_eq!(
-        change_of(changes, "Twin strip"),
-        Change::Kept {
-            reason: KeepReason::Ambiguous
-        }
-    );
-    assert_eq!(
-        change_of(changes, "Strip iota"),
-        Change::Kept {
-            reason: KeepReason::Unavailable
+        saved.changes[0].change,
+        Change::Replaced {
+            was: effect_item(None, "solid"),
+            now: effect_item(None, "solid"),
         }
     );
 }
 
 #[tokio::test(start_paused = true)]
-async fn update_removes_what_the_user_stopped_and_replaces_what_the_user_changed() {
+async fn user_changes_are_saved_and_reported_and_previewed() {
     let dir = TempDir::new("update-user");
-    let profiles = open(&dir).await;
-    let (handle, _) = demo().await;
-    let gpu = DeviceRef::new(GPU);
+    let (profiles, handle, _, id) = active_profile(&dir).await;
     let memory = DeviceRef::new(MEMORY);
-    handle
-        .apply_effect(whole(&gpu), solid(Rgb::new(9, 9, 9)))
-        .await
-        .expect("gpu");
     handle
         .apply_effect(whole(&memory), solid(Rgb::new(8, 8, 8)))
         .await
         .expect("memory");
-    let created = profiles
-        .create_from_session(&handle, "Mine")
+    profiles
+        .update_from_session(&handle, &id)
         .await
-        .expect("capture");
-    handle.stop_effect(whole(&gpu)).await.expect("stop");
+        .expect("add memory");
+    handle.stop_effect(whole(&gpu())).await.expect("stop");
     handle
-        .apply_effect(whole(&memory), rainbow())
+        .apply_effect(whole(&memory), rainbow(&[]))
         .await
         .expect("change");
+    handle
+        .select_mode(DeviceRef::new(LIGHT_BAR), 1)
+        .await
+        .expect("mode");
+    handle.set_frame_rate(45).await.expect("rate");
 
+    let summary = profiles.summary(Some(&handle)).await;
+    let preview = profiles
+        .preview_update(&handle, &id)
+        .await
+        .expect("preview");
+    let unchanged = profiles.profile(&id).await.expect("not yet saved");
     let saved = profiles
-        .update_from_session(&handle, &created.id)
+        .update_from_session(&handle, &id)
         .await
         .expect("update");
 
-    let profile = profiles.profile(&created.id).await.expect("saved");
-    assert_eq!(
-        change_of(&saved.changes, "Demo Graphics Card"),
-        Change::Removed
-    );
-    let memory_changes: Vec<&Change> = saved
+    assert_eq!(summary.active, Some(id.clone()));
+    assert_eq!(summary.unsaved_changes, Some(4));
+    assert_eq!(preview, saved);
+    assert_eq!(unchanged.assignments.len(), 2);
+    let changes: Vec<(&str, &Change)> = saved
         .changes
         .iter()
-        .filter(|change| change.device == memory)
-        .map(|change| &change.change)
+        .map(|change| (change.device.as_str(), &change.change))
         .collect();
-    assert_eq!(memory_changes, [&Change::Replaced, &Change::Added]);
-    assert!(profile.device(&gpu).is_none());
-    assert_eq!(profile.assignments.len(), 1);
-    assert_eq!(profile.assignments[0].effect.effect, "rainbow-wave");
     assert_eq!(
-        profiles.summary(Some(&handle)).await.active,
-        Some(created.id.clone())
+        changes,
+        [
+            (
+                GPU,
+                &Change::Removed {
+                    was: effect_item(None, "solid")
+                }
+            ),
+            (
+                MEMORY,
+                &Change::Replaced {
+                    was: effect_item(None, "solid"),
+                    now: effect_item(None, "rainbow-wave"),
+                }
+            ),
+            (
+                LIGHT_BAR,
+                &Change::Added {
+                    now: ProfileItem::HardwareMode {
+                        index: 1,
+                        name: "Breathing".into()
+                    }
+                }
+            ),
+        ]
     );
+    assert_eq!(
+        saved.frame_rate,
+        Some(prismforge_core::profile::FrameRateChange { was: 30, now: 45 })
+    );
+    let profile = profiles.profile(&id).await.expect("saved");
+    assert_eq!(profile.frame_rate, 45);
+    assert!(
+        profile
+            .assignments
+            .iter()
+            .all(|assignment| assignment.device == memory)
+    );
+    assert_eq!(
+        profiles.summary(Some(&handle)).await.unsaved_changes,
+        Some(0)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_stop_right_after_an_apply_is_always_saved() {
+    let dir = TempDir::new("update-race");
+    let profiles = open(&dir).await;
+    let (handle, _) = demo().await;
+    for round in 0..40 {
+        handle
+            .apply_effect(whole(&gpu()), solid(Rgb::new(round, 0, 0)))
+            .await
+            .expect("gpu");
+        let id = profiles
+            .create_from_session(&handle, &format!("Round {round}"))
+            .await
+            .expect("create")
+            .id;
+        apply(&profiles, &handle, &id).await;
+        handle.stop_effect(whole(&gpu())).await.expect("stop");
+        let saved = profiles
+            .update_from_session(&handle, &id)
+            .await
+            .expect("update");
+        assert_eq!(
+            saved
+                .changes
+                .iter()
+                .map(|change| &change.change)
+                .collect::<Vec<_>>(),
+            [&Change::Removed {
+                was: effect_item(None, "solid")
+            }],
+            "round {round}"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn save_as_from_the_active_profile_keeps_skipped_and_unresolved_settings() {
+    let dir = TempDir::new("save-as");
+    let (profiles, handle, _, id) = active_profile(&dir).await;
+    let mut stored = profiles.profile(&id).await.expect("stored");
+    let mut absent = stored.devices[0].clone();
+    absent.reference = DeviceRef::new("dev-absent");
+    absent.label = "Absent strip".into();
+    absent.identity.model = "Absent strip".into();
+    absent.identity.serial = Some("SN-absent".into());
+    stored.devices.push(absent);
+    stored
+        .assignments
+        .push(prismforge_core::profile::ProfileAssignment {
+            device: DeviceRef::new("dev-absent"),
+            zone: None,
+            effect: effect("fire", &[]),
+            extra: Default::default(),
+        });
+    profiles.replace(&id, stored.clone()).await.expect("edit");
+    apply(&profiles, &handle, &id).await;
+    handle
+        .apply_effect(whole(&gpu()), solid(Rgb::new(1, 2, 3)))
+        .await
+        .expect("change");
+
+    let copy = profiles
+        .create_from_session(&handle, "Copy")
+        .await
+        .expect("save as");
+
+    let saved = profiles.profile(&copy.id).await.expect("copy");
+    assert_eq!(saved.name, "Copy");
+    assert_eq!(saved.devices, stored.devices);
+    assert_eq!(saved.assignments[1], stored.assignments[1]);
+    assert_eq!(
+        saved.assignments[0].effect.values["color"],
+        json!({"Color": {"r": 1, "g": 2, "b": 3}})
+    );
+    assert_eq!(profiles.profile(&id).await.expect("original"), stored);
+    assert_eq!(profiles.summary(Some(&handle)).await.active, Some(copy.id));
 }
 
 #[tokio::test(start_paused = true)]
@@ -355,7 +665,7 @@ async fn update_of_a_profile_not_applied_in_this_session_is_refused() {
     let profiles = open(&dir).await;
     let (first, _) = demo().await;
     first
-        .apply_effect(whole(&DeviceRef::new(GPU)), solid(Rgb::new(9, 9, 9)))
+        .apply_effect(whole(&gpu()), solid(Rgb::new(9, 9, 9)))
         .await
         .expect("gpu");
     let one = profiles
@@ -413,7 +723,7 @@ async fn unknown_fields_at_every_level_survive_an_update_for_present_and_absent_
     let snapshot = first.snapshot();
     let [alpha, beta, gamma, delta] =
         ["SN-alpha", "SN-beta", "SN-gamma", "SN-delta"].map(|serial| reference(&snapshot, serial));
-    let zone = |device: &DeviceRef, zone| prismforge_core::OutputTarget {
+    let zone = |device: &DeviceRef, zone| OutputTarget {
         device: device.clone(),
         zone: Some(zone),
     };
@@ -478,14 +788,37 @@ async fn unknown_fields_at_every_level_survive_an_update_for_present_and_absent_
     ]);
     let handle = connected(&server, Vec::new()).await;
     apply(&profiles, &handle, &id).await;
-    profiles
+    let untouched = profiles
         .update_from_session(&handle, &id)
         .await
         .expect("update");
+    handle
+        .apply_effect(zone(&alpha, 0), rainbow(&[]))
+        .await
+        .expect("replace alpha front");
+    let replaced = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("update again");
     drop(profiles);
     let reopened = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
+    let saved = reopened.profile(&id).expect("saved");
 
-    assert_eq!(reopened.profile(&id).expect("saved"), &edited);
+    assert_eq!(untouched.changes, []);
+    assert_eq!(replaced.changes.len(), 1);
+    assert_eq!(saved.devices, edited.devices);
+    assert_eq!(saved.extra, edited.extra);
+    assert_eq!(saved.modes, edited.modes);
+    assert_eq!(saved.external, edited.external);
+    let mut expected = edited.assignments.clone();
+    expected[position].effect.effect = "rainbow-wave".into();
+    expected[position].effect.values = saved.assignments[position].effect.values.clone();
+    expected[position].effect.extra = Default::default();
+    assert_eq!(saved.assignments, expected);
+    assert_eq!(
+        saved.assignments[position].extra,
+        edited.assignments[position].extra
+    );
 }
 
 #[tokio::test(start_paused = true)]

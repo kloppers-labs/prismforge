@@ -8,7 +8,7 @@ use crate::profile::effects::EffectProblem;
 use crate::profile::model::{Profile, ProfileDevice};
 use crate::profile::resolve::{DeviceResolution, DeviceStatus, resolve};
 use crate::scene::OutputTarget;
-use crate::session::{OutputError, SessionError, SessionHandle, SessionSnapshot};
+use crate::session::{Origin, OutputError, SessionError, SessionHandle, SessionSnapshot};
 
 /// What happened to each stored setting; partial application is normal and nothing is rolled back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,14 +86,17 @@ pub enum ApplyError {
     Store(#[from] crate::store::StoreError),
 }
 
-/// Applies `profile` through the session commands; loading or importing never calls this.
+/// Applies `profile` through the session commands as a profile, so it creates no user intent records.
 pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyReport, ApplyError> {
     let snapshot = handle.snapshot();
     if !is_live(&snapshot.connection) {
         return Err(ApplyError::NotConnected);
     }
     let resolutions = resolve(profile, &snapshot.devices);
-    let frame_rate = match handle.set_frame_rate(profile.frame_rate).await {
+    let frame_rate = match handle
+        .set_frame_rate_as(Origin::Profile, profile.frame_rate)
+        .await
+    {
         Ok(in_use) => FrameRateOutcome::Applied { in_use },
         Err(error) => FrameRateOutcome::Refused { error },
     };
@@ -105,7 +108,7 @@ pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyRep
         let outcome = match target_of(&resolutions, &external.device) {
             Ok(device) => done(
                 handle
-                    .declare_external(device, external.label.clone())
+                    .declare_external_as(Origin::Profile, device, external.label.clone())
                     .await,
             ),
             Err(reason) => skip(reason),
@@ -125,9 +128,11 @@ pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyRep
         };
         let outcome = match target_of(&resolutions, &mode.device) {
             Ok(device) => match mode_now(&snapshot, &device, mode.index) {
-                Some(found) if found == mode.name => {
-                    done(handle.select_mode(device, mode.index).await)
-                }
+                Some(found) if found == mode.name => done(
+                    handle
+                        .select_mode_as(Origin::Profile, device, mode.index)
+                        .await,
+                ),
                 found => skip(SkipReason::ModeListChanged { found }),
             },
             Err(reason) => skip(reason),
@@ -150,7 +155,11 @@ pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyRep
                     device,
                     zone: assignment.zone,
                 };
-                done(handle.apply_effect(target, instance).await)
+                done(
+                    handle
+                        .apply_effect_as(Origin::Profile, target, instance)
+                        .await,
+                )
             }
         };
         items.push(report(

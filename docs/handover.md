@@ -32,7 +32,7 @@ All tests pass on macOS. Windows CI passed on the last commit of Task 4a and on 
 | Effects are pure functions of values, time, LED position and seed. The six built-in effects are original code. | `docs/decisions/0003-effects-engine.md` |
 | The session task also owns output: one batched write per device or zone per tick, 30 FPS by default, clamped to 1 to 60. Late ticks are skipped and counted, never queued. Static effects are written once. | same |
 | One owner per device: a PrismForge effect, a hardware mode selected through PrismForge, or another program the user declared. A declared device refuses effects until the user hands it over. Stopping the last effect restores the remembered state. | same |
-| One session task owns the backend. The desktop shell reads snapshots and sends commands through a queue with a fixed size. | this file |
+| One session task owns the backend. The desktop shell reads snapshots and sends commands through a queue with a fixed size. The session publishes the snapshot that shows a command's result before it replies. | this file |
 | Demo mode uses a simulated backend. Each simulated device carries the origin "simulated". A failed real connection never shows demo devices. | this file |
 | The desktop shell owns at most one session. A new session starts only after the previous one has stopped and its identify is restored. Disconnect ends the session. | `apps/desktop/README.md` |
 | The window gets the latest snapshot at most once per 50 ms. Each view has a rising revision, and the interface ignores older views. | `apps/desktop/README.md` |
@@ -65,7 +65,7 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18,
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 228 tests at the end of Task 3a fix round 1. 36 in `prismforge-effects` (5 for the preview), 111 in `prismforge-core` (35 of them for output and ownership, 34 for profiles and the store, 1 for the registry seed), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 237 tests at the end of Task 3a fix round 2. 36 in `prismforge-effects` (5 for the preview), 120 in `prismforge-core` (35 of them for output and ownership, 42 for profiles and the store, 1 for the registry seed, 1 for reply-after-publish), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 70 interface tests (22 for the effects screen, 10 for automatic re-apply, 6 for result texts, 6 for the preview) |
@@ -81,7 +81,7 @@ Windows CI (`windows-latest`) runs format, both lint runs, `cargo test --workspa
 | `2fd05a1` | 44389727399 | Last commit of Task 4a |
 | `b436973` | 44396160088 | Last commit of Task 4b before review fix round 1 |
 
-The review fix round 1 commits after `b436973` and the Task 3a commits have no CI result yet. Task 3a was not pushed. This is build and test evidence only. Nobody has installed or run the app on Windows.
+The review fix round 1 commits after `b436973` have no CI result. The controller reported that Windows CI passed on `ce6b1a8` (Task 3a fix round 1). The Task 3a fix round 2 commit has no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
 
 Checked by hand in the native macOS app built at commit `e19e8dc`, in demo mode. Later commits changed wording, the visible reason next to Stop, and the rules for automatic re-apply and result texts (review fix round 1). Interface tests cover those changes; they were not checked by hand. The app was started in the background with `open -g` and driven through the macOS accessibility tree only. No screenshot was taken and the window was never brought to the front. The checks read element text and states, not pixels:
 
@@ -122,7 +122,7 @@ Not done:
 3. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
 4. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
 5. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
-6. Task 3b: Tauri commands and a profile screen on top of `Profiles`. Order for each session: seed the backend with `Profiles::known_devices`, create the session, start `keep_registry` with `handle.known_devices()` (before or after connect; it writes the current registry at once), then connect. Run a `ConnectTrigger` watcher beside the session. The keeper holds only a receiver and ends with the session; the watcher holds a handle, so abort it before the session ends. Show the `changes` of create and update, and use `StoreSummary::active` to offer update only for the active profile. Pass the per-user configuration folder.
+6. Task 3b: Tauri commands and a profile screen on top of `Profiles`. Order for each session: seed the backend with `Profiles::known_devices`, create the session, start `keep_registry` with `handle.known_devices()` (before or after connect; it writes the current registry at once), then connect. Run a `ConnectTrigger` watcher beside the session. The keeper holds only a receiver and ends with the session; the watcher holds a handle, so abort it before the session ends. Show `preview_update` before the save and the `changes` after it. Use `StoreSummary::active` to offer update only for the active profile, and `unsaved_changes` to show that there is something to save. Pass the per-user configuration folder.
 
 ## Known issues
 
@@ -138,7 +138,7 @@ Not done:
 - **The desktop app does not save the list of known devices yet.** The store, the seeding and the read-back exist in Rust (Task 3a). Until the shell uses them (Task 3b), a device with a serial number that moved to a new location gets a new reference after an application restart.
 - **Profiles are not in the app yet.** The Rust core can save, apply, export and import them. The screen and the commands come with Task 3b.
 - **An export cannot tell identical devices apart.** It has no serial numbers or locations. On the importing computer, two devices of the same model with the same zones stay unresolved.
-- **A profile update changes only what the user changed in this session.** It needs the active profile (the one applied or saved in this session) and refuses any other. Settings that apply skipped stay. An effect the user stopped after the apply is removed. The update returns a change list.
+- **A profile update adds only what the user did in this session.** The session records each user command for output (apply, stop, hardware mode, declaration, hand-back, frame rate). An update applies the records after the profile's baseline to the stored profile. Everything else stays as loaded. It needs the active profile (the one applied or saved in this session) and refuses any other. The records live in memory for one session. After an app restart, apply or create a profile before the next update.
 - **Power loss is not tested.** The store syncs the temporary file before the rename, and the tests fail each write step, but no test cuts power.
 - **Native screenshots are incomplete.** `docs/screenshots/connection.png` is a capture of the native macOS window. The demo inventory, identify outcome, diagnostics and connection failure screenshots are missing: Stage Manager kept the background window as a thumbnail, and later the screen was locked. The window must be in front to capture it, which needs the owner's consent.
 - **The retry number is the next retry.** The session counts retries from 1 after each loss. The interface says "retry N comes next" and never counts failed attempts. The counters in Diagnostics count all connects of the session.

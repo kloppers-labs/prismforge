@@ -16,6 +16,7 @@ use crate::session::diagnostics::{
     Counters, Diagnostics, ErrorRecord, EventRing, Operation, SessionEventKind,
 };
 use crate::session::identify::{IdentifyOutcome, IdentifyPlan, RestoreFailure, RestoreOutcome};
+use crate::session::intent::Intents;
 use crate::session::output::Output;
 use crate::session::snapshot::{OutputStatus, SessionSnapshot};
 use crate::session::{Command, Reply, SessionConfig, SessionError};
@@ -46,6 +47,7 @@ pub struct Session<B> {
     counters: Counters,
     events: EventRing,
     output: Output,
+    intents: Intents,
 }
 
 enum Link {
@@ -116,7 +118,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             last_error: None,
             counters: Counters::default(),
             output,
+            intents: Intents::default(),
         }
+    }
+
+    /// Publishes first, so a caller that sees the reply also sees its result in the snapshot.
+    pub(super) fn answer<T, E>(&self, reply: Reply<T, E>, result: Result<T, E>) {
+        self.publish();
+        let _ = reply.send(result);
     }
 
     pub(crate) fn publisher(&self) -> Arc<watch::Sender<SessionSnapshot>> {
@@ -203,19 +212,23 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         match command {
             Command::Connect(reply) => {
                 let result = self.connect().await;
-                let _ = reply.send(result.map_err(SessionError::from));
+                self.answer(reply, result.map_err(SessionError::from));
+            }
+            Command::Intents { after, reply } => {
+                let log = self.intents.after(after);
+                self.answer(reply, Ok(log));
             }
             Command::Disconnect(reply) => {
                 self.stop().await;
                 self.push(SessionEventKind::Disconnected);
-                let _ = reply.send(Ok(()));
+                self.answer(reply, Ok(()));
             }
             Command::Refresh(reply) => {
                 let result = match self.link {
                     Link::Connected => self.refresh_or_lose(1).await,
                     _ => Err(BackendError::NotConnected),
                 };
-                let _ = reply.send(result.map_err(SessionError::from));
+                self.answer(reply, result.map_err(SessionError::from));
             }
             Command::Identify { request, reply } => self.start_identify(request, reply).await,
             Command::Output(command) => self.on_output(command).await,

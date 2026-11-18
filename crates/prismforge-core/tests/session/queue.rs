@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use prismforge_core::ConnectionState;
 use prismforge_core::session::SessionError;
+use prismforge_core::{ConnectionState, Rgb};
+use prismforge_effects::ControlValue;
 use prismforge_testkit::DemoBackend;
 use tokio::time::Instant;
 
-use crate::support::{config, start};
+use crate::support::{self, config, start};
 
 const SLOW: Duration = Duration::from_secs(10);
 
@@ -59,4 +60,29 @@ async fn commands_beyond_the_queue_bound_are_refused_as_busy() {
         handle.snapshot().diagnostics.counters.commands_refused_busy,
         1
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn every_reply_comes_after_the_snapshot_that_shows_it() {
+    let (handle, _) = support::demo(support::config()).await;
+    let gpu = support::whole(support::GPU);
+    for round in 0..300u32 {
+        let color = Rgb::new((round % 251) as u8, 7, 9);
+        handle
+            .apply_effect(gpu.clone(), support::solid(color))
+            .await
+            .expect("apply");
+        let scene = handle.snapshot().output.scene;
+        assert_eq!(scene.assignments.len(), 1, "round {round}");
+        assert_eq!(
+            scene.assignments[0].effect.values.get("color"),
+            Some(&ControlValue::Color(color)),
+            "round {round}"
+        );
+        handle.stop_effect(gpu.clone()).await.expect("stop");
+        assert!(
+            handle.snapshot().output.scene.assignments.is_empty(),
+            "round {round}"
+        );
+    }
 }

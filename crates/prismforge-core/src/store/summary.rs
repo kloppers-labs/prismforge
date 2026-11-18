@@ -16,6 +16,8 @@ pub struct StoreSummary {
     pub apply_on_connect: Option<ProfileId>,
     /// The profile applied or saved in the session the summary was asked for; updates need it.
     pub active: Option<ProfileId>,
+    /// User changes in this session not yet saved into the active profile; `None` without one.
+    pub unsaved_changes: Option<usize>,
     /// What the store did to damaged or missing files since it opened, and failed background writes.
     pub notices: Vec<StoreNotice>,
 }
