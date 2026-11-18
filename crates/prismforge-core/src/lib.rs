@@ -6,8 +6,10 @@ mod error;
 mod identity;
 mod inventory;
 mod ownership;
+pub mod profile;
 mod scene;
 pub mod session;
+pub mod store;
 
 pub use backend::{BackendEvent, BackendInfo, RgbBackend};
 pub use capabilities::{
