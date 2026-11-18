@@ -1,9 +1,11 @@
 use std::future::Future;
 
+use serde::{Deserialize, Serialize};
+
 use crate::capabilities::DeviceCapabilities;
 use crate::color::Rgb;
 use crate::connection::{ConnectionState, LossCause};
-use crate::device::DeviceRef;
+use crate::device::{BackendOrigin, DeviceRef};
 use crate::error::BackendError;
 use crate::inventory::Inventory;
 
@@ -13,9 +15,19 @@ pub enum BackendEvent {
     ConnectionLost { cause: LossCause, detail: String },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BackendInfo {
+    pub origin: BackendOrigin,
+    pub address: Option<String>,
+    pub protocol_version: Option<u32>,
+    pub server_name: Option<String>,
+}
+
 /// Futures other than `next_event` are not cancel-safe: dropping one mid-call closes the connection.
 pub trait RgbBackend {
     fn connection_state(&self) -> &ConnectionState;
+
+    fn info(&self) -> BackendInfo;
 
     fn connect(&mut self) -> impl Future<Output = Result<(), BackendError>> + Send;
 

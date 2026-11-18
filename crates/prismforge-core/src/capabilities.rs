@@ -2,11 +2,22 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceCapabilities {
-    pub direct_mode: bool,
+    /// Index of the mode PrismForge treats as Direct Mode, if the device has one.
+    pub direct_mode: Option<usize>,
     pub active_mode: Option<usize>,
     pub modes: Vec<ModeDescriptor>,
     pub resizable_zones: Vec<ZoneResizeBounds>,
     pub saves_to_device_memory: bool,
+}
+
+impl DeviceCapabilities {
+    pub fn has_direct_mode(&self) -> bool {
+        self.direct_mode.is_some()
+    }
+
+    pub fn in_direct_mode(&self) -> bool {
+        self.direct_mode.is_some() && self.direct_mode == self.active_mode
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

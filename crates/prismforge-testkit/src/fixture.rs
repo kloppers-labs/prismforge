@@ -175,6 +175,7 @@ pub struct FixtureDevice {
     pub modes: Vec<FixtureMode>,
     pub active_mode: i32,
     pub zones: Vec<FixtureZone>,
+    pub led_colors: Vec<[u8; 3]>,
     pub led_count_override: Option<u16>,
 }
 
@@ -192,6 +193,7 @@ impl FixtureDevice {
             modes: vec![FixtureMode::direct(), FixtureMode::static_color()],
             active_mode: 0,
             zones: Vec::new(),
+            led_colors: Vec::new(),
             led_count_override: None,
         }
     }
@@ -240,6 +242,17 @@ impl FixtureDevice {
         self
     }
 
+    pub fn active_mode(mut self, index: i32) -> Self {
+        self.active_mode = index;
+        self
+    }
+
+    /// LEDs past the end of `colors` report black.
+    pub fn led_colors(mut self, colors: Vec<[u8; 3]>) -> Self {
+        self.led_colors = colors;
+        self
+    }
+
     pub fn without_direct_mode(self) -> Self {
         self.modes(vec![FixtureMode::static_color(), FixtureMode::breathing()])
     }
@@ -273,8 +286,8 @@ impl FixtureDevice {
             body.string(&format!("LED {index}"));
         }
         body.u16(leds);
-        for _ in 0..leds {
-            body.color([0, 0, 0]);
+        for index in 0..leds as usize {
+            body.color(self.led_colors.get(index).copied().unwrap_or([0, 0, 0]));
         }
         body.u16(0).u32(0).string(&self.name).u32(1).byte(0);
         let body = body.into_bytes();

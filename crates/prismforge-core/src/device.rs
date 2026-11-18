@@ -3,6 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::capabilities::DeviceCapabilities;
+use crate::color::Rgb;
 use crate::identity::{DeviceFingerprint, ZoneShape};
 
 /// Persistent PrismForge reference to a physical device; never a backend runtime ID.
@@ -24,6 +25,12 @@ impl fmt::Display for DeviceRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BackendOrigin {
+    OpenRgb,
+    Simulated,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -82,6 +89,7 @@ pub struct ZoneDescriptor {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceDescriptor {
+    pub origin: BackendOrigin,
     pub name: String,
     pub vendor: String,
     pub description: String,
@@ -91,6 +99,8 @@ pub struct DeviceDescriptor {
     pub kind: DeviceKind,
     pub zones: Vec<ZoneDescriptor>,
     pub led_count: usize,
+    /// LED colours as the backend last reported them, one per LED.
+    pub colors: Vec<Rgb>,
     pub capabilities: DeviceCapabilities,
 }
 

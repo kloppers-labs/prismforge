@@ -1,6 +1,6 @@
 use prismforge_core::{
-    DeviceCapabilities, DeviceDescriptor, DeviceKind, MatrixSize, ModeDescriptor, ModeDirection,
-    ModePersistence, ValueRange, ZoneDescriptor, ZoneKind, ZoneResizeBounds,
+    BackendOrigin, DeviceCapabilities, DeviceDescriptor, DeviceKind, MatrixSize, ModeDescriptor,
+    ModeDirection, ModePersistence, ValueRange, ZoneDescriptor, ZoneKind, ZoneResizeBounds,
 };
 
 use crate::protocol::{ControllerData, ModeData, ZoneData};
@@ -24,6 +24,7 @@ const DIRECT_MODE_NAME: &str = "Direct";
 pub fn describe(data: &ControllerData) -> DeviceDescriptor {
     let zones: Vec<ZoneDescriptor> = data.zones.iter().map(describe_zone).collect();
     DeviceDescriptor {
+        origin: BackendOrigin::OpenRgb,
         name: data.name.clone(),
         vendor: data.vendor.clone(),
         description: data.description.clone(),
@@ -32,6 +33,7 @@ pub fn describe(data: &ControllerData) -> DeviceDescriptor {
         location: data.location.clone(),
         kind: device_kind(data.device_type),
         led_count: data.led_names.len(),
+        colors: data.colors.clone(),
         capabilities: capabilities(data, &zones),
         zones,
     }
@@ -39,7 +41,7 @@ pub fn describe(data: &ControllerData) -> DeviceDescriptor {
 
 fn capabilities(data: &ControllerData, zones: &[ZoneDescriptor]) -> DeviceCapabilities {
     DeviceCapabilities {
-        direct_mode: data.modes.iter().any(is_direct_mode),
+        direct_mode: data.modes.iter().position(is_direct_mode),
         active_mode: (!data.modes.is_empty()).then_some(data.active_mode as usize),
         modes: data.modes.iter().map(describe_mode).collect(),
         resizable_zones: zones

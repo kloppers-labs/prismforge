@@ -132,6 +132,10 @@ where
         self.protocol_version
     }
 
+    pub fn server_name(&self) -> Option<String> {
+        self.status.borrow().server_name.clone()
+    }
+
     pub async fn controller_ids(&mut self) -> Result<Vec<u32>, ClientError> {
         let packet = packet_id::REQUEST_CONTROLLER_COUNT;
         let reply = self

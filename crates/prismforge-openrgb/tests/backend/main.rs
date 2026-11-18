@@ -1,5 +1,6 @@
 mod acks;
 mod controller_data;
+mod details;
 mod identity;
 mod loss;
 mod negotiation;

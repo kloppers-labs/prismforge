@@ -1,7 +1,7 @@
 use prismforge_core::{
-    BackendError, BackendEvent, ConnectionState, DeviceCapabilities, DeviceDescriptor,
-    DeviceIdentity, DeviceIssue, DeviceRef, Inventory, InventoryDevice, IssueReason, KnownDevice,
-    LossCause, Reconciliation, Rgb, RgbBackend, StateReason, reconcile,
+    BackendError, BackendEvent, BackendInfo, BackendOrigin, ConnectionState, DeviceCapabilities,
+    DeviceDescriptor, DeviceIdentity, DeviceIssue, DeviceRef, Inventory, InventoryDevice,
+    IssueReason, KnownDevice, LossCause, Reconciliation, Rgb, RgbBackend, StateReason, reconcile,
 };
 use tokio::time::timeout;
 
@@ -226,7 +226,7 @@ impl<C: Connector> OpenRgbBackend<C> {
             .expect("lookup found an inventory")
             .devices[index]
             .descriptor;
-        if !descriptor.capabilities.direct_mode {
+        if !descriptor.capabilities.has_direct_mode() {
             return Err(BackendError::DirectModeUnavailable {
                 device: device.clone(),
             });
@@ -287,6 +287,15 @@ impl<C: Connector> OpenRgbBackend<C> {
 impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
     fn connection_state(&self) -> &ConnectionState {
         &self.state
+    }
+
+    fn info(&self) -> BackendInfo {
+        BackendInfo {
+            origin: BackendOrigin::OpenRgb,
+            address: self.connector.address(),
+            protocol_version: self.protocol_version(),
+            server_name: self.client.as_ref().and_then(OpenRgbClient::server_name),
+        }
     }
 
     async fn connect(&mut self) -> Result<(), BackendError> {

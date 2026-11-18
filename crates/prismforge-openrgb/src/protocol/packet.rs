@@ -8,6 +8,7 @@ pub mod packet_id {
     pub const ACK: u32 = 10;
     pub const REQUEST_PROTOCOL_VERSION: u32 = 40;
     pub const SET_CLIENT_NAME: u32 = 50;
+    pub const SET_SERVER_NAME: u32 = 51;
     pub const DEVICE_LIST_UPDATED: u32 = 100;
     pub const UPDATE_LEDS: u32 = 1050;
     pub const UPDATE_ZONE_LEDS: u32 = 1051;
@@ -74,6 +75,15 @@ fn encode_colors(prefix: &[u8], colors: &[Rgb]) -> Option<Vec<u8>> {
         payload.extend_from_slice(&[color.r, color.g, color.b, 0]);
     }
     Some(payload)
+}
+
+/// `None` unless the payload is UTF-8 text ending in exactly one NUL.
+pub fn decode_string(payload: &[u8]) -> Option<String> {
+    let text = payload.strip_suffix(&[0])?;
+    if text.contains(&0) {
+        return None;
+    }
+    String::from_utf8(text.to_vec()).ok()
 }
 
 pub fn decode_u32(payload: &[u8]) -> Result<u32, PayloadError> {

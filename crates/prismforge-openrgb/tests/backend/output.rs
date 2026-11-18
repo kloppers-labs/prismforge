@@ -53,11 +53,12 @@ async fn refuses_device_without_direct_mode() {
     let inventory = backend.refresh_inventory().await.expect("inventory");
     let plain = support::reference_by_serial(inventory, "SN-plain");
 
-    assert!(
-        !backend
+    assert_eq!(
+        backend
             .capabilities(&plain)
             .expect("capabilities")
-            .direct_mode
+            .direct_mode,
+        None
     );
     let refused = BackendError::DirectModeUnavailable {
         device: plain.clone(),
@@ -147,7 +148,7 @@ async fn reports_modes_and_capabilities() {
 
     let capabilities = backend.capabilities(&keyboard).expect("capabilities");
 
-    assert!(capabilities.direct_mode);
+    assert_eq!(capabilities.direct_mode, Some(0));
     assert!(capabilities.saves_to_device_memory);
     assert_eq!(capabilities.active_mode, Some(0));
     assert_eq!(

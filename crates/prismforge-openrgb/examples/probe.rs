@@ -121,7 +121,7 @@ fn print_device(device: &InventoryDevice) {
     }
     let capabilities = &descriptor.capabilities;
     println!(
-        "  direct mode: {}, saves to device memory: {}, active mode: {:?}",
+        "  direct mode: {:?}, saves to device memory: {}, active mode: {:?}",
         capabilities.direct_mode, capabilities.saves_to_device_memory, capabilities.active_mode
     );
     for mode in &capabilities.modes {

@@ -5,7 +5,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, ReadHalf};
 use tokio::sync::{oneshot, watch};
 
 use crate::client::ClientError;
-use crate::protocol::{HEADER_LEN, PacketHeader, decode_ack, packet_id};
+use crate::protocol::{HEADER_LEN, PacketHeader, decode_ack, decode_string, packet_id};
 
 /// At protocol 6 the server ACKs every packet after any reply, so an exchange that ends on its own ACK leaves none behind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +105,7 @@ impl PendingSlot {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReaderStatus {
     pub list_epoch: u64,
+    pub server_name: Option<String>,
     pub closed: Option<ClientError>,
 }
 
@@ -148,6 +149,9 @@ fn route(
 ) {
     match header.packet_id {
         packet_id::DEVICE_LIST_UPDATED => status.send_modify(|status| status.list_epoch += 1),
+        packet_id::SET_SERVER_NAME => {
+            status.send_modify(|status| status.server_name = decode_string(&payload));
+        }
         packet_id::ACK => {
             if let Ok(ack) = decode_ack(&payload) {
                 pending.on_ack(header.device_id, ack.packet_id, ack.status);
