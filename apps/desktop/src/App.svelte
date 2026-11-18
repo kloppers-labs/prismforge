@@ -7,6 +7,7 @@
   import { isSimulated, summarise } from "./features/connection/wording";
   import DiagnosticsDrawer from "./features/diagnostics/DiagnosticsDrawer.svelte";
   import Inventory from "./features/devices/Inventory.svelte";
+  import EffectsScreen from "./features/effects/EffectsScreen.svelte";
   import { failureText } from "./lib/errors";
   import Mark from "./lib/Mark.svelte";
   import { AppState } from "./lib/state/app.svelte";
@@ -21,6 +22,7 @@
       : false,
   );
   let summary = $derived(session ? summarise(session) : null);
+  let inventory = $derived(session !== null && !stopped && session.devices.length > 0);
   let diagnosticsButton: HTMLButtonElement | undefined = $state();
 
   onMount(() => {
@@ -45,6 +47,16 @@
       <Mark />
       <span class="name">PrismForge</span>
     </div>
+    {#if inventory}
+      <nav class="screens" aria-label="Screens">
+        <button type="button" aria-current={app.screen === "devices" ? "page" : undefined} onclick={() => (app.screen = "devices")}>
+          Devices
+        </button>
+        <button type="button" aria-current={app.screen === "effects" ? "page" : undefined} onclick={() => (app.screen = "effects")}>
+          Effects
+        </button>
+      </nav>
+    {/if}
     {#if session && !stopped}
       <SessionBar {app} {session} />
     {:else}
@@ -87,6 +99,8 @@
       <ConnectionScreen {app} stopped={session} />
     {:else if session.devices.length === 0}
       <WaitingPanel {session} />
+    {:else if app.screen === "effects"}
+      <EffectsScreen {app} {session} />
     {:else}
       <Inventory {app} {session} />
     {/if}
@@ -135,6 +149,27 @@
     font-weight: 700;
     font-size: 15px;
     letter-spacing: 0.01em;
+  }
+
+  .screens {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: var(--ink-0);
+  }
+
+  .screens button {
+    border: 0;
+    background: transparent;
+    padding: 4px 14px;
+    color: var(--text-dim);
+  }
+
+  .screens button[aria-current="page"] {
+    background: var(--ink-3);
+    color: var(--text);
   }
 
   .spacer {

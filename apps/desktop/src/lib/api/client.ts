@@ -2,7 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { CommandError } from "./bindings/CommandError";
 import type { DeviceRef } from "./bindings/DeviceRef";
+import type { EffectCatalog } from "./bindings/EffectCatalog";
+import type { EffectInstance } from "./bindings/EffectInstance";
 import type { IdentifyOutcome } from "./bindings/IdentifyOutcome";
+import type { OutputTarget } from "./bindings/OutputTarget";
+import type { PreviewBatch } from "./bindings/PreviewBatch";
+import type { PreviewRequest } from "./bindings/PreviewRequest";
+import type { RestoreOutcome } from "./bindings/RestoreOutcome";
 import type { ShellView } from "./bindings/ShellView";
 
 export const VIEW_EVENT = "session-view";
@@ -42,6 +48,14 @@ export const api = {
   refresh: () => call<null>("refresh"),
   identify: (device: DeviceRef, zone: number | null) =>
     call<IdentifyOutcome>("identify", { device, zone }),
+  effectCatalog: () => call<EffectCatalog>("effect_catalog"),
+  applyEffect: (target: OutputTarget, effect: EffectInstance) => call<null>("apply_effect", { target, effect }),
+  stopEffect: (target: OutputTarget) => call<RestoreOutcome | null>("stop_effect", { target }),
+  selectMode: (device: DeviceRef, mode: number) => call<null>("select_mode", { device, mode }),
+  declareExternal: (device: DeviceRef, label: string) => call<null>("declare_external", { device, label }),
+  clearExternal: (device: DeviceRef) => call<null>("clear_external", { device }),
+  setFrameRate: (frameRate: number) => call<number>("set_frame_rate", { frameRate }),
+  previewEffect: (request: PreviewRequest) => call<PreviewBatch>("preview_effect", { request }),
   onView: (handler: (view: ShellView) => void): Promise<UnlistenFn> =>
     listen<ShellView>(VIEW_EVENT, (event) => handler(event.payload)),
 };
