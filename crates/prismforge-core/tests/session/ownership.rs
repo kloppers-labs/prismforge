@@ -6,7 +6,7 @@ use prismforge_core::session::{
 };
 use prismforge_core::{BackendError, DeviceRef, OutputOwner, OutputTarget, Rgb};
 use prismforge_effects::{ControlValue, InstanceError, ValueError, ValueProblem};
-use prismforge_testkit::{DemoBackend, DemoOutput, FakeServer, FixtureDevice, wire};
+use prismforge_testkit::{DemoBackend, DemoOutput, FakeServer, FixtureDevice, FixtureMode, wire};
 use tokio::time::{Instant, sleep};
 
 use crate::support::{
@@ -640,4 +640,156 @@ async fn no_command_writes_to_a_device_declared_external() {
     session.await.expect("session ends");
 
     assert_eq!(controls.outputs()[declared..], []);
+}
+
+fn alpha_in_mode(active: i32, modes: Vec<FixtureMode>) -> FixtureDevice {
+    strip("alpha", 3).modes(modes).active_mode(active)
+}
+
+fn direct_static_breathing() -> Vec<FixtureMode> {
+    vec![
+        FixtureMode::direct(),
+        FixtureMode::static_color(),
+        FixtureMode::breathing(),
+    ]
+}
+
+async fn restart_with(
+    server: &FakeServer,
+    handle: &prismforge_core::session::SessionHandle,
+    alpha: FixtureDevice,
+) {
+    server.restart(vec![(0, alpha.into())]);
+    wait_until(handle, is_retrying).await;
+    wait_until(handle, is_connected).await;
+}
+
+async fn run_and_stop(
+    handle: &prismforge_core::session::SessionHandle,
+    target: &OutputTarget,
+) -> Option<RestoreOutcome> {
+    handle
+        .apply_effect(target.clone(), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+    handle.stop_effect(target.clone()).await.expect("stop")
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_mode_chosen_elsewhere_replaces_the_remembered_state() {
+    let server = FakeServer::new();
+    server.add_device(0, alpha_in_mode(1, direct_static_breathing()));
+    let handle = support::connected_openrgb(&server).await;
+    let alpha = reference(&handle.snapshot(), "SN-alpha");
+    let target = OutputTarget {
+        device: alpha.clone(),
+        zone: None,
+    };
+    handle
+        .apply_effect(target.clone(), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+    handle
+        .declare_external(alpha.clone(), PLUGIN.into())
+        .await
+        .expect("declare");
+    restart_with(
+        &server,
+        &handle,
+        alpha_in_mode(2, direct_static_breathing()),
+    )
+    .await;
+    handle.clear_external(alpha).await.expect("hand back");
+
+    let restore = run_and_stop(&handle, &target).await;
+
+    assert_eq!(restore, Some(RestoreOutcome::Restored));
+    let last = server.mode_updates().pop().expect("a mode update");
+    assert_eq!(last.mode_index, 2);
+    assert_eq!(last.mode, FixtureMode::breathing());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_remembered_state_that_no_longer_fits_gives_way_to_a_fresh_capture() {
+    let server = FakeServer::new();
+    server.add_device(0, alpha_in_mode(1, direct_static_breathing()));
+    let handle = support::connected_openrgb(&server).await;
+    let alpha = reference(&handle.snapshot(), "SN-alpha");
+    let target = OutputTarget {
+        device: alpha.clone(),
+        zone: None,
+    };
+    handle
+        .apply_effect(target.clone(), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+    handle
+        .declare_external(alpha.clone(), PLUGIN.into())
+        .await
+        .expect("declare");
+    let reordered = vec![
+        FixtureMode::direct(),
+        FixtureMode::breathing(),
+        FixtureMode::static_color(),
+    ];
+    restart_with(&server, &handle, alpha_in_mode(0, reordered)).await;
+    handle.clear_external(alpha).await.expect("hand back");
+    let unknown = Some(RestoreOutcome::PartlyRestored {
+        failure: prismforge_core::session::RestoreFailure::PreviousStateUnknown,
+    });
+
+    for round in 0..3 {
+        assert_eq!(
+            run_and_stop(&handle, &target).await,
+            unknown,
+            "round {round}"
+        );
+    }
+    assert!(
+        server
+            .mode_updates()
+            .iter()
+            .all(|update| update.session == 0)
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_state_remembered_as_unknown_gives_way_to_a_newer_reported_mode() {
+    let server = FakeServer::new();
+    server.add_device(0, alpha_in_mode(0, direct_static_breathing()));
+    let handle = support::connected_openrgb(&server).await;
+    let alpha = reference(&handle.snapshot(), "SN-alpha");
+    let target = OutputTarget {
+        device: alpha.clone(),
+        zone: None,
+    };
+    let running = tokio::spawn(handle.identify(alpha.clone(), None, BLINK));
+    wait_until(&handle, |snapshot| snapshot.identify.is_some()).await;
+    server.disconnect_all();
+    let interrupted = running.await.expect("task").expect("identify");
+    wait_until(&handle, is_connected).await;
+    let unknown = Some(RestoreOutcome::PartlyRestored {
+        failure: prismforge_core::session::RestoreFailure::PreviousStateUnknown,
+    });
+
+    let first = run_and_stop(&handle, &target).await;
+    restart_with(
+        &server,
+        &handle,
+        alpha_in_mode(2, direct_static_breathing()),
+    )
+    .await;
+    let second = run_and_stop(&handle, &target).await;
+
+    assert!(matches!(
+        interrupted.restore,
+        RestoreOutcome::NotRestored { .. }
+    ));
+    assert_eq!(first, unknown);
+    assert_eq!(second, Some(RestoreOutcome::Restored));
+    let last = server.mode_updates().pop().expect("a mode update");
+    assert_eq!(last.mode_index, 2);
 }

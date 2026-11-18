@@ -65,7 +65,12 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             let descriptor = &inventory.output_target(&device, target.zone)?.descriptor;
             let suspect = self.state_suspect(&device, inventory);
             self.output.effect(&device).is_none().then(|| {
-                let previous = self.output.remembered.get(&device).cloned();
+                let previous = self
+                    .output
+                    .remembered
+                    .get(&device)
+                    .filter(|previous| previous.still_matches(inventory).is_ok())
+                    .cloned();
                 let previous = previous
                     .unwrap_or_else(|| PreviousState::capture(&device, descriptor, suspect));
                 (previous, descriptor.colors.clone())

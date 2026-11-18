@@ -1,15 +1,24 @@
+use std::collections::VecDeque;
+
 use prismforge_effects::linear_positions;
 use tokio::time::Instant;
 
 use crate::backend::RgbBackend;
 use crate::device::DeviceRef;
 use crate::error::BackendError;
+use crate::scene::OutputTarget;
 use crate::session::diagnostics::Operation;
-use crate::session::output::{EffectOutput, Tick};
+use crate::session::output::{EffectOutput, Step, Tick};
 use crate::session::runner::{Link, Session};
 use crate::session::snapshot::PauseReason;
 
 const SEED: u64 = 0;
+
+enum Flow {
+    Next,
+    SkipDevice,
+    Lost,
+}
 
 impl<B: RgbBackend + Send + 'static> Session<B> {
     /// When the next frame or retry is due; `None` while nothing can be written, so the loop never spins.
@@ -62,22 +71,26 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
     }
 
-    /// Writes the frame for now to each due device; waiting commands go between two devices, and passed ticks are skipped.
+    /// Runs the due backend calls one at a time; a waiting command goes between two calls, and passed ticks are skipped.
     pub(super) async fn on_frame(&mut self) {
         self.output.frame_owed = false;
         let mut tick = match self.output.tick.take() {
             Some(tick) => tick,
             None => self.start_tick(),
         };
-        while let Some(device) = tick.remaining.pop_front() {
-            let still_due = self.output.effect(&device).is_some_and(|output| {
-                self.device_due(&device, output)
-                    .is_some_and(|due| due <= Instant::now())
-            });
-            if still_due && !self.write_device(&device).await {
-                return;
+        while let Some(step) = tick.steps.pop_front() {
+            let device = step.device();
+            match self.run_step(&step).await {
+                Flow::Next if !tick.steps.iter().any(|later| later.device() == device) => {
+                    if let Some(output) = self.output.effect_mut(device) {
+                        output.refusal = None;
+                    }
+                }
+                Flow::Next => {}
+                Flow::SkipDevice => tick.steps.retain(|later| later.device() != device),
+                Flow::Lost => return,
             }
-            if !tick.remaining.is_empty() && !self.commands.is_empty() {
+            if !tick.steps.is_empty() && !self.commands.is_empty() {
                 self.output.tick = Some(tick);
                 return;
             }
@@ -89,89 +102,124 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
 
     fn start_tick(&self) -> Tick {
         let fired = Instant::now();
+        let mut steps = VecDeque::new();
+        for (device, output) in self.output.effects() {
+            if !self
+                .device_due(device, output)
+                .is_some_and(|due| due <= fired)
+            {
+                continue;
+            }
+            if !output.direct_mode {
+                steps.push_back(Step::DirectMode(device.clone()));
+            }
+            steps.extend(
+                output
+                    .effects
+                    .iter()
+                    .filter(|running| running.needs_frame())
+                    .map(|running| Step::Frame(running.target.clone())),
+            );
+        }
         Tick {
             fired,
             on_cadence: self.output.next_tick <= fired,
-            remaining: self
-                .output
-                .effects()
-                .filter(|(device, output)| {
-                    self.device_due(device, output)
-                        .is_some_and(|due| due <= fired)
-                })
-                .map(|(device, _)| device.clone())
-                .collect(),
+            steps,
         }
     }
 
-    /// One batched write per assigned target, rendered for the moment it starts; false once the connection is gone.
-    async fn write_device(&mut self, device: &DeviceRef) -> bool {
-        let now = Instant::now();
-        let (Some(inventory), Some(output)) = (&self.inventory, self.output.effect(device)) else {
-            return true;
-        };
-        let mut frames = Vec::new();
-        let mut led_count = output.shown.len();
-        for (index, running) in output.effects.iter().enumerate() {
-            if running.written && running.effect.is_static() {
-                continue;
-            }
-            let Ok(target) = inventory.output_target(device, running.target.zone) else {
-                return true;
-            };
-            let descriptor = &target.descriptor;
-            let leds = running.target.zone.map_or(descriptor.led_count, |zone| {
-                descriptor.zones[zone].led_count
-            });
-            let start = running.target.zone.map_or(0, |zone| {
-                descriptor.zones[..zone]
-                    .iter()
-                    .map(|zone| zone.led_count)
-                    .sum()
-            });
-            let time = now.saturating_duration_since(running.started);
-            let colors = running.effect.render(time, &linear_positions(leds), SEED);
-            frames.push((index, running.target.zone, start, colors));
-            led_count = descriptor.led_count;
+    async fn run_step(&mut self, step: &Step) -> Flow {
+        let device = step.device();
+        let due = self.output.effect(device).is_some_and(|output| {
+            self.device_due(device, output)
+                .is_some_and(|due| due <= Instant::now())
+        });
+        if !due {
+            return Flow::SkipDevice;
         }
-        if !output.direct_mode {
-            if let Err(error) = self.backend.enable_direct_mode(device).await {
-                return self.refused(device, error);
-            }
-            if let Some(output) = self.output.effect_mut(device) {
-                output.direct_mode = true;
-            }
+        match step {
+            Step::DirectMode(device) => self.enable_direct_mode(device).await,
+            Step::Frame(target) => self.write_frame(target).await,
         }
-        for (index, zone, start, colors) in frames {
-            let written = match zone {
-                Some(zone) => self.backend.write_zone_frame(device, zone, &colors).await,
-                None => self.backend.write_device_frame(device, &colors).await,
-            };
-            if let Err(error) = written {
-                return self.refused(device, error);
-            }
-            self.counters.frames_written += 1;
-            if let Some(output) = self.output.effect_mut(device) {
-                output.show(start, &colors, led_count);
-                if let Some(running) = output.effects.get_mut(index) {
-                    running.written = true;
-                }
-            }
+    }
+
+    async fn enable_direct_mode(&mut self, device: &DeviceRef) -> Flow {
+        if self
+            .output
+            .effect(device)
+            .is_some_and(|output| output.direct_mode)
+        {
+            return Flow::Next;
+        }
+        if let Err(error) = self.backend.enable_direct_mode(device).await {
+            return self.refused(device, error);
         }
         if let Some(output) = self.output.effect_mut(device) {
-            output.refusal = None;
+            output.direct_mode = true;
         }
-        true
+        Flow::Next
+    }
+
+    /// One batched write for one target, rendered for the moment it starts.
+    async fn write_frame(&mut self, target: &OutputTarget) -> Flow {
+        let device = &target.device;
+        let now = Instant::now();
+        let (Some(inventory), Some(output)) = (&self.inventory, self.output.effect(device)) else {
+            return Flow::SkipDevice;
+        };
+        let Some(index) = output
+            .effects
+            .iter()
+            .position(|running| running.target == *target)
+        else {
+            return Flow::Next;
+        };
+        let running = &output.effects[index];
+        if !running.needs_frame() {
+            return Flow::Next;
+        }
+        let Ok(entry) = inventory.output_target(device, target.zone) else {
+            return Flow::SkipDevice;
+        };
+        if !output.direct_mode {
+            return Flow::SkipDevice;
+        }
+        let descriptor = &entry.descriptor;
+        let led_count = descriptor.led_count;
+        let (start, leds) = target.zone.map_or((0, led_count), |zone| {
+            let start = descriptor.zones[..zone]
+                .iter()
+                .map(|zone| zone.led_count)
+                .sum();
+            (start, descriptor.zones[zone].led_count)
+        });
+        let time = now.saturating_duration_since(running.started);
+        let colors = running.effect.render(time, &linear_positions(leds), SEED);
+        let written = match target.zone {
+            Some(zone) => self.backend.write_zone_frame(device, zone, &colors).await,
+            None => self.backend.write_device_frame(device, &colors).await,
+        };
+        if let Err(error) = written {
+            return self.refused(device, error);
+        }
+        self.counters.frames_written += 1;
+        if let Some(output) = self.output.effect_mut(device) {
+            output.show(start, &colors, led_count);
+            if let Some(running) = output.effects.get_mut(index) {
+                running.written = true;
+            }
+        }
+        Flow::Next
     }
 
     /// A refusal waits for its own retry time; a stale inventory waits for the next refresh instead.
-    fn refused(&mut self, device: &DeviceRef, error: BackendError) -> bool {
+    fn refused(&mut self, device: &DeviceRef, error: BackendError) -> Flow {
         let lost = self.lost_reason();
         self.record_error(Operation::Output, &error, lost.clone());
         if lost.is_some() {
             self.counters.output_writes_failed += 1;
             self.lose_if_disconnected();
-            return false;
+            return Flow::Lost;
         }
         self.counters.output_writes_refused += 1;
         if error != BackendError::StaleInventory
@@ -179,6 +227,6 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         {
             output.refuse(error, Instant::now());
         }
-        true
+        Flow::SkipDevice
     }
 }

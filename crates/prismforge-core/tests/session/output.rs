@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use prismforge_core::session::{OutputCondition, SessionConfig};
+use prismforge_core::session::{OutputCondition, SessionConfig, SessionHandle};
 use prismforge_core::{BackendError, DeviceRef, LossCause, OutputTarget, Rgb};
 use prismforge_effects::{linear_positions, prepare};
 use prismforge_testkit::DemoOutput;
@@ -303,8 +303,7 @@ async fn connection_loss_pauses_output_until_direct_mode_is_enabled_again() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_command_waits_for_at_most_one_write_while_effects_run() {
-    const SLOW_CALL: Duration = Duration::from_millis(25);
+async fn a_command_waits_for_at_most_one_backend_call_while_effects_run() {
     let (handle, controls) = demo(config()).await;
     for device in [GPU, MEMORY, MOTHERBOARD] {
         handle
@@ -314,13 +313,7 @@ async fn a_command_waits_for_at_most_one_write_while_effects_run() {
     }
     controls.set_call_delay(SLOW_CALL);
 
-    let mut slowest = Duration::ZERO;
-    for _ in 0..40 {
-        sleep(Duration::from_millis(7)).await;
-        let asked = Instant::now();
-        handle.set_frame_rate(30).await.expect("set frame rate");
-        slowest = slowest.max(asked.elapsed());
-    }
+    let slowest = slowest_reply(&handle).await;
     assert!(slowest <= SLOW_CALL, "a command waited {slowest:?}");
 
     let before = handle.snapshot().diagnostics.counters.frames_written;
@@ -339,4 +332,56 @@ async fn a_command_waits_for_at_most_one_write_while_effects_run() {
     }
     let during = handle.snapshot().diagnostics.counters.frames_written - before;
     assert!(during >= 30, "{during} frames while commands kept coming");
+}
+
+const SLOW_CALL: Duration = Duration::from_millis(25);
+
+async fn slowest_reply(handle: &SessionHandle) -> Duration {
+    let mut slowest = Duration::ZERO;
+    for _ in 0..40 {
+        sleep(Duration::from_millis(7)).await;
+        let asked = Instant::now();
+        handle.set_frame_rate(30).await.expect("set frame rate");
+        slowest = slowest.max(asked.elapsed());
+    }
+    slowest
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_command_waits_for_at_most_one_backend_call_while_zone_effects_run() {
+    let (handle, controls) = demo(config()).await;
+    for zone in 0..3 {
+        let target = OutputTarget {
+            device: DeviceRef::new(MOTHERBOARD),
+            zone: Some(zone),
+        };
+        handle.apply_effect(target, rainbow()).await.expect("apply");
+    }
+    controls.set_call_delay(SLOW_CALL);
+
+    let slowest = slowest_reply(&handle).await;
+
+    assert!(slowest <= SLOW_CALL, "a command waited {slowest:?}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_command_waits_for_at_most_one_backend_call_while_output_resumes() {
+    let (handle, controls) = demo(config()).await;
+    handle
+        .apply_effect(whole(GPU), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+    controls.set_call_delay(SLOW_CALL);
+
+    controls.lose_connection(LossCause::Timeout);
+    wait_until(&handle, is_retrying).await;
+    wait_until(&handle, is_connected).await;
+    let asked = Instant::now();
+    handle.set_frame_rate(30).await.expect("set frame rate");
+    let waited = asked.elapsed();
+    sleep(Duration::from_millis(200)).await;
+
+    assert!(waited <= SLOW_CALL, "a command waited {waited:?}");
+    assert_eq!(direct_mode_calls(&controls.outputs(), GPU), 2);
 }

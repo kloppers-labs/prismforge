@@ -21,9 +21,9 @@ pub(crate) struct Output {
     pub frame_rate: u32,
     pub next_tick: Instant,
     pub claims: BTreeMap<DeviceRef, Claim>,
-    /// States of devices PrismForge changed and has not restored; the next take-over reuses them.
+    /// States of devices PrismForge changed and has not restored; dropped once the device reports another mode.
     pub remembered: BTreeMap<DeviceRef, PreviousState>,
-    /// A tick that stopped between two devices to let a command through.
+    /// A tick that stopped between two backend calls to let a command through.
     pub tick: Option<Tick>,
     /// Set when a command ran while output was due, so output goes next.
     pub frame_owed: bool,
@@ -32,7 +32,22 @@ pub(crate) struct Output {
 pub(crate) struct Tick {
     pub fired: Instant,
     pub on_cadence: bool,
-    pub remaining: VecDeque<DeviceRef>,
+    pub steps: VecDeque<Step>,
+}
+
+/// One backend call of a tick.
+pub(crate) enum Step {
+    DirectMode(DeviceRef),
+    Frame(OutputTarget),
+}
+
+impl Step {
+    pub fn device(&self) -> &DeviceRef {
+        match self {
+            Self::DirectMode(device) => device,
+            Self::Frame(target) => &target.device,
+        }
+    }
 }
 
 pub(crate) enum Claim {
@@ -130,6 +145,12 @@ impl Output {
 
     /// Every effect is written again; direct mode counts as enabled only where the inventory still reports it.
     pub fn after_inventory(&mut self, inventory: &Inventory) {
+        self.remembered.retain(|device, _| {
+            inventory.device(device).is_none_or(|entry| {
+                let capabilities = &entry.descriptor.capabilities;
+                capabilities.active_mode.is_none() || capabilities.in_direct_mode()
+            })
+        });
         for (device, claim) in &mut self.claims {
             let Claim::Effect(output) = claim else {
                 continue;
@@ -173,6 +194,12 @@ impl Output {
     }
 }
 
+impl Running {
+    pub fn needs_frame(&self) -> bool {
+        !self.written || !self.effect.is_static()
+    }
+}
+
 impl Claim {
     pub fn owner(&self) -> OutputOwner {
         match self {
@@ -213,9 +240,7 @@ impl EffectOutput {
 
     /// True while some effect still needs a frame: it is animated or not yet written.
     pub fn pending(&self) -> bool {
-        self.effects
-            .iter()
-            .any(|running| !running.written || !running.effect.is_static())
+        self.effects.iter().any(Running::needs_frame)
     }
 
     pub fn show(&mut self, start: usize, colors: &[Rgb], led_count: usize) {
