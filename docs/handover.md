@@ -4,13 +4,13 @@ Last update: 2026-11-18.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: its Windows build has no result yet.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and two hand checks are missing.
 
 The repository has a Rust workspace with three crates and a desktop app. `prismforge-core` holds the device types, the identity matching, the backend contract and the session. The session owns the backend, reconnects, keeps a readable snapshot, and runs the identify action. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
 
 `apps/desktop` is a Tauri 2 app with a Svelte 5 and TypeScript interface. It has a connection screen, a device list with device details, an identify action, a diagnostics drawer and a labelled demo mode. The shell in `apps/desktop/src-tauri` owns at most one session. The interface types and the test fixtures are generated from the Rust code.
 
-All tests pass on macOS. The native app was built and run on macOS (Apple Silicon) only. No test against a real OpenRGB server, real hardware or Windows has been done.
+All tests pass on macOS and in Windows CI. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -34,7 +34,7 @@ All tests pass on macOS. The native app was built and run on macOS (Apple Silico
 The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 
 1. Task 1: OpenRGB boundary. **Complete.**
-2. Task 2: desktop connection and inventory slice. **Built.** The Windows CI result is still open.
+2. Task 2: desktop connection and inventory slice. **Built.** Built and tested in Windows CI. A run on Windows, the missing screenshots and two hand checks are still open.
 3. Task 4: effect engine, output scheduler and output ownership.
 4. Task 3: profiles.
 5. Task 5: component setup and layout.
@@ -52,36 +52,38 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18,
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 110 tests. 41 in `prismforge-core`, 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 11 in `prismforge-desktop` (6 shell, 4 view forwarding, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 113 tests. 41 in `prismforge-core`, 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
-| `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 21 interface tests |
+| `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 24 interface tests |
 | `pnpm tauri:build --bundles app` in `apps/desktop` | Pass: `PrismForge.app`, 10.7 MiB, not signed |
+
+Windows CI run 44320629268 on commit `548677b` (`windows-latest`) passed every step: format, both lint runs, `cargo test --workspace`, the binding drift check, `pnpm install --frozen-lockfile`, typecheck, interface tests and `pnpm tauri:build`. The artifact `prismforge-windows-unsigned` (about 5.2 MB) holds the MSI and NSIS installers. This is build and test evidence only. Nobody has installed or run the app on Windows. Commits after `548677b` have no CI result yet.
 
 Checked by hand in the native macOS app:
 
 - Connection screen at start. Nothing connected before a choice.
-- Connect to `127.0.0.1:6742` with no server: "Retrying, attempt 1, 2, 3" with the cause "Nothing answered at the OpenRGB server at 127.0.0.1:6742". No device list and no demo banner.
+- Connect to `127.0.0.1:6742` with no server: the retry state with its count and the cause "Nothing answered at the OpenRGB server at 127.0.0.1:6742". No device list and no demo banner. (The retry text has changed since; see Not done.)
 - Demo mode: striped banner, five simulated devices, device details, identify of a motherboard zone with the outcome text, diagnostics drawer with origin, counters, device references and events.
 - From demo mode, Disconnect, then Connect to OpenRGB: retry state with no demo devices.
-- A macOS Quit request ends the process. Closing the window by hand was not checked; the window close button could not be reached while the window was a Stage Manager thumbnail.
-- This check ran on the build before the commit that names the demo backend in demo identify text. The interface tests cover that text; the native app was not checked again because the screen was locked.
+- A macOS Quit request ends the process.
 
-Not run:
+Not done:
 
-- The Windows CI job. `.github/workflows/ci.yml` runs format, lint, tests, both drift checks, the typecheck, the interface tests and the native Windows build, and uploads the unsigned installers. Nobody has seen its result yet.
+- Native screenshots of demo mode, a device with an identify outcome, diagnostics and a failed connection. Only `docs/screenshots/connection.png` exists.
+- Closing the window by hand. The tests in `apps/desktop/src-tauri/tests/exit.rs` cover the stop-then-exit logic without a window. The Tauri event handler that calls it has no test: Tauri's mock runtime cannot exit (`request_exit` is unimplemented in tauri 2.12.6).
+- A hand check of the current build. The hand check above ran on the build before the commits that name the demo backend in demo identify text and that changed the retry text. Interface tests cover both texts.
 - Any run of the app on Windows.
 - Any test against a real OpenRGB server.
 - Any hardware write.
 
 ## Next steps
 
-1. Push the branch and read the result of the Windows CI job. Fix what fails.
+1. With the owner's consent and screen-capture permission, take the four missing screenshots and check the current build by hand, including closing the window during an identify.
 2. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
 3. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
 4. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did.
-5. Take the missing native screenshots (see Known issues).
-6. Add persistence for the list of known devices. The profiles task needs it.
+5. Add persistence for the list of known devices. The profiles task needs it.
 
 ## Known issues
 
@@ -95,7 +97,8 @@ Not run:
 - **Reconnect does not stop by itself.** The session retries with a delay that grows to a fixed cap (30 seconds by default) until the user disconnects. A server that reports a protocol below 6 is not retried. A server that does not answer the version request is retried; while it retries, the state shows "unsupported protocol" without a version, because an old server and a hung server look the same.
 - **An identify during a device rescan can fail once.** If a device-list change is pending, identify reports "unchanged" with a stale-inventory error and writes nothing. The session refreshes by itself within about 250 ms. A second try then works.
 - **The list of known devices is in memory only.** After an application restart, a device with a serial number that moved to a new location gets a new reference.
-- **Native screenshots are incomplete.** `docs/screenshots/connection.png` is a capture of the native macOS window. The demo inventory, identify outcome, diagnostics and connection failure screenshots are missing: Stage Manager kept the background window as a thumbnail, and later the screen was locked. The window must be in front to capture it.
+- **Native screenshots are incomplete.** `docs/screenshots/connection.png` is a capture of the native macOS window. The demo inventory, identify outcome, diagnostics and connection failure screenshots are missing: Stage Manager kept the background window as a thumbnail, and later the screen was locked. The window must be in front to capture it, which needs the owner's consent.
+- **The retry number is the next retry.** The session counts retries from 1 after each loss. The interface says "retry N comes next" and never counts failed attempts. The counters in Diagnostics count all connects of the session.
 - **Ambiguous devices cannot be resolved yet.** The app explains them and turns Identify off for them. A way to tell identical devices apart by hand does not exist.
 - **Disconnect ends the session.** Its diagnostics and its list of known devices are gone after a disconnect. Host and port reset to the defaults when the app restarts.
 - **Identify always lasts 3 seconds.** The shell sets it; there is no setting.

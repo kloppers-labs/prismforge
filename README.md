@@ -12,8 +12,9 @@ PrismForge is at an early stage. The first desktop app shows the connection, the
 |---|---|
 | OpenRGB SDK client (protocol 6, OpenRGB 1.0 and later) | Built. Tested against a scripted fake server only. |
 | Device identity that survives an OpenRGB restart | Built. Tested against a scripted fake server only. |
-| Desktop app: connection, device list, identify, diagnostics, demo mode | Built. Built and run on macOS (Apple Silicon) only. |
-| Windows build of the desktop app | **Not confirmed.** A Windows CI job exists; no result yet. |
+| Desktop app: connection, device list, identify, diagnostics, demo mode | Built. Run by hand on macOS (Apple Silicon) only. |
+| Windows build of the desktop app | Built and tested in CI on `windows-latest`: format, lint, all tests, typecheck and the unsigned installers. |
+| Run of the desktop app on Windows | **Not done** |
 | Test against a real OpenRGB server | **Not done** |
 | Test on real hardware | **Not done** |
 | Effects, profiles, layout, tray, autostart | Not started |
@@ -51,6 +52,8 @@ The app starts on the connection screen. Nothing connects until you choose:
 - **Explore demo mode**: five simulated devices. A striped banner labels demo mode on every screen. Demo mode sends nothing to hardware.
 
 ![The connection screen](docs/screenshots/connection.png)
+
+Only the connection screen has a screenshot so far. Screenshots of demo mode, a device with an identify outcome, diagnostics and a failed connection are still missing.
 
 ## Probe a real OpenRGB server
 
