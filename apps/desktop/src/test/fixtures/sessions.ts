@@ -3095,6 +3095,748 @@ export const openRgbDegraded: SessionSnapshot = {
   }
 };
 
+export const openRgbLostWhileConnected: SessionSnapshot = {
+  "connection": {
+    "Retrying": {
+      "attempt": 1,
+      "reason": {
+        "ConnectionLost": {
+          "cause": "ServerClosed"
+        }
+      }
+    }
+  },
+  "backend": {
+    "origin": "OpenRgb",
+    "address": "127.0.0.1:6742",
+    "protocol_version": null,
+    "server_name": null
+  },
+  "devices": [
+    {
+      "identity": {
+        "New": "dev-1052f35afd339289"
+      },
+      "descriptor": {
+        "origin": "OpenRgb",
+        "name": "Fixture Strip",
+        "vendor": "Fixture Vendor",
+        "description": "Fixture device",
+        "version": "1.0",
+        "serial": "SN-alpha",
+        "location": "usb:alpha",
+        "kind": "LedStrip",
+        "zones": [
+          {
+            "name": "Header",
+            "kind": "Linear",
+            "led_count": 12,
+            "leds_min": 0,
+            "leds_max": 60,
+            "matrix": null
+          }
+        ],
+        "led_count": 12,
+        "colors": [
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          }
+        ],
+        "capabilities": {
+          "direct_mode": 0,
+          "active_mode": 2,
+          "modes": [
+            {
+              "name": "Direct",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": true,
+              "mode_colors": null,
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "None"
+            },
+            {
+              "name": "Static",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 1
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            },
+            {
+              "name": "Breathing",
+              "speed": {
+                "min": 1,
+                "max": 5
+              },
+              "brightness": {
+                "min": 0,
+                "max": 100
+              },
+              "directions": [
+                "LeftRight"
+              ],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 2
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            }
+          ],
+          "resizable_zones": [
+            {
+              "zone": 0,
+              "min": 0,
+              "max": 60
+            }
+          ],
+          "saves_to_device_memory": true
+        }
+      },
+      "available": false
+    },
+    {
+      "identity": {
+        "New": "dev-3aa84c4a5a06ce30"
+      },
+      "descriptor": {
+        "origin": "OpenRgb",
+        "name": "Fixture Graphics Card",
+        "vendor": "Fixture Vendor",
+        "description": "Fixture device",
+        "version": "1.0",
+        "serial": "SN-card",
+        "location": "pci:1",
+        "kind": "Gpu",
+        "zones": [
+          {
+            "name": "Logo",
+            "kind": "Linear",
+            "led_count": 4,
+            "leds_min": 4,
+            "leds_max": 4,
+            "matrix": null
+          }
+        ],
+        "led_count": 4,
+        "colors": [
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          }
+        ],
+        "capabilities": {
+          "direct_mode": null,
+          "active_mode": 0,
+          "modes": [
+            {
+              "name": "Static",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 1
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            },
+            {
+              "name": "Breathing",
+              "speed": {
+                "min": 1,
+                "max": 5
+              },
+              "brightness": {
+                "min": 0,
+                "max": 100
+              },
+              "directions": [
+                "LeftRight"
+              ],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 2
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            }
+          ],
+          "resizable_zones": [],
+          "saves_to_device_memory": true
+        }
+      },
+      "available": false
+    }
+  ],
+  "issues": [],
+  "identify": null,
+  "diagnostics": {
+    "last_error": null,
+    "counters": {
+      "connect_attempts": 1,
+      "connect_failures": 0,
+      "inventory_refreshes": 1,
+      "refresh_failures": 0,
+      "commands_refused_busy": 0
+    },
+    "events": [
+      {
+        "sequence": 0,
+        "at_ms": 0,
+        "kind": "ConnectAttempt"
+      },
+      {
+        "sequence": 1,
+        "at_ms": 0,
+        "kind": "Connected"
+      },
+      {
+        "sequence": 2,
+        "at_ms": 0,
+        "kind": {
+          "InventoryRefreshed": {
+            "generation": 1,
+            "devices": 2
+          }
+        }
+      },
+      {
+        "sequence": 3,
+        "at_ms": 0,
+        "kind": {
+          "ConnectionLost": {
+            "reason": {
+              "ConnectionLost": {
+                "cause": "ServerClosed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 4,
+        "at_ms": 0,
+        "kind": {
+          "RetryScheduled": {
+            "attempt": 1,
+            "delay_ms": 500
+          }
+        }
+      }
+    ]
+  }
+};
+
+export const openRgbLostRetryFailed: SessionSnapshot = {
+  "connection": {
+    "Retrying": {
+      "attempt": 2,
+      "reason": {
+        "UnsupportedProtocol": {
+          "server_version": null
+        }
+      }
+    }
+  },
+  "backend": {
+    "origin": "OpenRgb",
+    "address": "127.0.0.1:6742",
+    "protocol_version": null,
+    "server_name": null
+  },
+  "devices": [
+    {
+      "identity": {
+        "New": "dev-1052f35afd339289"
+      },
+      "descriptor": {
+        "origin": "OpenRgb",
+        "name": "Fixture Strip",
+        "vendor": "Fixture Vendor",
+        "description": "Fixture device",
+        "version": "1.0",
+        "serial": "SN-alpha",
+        "location": "usb:alpha",
+        "kind": "LedStrip",
+        "zones": [
+          {
+            "name": "Header",
+            "kind": "Linear",
+            "led_count": 12,
+            "leds_min": 0,
+            "leds_max": 60,
+            "matrix": null
+          }
+        ],
+        "led_count": 12,
+        "colors": [
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          }
+        ],
+        "capabilities": {
+          "direct_mode": 0,
+          "active_mode": 2,
+          "modes": [
+            {
+              "name": "Direct",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": true,
+              "mode_colors": null,
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "None"
+            },
+            {
+              "name": "Static",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 1
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            },
+            {
+              "name": "Breathing",
+              "speed": {
+                "min": 1,
+                "max": 5
+              },
+              "brightness": {
+                "min": 0,
+                "max": 100
+              },
+              "directions": [
+                "LeftRight"
+              ],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 2
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            }
+          ],
+          "resizable_zones": [
+            {
+              "zone": 0,
+              "min": 0,
+              "max": 60
+            }
+          ],
+          "saves_to_device_memory": true
+        }
+      },
+      "available": false
+    },
+    {
+      "identity": {
+        "New": "dev-3aa84c4a5a06ce30"
+      },
+      "descriptor": {
+        "origin": "OpenRgb",
+        "name": "Fixture Graphics Card",
+        "vendor": "Fixture Vendor",
+        "description": "Fixture device",
+        "version": "1.0",
+        "serial": "SN-card",
+        "location": "pci:1",
+        "kind": "Gpu",
+        "zones": [
+          {
+            "name": "Logo",
+            "kind": "Linear",
+            "led_count": 4,
+            "leds_min": 4,
+            "leds_max": 4,
+            "matrix": null
+          }
+        ],
+        "led_count": 4,
+        "colors": [
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          }
+        ],
+        "capabilities": {
+          "direct_mode": null,
+          "active_mode": 0,
+          "modes": [
+            {
+              "name": "Static",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 1
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            },
+            {
+              "name": "Breathing",
+              "speed": {
+                "min": 1,
+                "max": 5
+              },
+              "brightness": {
+                "min": 0,
+                "max": 100
+              },
+              "directions": [
+                "LeftRight"
+              ],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 2
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            }
+          ],
+          "resizable_zones": [],
+          "saves_to_device_memory": true
+        }
+      },
+      "available": false
+    }
+  ],
+  "issues": [],
+  "identify": null,
+  "diagnostics": {
+    "last_error": {
+      "at_ms": 2500,
+      "operation": "Connect",
+      "error": {
+        "UnsupportedProtocol": {
+          "server_version": null,
+          "required": 6
+        }
+      },
+      "ended_connection": null
+    },
+    "counters": {
+      "connect_attempts": 2,
+      "connect_failures": 1,
+      "inventory_refreshes": 1,
+      "refresh_failures": 0,
+      "commands_refused_busy": 0
+    },
+    "events": [
+      {
+        "sequence": 0,
+        "at_ms": 0,
+        "kind": "ConnectAttempt"
+      },
+      {
+        "sequence": 1,
+        "at_ms": 0,
+        "kind": "Connected"
+      },
+      {
+        "sequence": 2,
+        "at_ms": 0,
+        "kind": {
+          "InventoryRefreshed": {
+            "generation": 1,
+            "devices": 2
+          }
+        }
+      },
+      {
+        "sequence": 3,
+        "at_ms": 0,
+        "kind": {
+          "ConnectionLost": {
+            "reason": {
+              "ConnectionLost": {
+                "cause": "ServerClosed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 4,
+        "at_ms": 0,
+        "kind": {
+          "RetryScheduled": {
+            "attempt": 1,
+            "delay_ms": 500
+          }
+        }
+      },
+      {
+        "sequence": 5,
+        "at_ms": 500,
+        "kind": "ConnectAttempt"
+      },
+      {
+        "sequence": 6,
+        "at_ms": 2500,
+        "kind": {
+          "ConnectFailed": {
+            "error": {
+              "UnsupportedProtocol": {
+                "server_version": null,
+                "required": 6
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 7,
+        "at_ms": 2500,
+        "kind": {
+          "RetryScheduled": {
+            "attempt": 2,
+            "delay_ms": 1000
+          }
+        }
+      }
+    ]
+  }
+};
+
+export const openRgbAllRejected: SessionSnapshot = {
+  "connection": {
+    "Degraded": {
+      "reasons": [
+        {
+          "ControllerDataRejected": {
+            "controllers": 1
+          }
+        }
+      ]
+    }
+  },
+  "backend": {
+    "origin": "OpenRgb",
+    "address": "127.0.0.1:6742",
+    "protocol_version": 6,
+    "server_name": "PrismForge fake OpenRGB"
+  },
+  "devices": [],
+  "issues": [
+    {
+      "runtime_id": 0,
+      "reason": "InconsistentData",
+      "detail": "zones hold 12 LEDs but the LED list has 3"
+    }
+  ],
+  "identify": null,
+  "diagnostics": {
+    "last_error": null,
+    "counters": {
+      "connect_attempts": 1,
+      "connect_failures": 0,
+      "inventory_refreshes": 1,
+      "refresh_failures": 0,
+      "commands_refused_busy": 0
+    },
+    "events": [
+      {
+        "sequence": 0,
+        "at_ms": 0,
+        "kind": "ConnectAttempt"
+      },
+      {
+        "sequence": 1,
+        "at_ms": 0,
+        "kind": "Connected"
+      },
+      {
+        "sequence": 2,
+        "at_ms": 0,
+        "kind": {
+          "InventoryRefreshed": {
+            "generation": 1,
+            "devices": 0
+          }
+        }
+      }
+    ]
+  }
+};
+
 export const openRgbRefused: SessionSnapshot = {
   "connection": {
     "Retrying": {

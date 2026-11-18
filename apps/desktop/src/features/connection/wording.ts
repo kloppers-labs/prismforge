@@ -39,10 +39,10 @@ export function summarise(session: SessionSnapshot): ConnectionSummary {
     const { attempt, reason } = connection.Retrying;
     return {
       tone: "problem",
-      label: `Retrying, attempt ${attempt}`,
+      label: `Retrying, retry ${attempt} next`,
       reasons: [
-        `Attempt ${attempt} failed. ${explain(reason, where)}`,
-        "PrismForge keeps trying on its own, with a longer wait after each attempt (at most 30 seconds).",
+        explain(reason, where, session),
+        `PrismForge tries again on its own. Retry ${attempt} comes next, with a longer wait before each retry (at most 30 seconds).`,
       ],
       retrying: true,
     };
@@ -51,7 +51,7 @@ export function summarise(session: SessionSnapshot): ConnectionSummary {
     return {
       tone: "warning",
       label: "Connected with problems",
-      reasons: connection.Degraded.reasons.map((reason) => explain(reason, where)),
+      reasons: connection.Degraded.reasons.map((reason) => explain(reason, where, session)),
       retrying: false,
     };
   }
@@ -59,12 +59,12 @@ export function summarise(session: SessionSnapshot): ConnectionSummary {
   return {
     tone: reason ? "problem" : "working",
     label: reason ? "Not connected" : "Starting",
-    reasons: reason ? [explain(reason, where)] : [],
+    reasons: reason ? [explain(reason, where, session)] : [],
     retrying: false,
   };
 }
 
-export function explain(reason: StateReason, where: string): string {
+export function explain(reason: StateReason, where: string, session: SessionSnapshot): string {
   if (reason === "ServerUnreachable") {
     return `Nothing answered at ${where}.`;
   }
@@ -83,7 +83,8 @@ export function explain(reason: StateReason, where: string): string {
   }
   if ("ControllerDataRejected" in reason) {
     const count = reason.ControllerDataRejected.controllers;
-    return `${count === 1 ? "One controller" : `${count} controllers`} sent data PrismForge could not read. The other devices still work.`;
+    const rejected = `${count === 1 ? "One controller" : `${count} controllers`} sent data PrismForge could not read.`;
+    return session.devices.some((device) => device.available) ? `${rejected} The other devices still work.` : rejected;
   }
   const count = reason.AmbiguousDevices.devices;
   return `${count} devices look identical to another device. PrismForge will not light them until it can tell them apart.`;

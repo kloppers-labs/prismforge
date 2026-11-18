@@ -72,7 +72,7 @@
   {/if}
 
   {#if session && !stopped && session.devices.length > 0 && summary && summary.reasons.length > 0}
-    <div class="notice {summary.tone}" role="status">
+    <div class="notice {summary.tone}" role="status" aria-label="Connection status">
       <ToneIcon tone={summary.tone} />
       <div>
         {#each summary.reasons as reason (reason)}

@@ -229,6 +229,37 @@ async fn openrgb_sessions(sessions: &mut Module) {
     sessions.add("openRgbDegraded", &degraded);
 }
 
+async fn openrgb_losses(sessions: &mut Module) {
+    let server = FakeServer::new();
+    server.add_device(0, breathing_strip("alpha", "Fixture Strip"));
+    server.add_device(1, graphics_card());
+    let handle = openrgb(&server);
+    handle.connect().await.expect("connect");
+    server.silence(wire::REQUEST_PROTOCOL_VERSION);
+    server.disconnect_all();
+    let lost = wait_until(&handle, |snapshot| {
+        matches!(snapshot.connection, ConnectionState::Retrying { .. })
+    })
+    .await;
+    sessions.add("openRgbLostWhileConnected", &lost);
+    let retry_failed = wait_until(&handle, |snapshot| {
+        matches!(
+            snapshot.connection,
+            ConnectionState::Retrying { attempt: 2, .. }
+        )
+    })
+    .await;
+    sessions.add("openRgbLostRetryFailed", &retry_failed);
+
+    let rejecting = FakeServer::new();
+    let mut uneven = breathing_strip("uneven", "Fixture Uneven Strip");
+    uneven.led_count_override = Some(3);
+    rejecting.add_device(0, uneven);
+    let handle = openrgb(&rejecting);
+    handle.connect().await.expect("connect");
+    sessions.add("openRgbAllRejected", &handle.snapshot());
+}
+
 async fn openrgb_failures(sessions: &mut Module) {
     let refusing = start(OpenRgbBackend::new(Refusing, ClientConfig::default()));
     let _ = refusing.connect().await;
@@ -285,6 +316,7 @@ async fn committed_fixtures_match_real_sessions() {
     demo_sessions(&mut sessions, &mut outcomes).await;
     demo_outcomes(&mut outcomes).await;
     openrgb_sessions(&mut sessions).await;
+    openrgb_losses(&mut sessions).await;
     openrgb_failures(&mut sessions).await;
     openrgb_outcomes(&mut outcomes).await;
 

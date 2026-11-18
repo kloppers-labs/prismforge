@@ -27,7 +27,7 @@ test("keeps_runtime_details_in_diagnostics", async () => {
 test("shows_the_last_error_and_real_counters", async () => {
   fakeShell(openRgbRefused);
   render(App);
-  await screen.findByText("Retrying, attempt 3");
+  await screen.findByText("Retrying, retry 3 next");
 
   const drawer = await openDiagnostics();
 
@@ -35,7 +35,7 @@ test("shows_the_last_error_and_real_counters", async () => {
   expect(within(drawer).getByText('{"Unreachable":{"detail":"connection refused"}}')).toBeTruthy();
   const counters = within(drawer).getByRole("heading", { name: "Counters" }).parentElement as HTMLElement;
   expect(within(counters).getByText("Failed connects").nextElementSibling?.textContent).toBe("3");
-  expect(within(drawer).getAllByText(/RetryScheduled attempt \d+ in \d+ ms/).length).toBeGreaterThan(0);
+  expect(within(drawer).getAllByText(/RetryScheduled retry \d+ in \d+ ms/).length).toBeGreaterThan(0);
 
   await fireEvent.keyDown(window, { key: "Escape" });
   expect(screen.queryByRole("complementary", { name: "Diagnostics" })).toBeNull();

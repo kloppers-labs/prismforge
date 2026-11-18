@@ -2,19 +2,22 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import Prerequisites from "./Prerequisites.svelte";
-  import { isSimulated, summarise } from "./wording";
+  import { capitalise, isSimulated, serverName, summarise } from "./wording";
 
   let { session }: { session: SessionSnapshot } = $props();
 
   let summary = $derived(summarise(session));
   let live = $derived(summary.tone === "ok" || summary.tone === "warning");
+  let rejected = $derived(session.issues.length);
 </script>
 
 <section class="waiting" aria-labelledby="waiting-title">
   <div class="head">
     <ToneIcon tone={summary.tone} />
     <h1 id="waiting-title">
-      {#if live}
+      {#if live && rejected > 0}
+        No usable devices
+      {:else if live}
         No devices found
       {:else if summary.retrying}
         Waiting for OpenRGB
@@ -26,8 +29,16 @@
   {#each summary.reasons as reason (reason)}
     <p>{reason}</p>
   {/each}
-  {#if live}
-    <p>OpenRGB answered but reports no devices. Check the device list in OpenRGB, then select Refresh devices.</p>
+  {#if live && rejected > 0}
+    <p>
+      PrismForge could not read the data of the {rejected === 1 ? "1 controller" : `${rejected} controllers`}
+      {serverName(session)} reported. Diagnostics lists {rejected === 1 ? "it" : "them"} with the reason.
+    </p>
+  {:else if live}
+    <p>
+      {capitalise(serverName(session))} answered but reports no devices. Check the device list in {serverName(session)}, then
+      select Refresh devices.
+    </p>
   {:else if !summary.retrying}
     <p class="loading" aria-busy="true">Reading the device list when the server answers.</p>
   {/if}

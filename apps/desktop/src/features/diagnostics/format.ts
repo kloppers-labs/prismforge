@@ -20,7 +20,7 @@ export function eventText(kind: SessionEventKind): string {
     return `ConnectionLost ${raw(kind.ConnectionLost.reason)}`;
   }
   if ("RetryScheduled" in kind) {
-    return `RetryScheduled attempt ${kind.RetryScheduled.attempt} in ${kind.RetryScheduled.delay_ms} ms`;
+    return `RetryScheduled retry ${kind.RetryScheduled.attempt} in ${kind.RetryScheduled.delay_ms} ms`;
   }
   if ("InventoryRefreshed" in kind) {
     const { generation, devices } = kind.InventoryRefreshed;

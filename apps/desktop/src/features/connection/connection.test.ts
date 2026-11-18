@@ -4,7 +4,10 @@ import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
 import {
   demoConnected,
+  openRgbAllRejected,
   openRgbConnecting,
+  openRgbLostRetryFailed,
+  openRgbLostWhileConnected,
   openRgbNoVersionAnswer,
   openRgbOldServer,
   openRgbRefused,
@@ -25,7 +28,7 @@ test("shows_connection_failure_without_fake_devices", async () => {
   await shell.push(openRgbRefused);
 
   await screen.findByRole("heading", { name: "Waiting for OpenRGB" });
-  expect(screen.getByText(/Attempt 3 failed\. Nothing answered at the OpenRGB server at 127\.0\.0\.1:6742\./)).toBeTruthy();
+  expect(screen.getByText("Nothing answered at the OpenRGB server at 127.0.0.1:6742.")).toBeTruthy();
   expect(screen.queryByRole("navigation", { name: /Devices/ })).toBeNull();
   expect(screen.queryByRole("button", { name: /Identify/ })).toBeNull();
   expect(screen.queryByRole("complementary", { name: "Demo mode" })).toBeNull();
@@ -51,10 +54,45 @@ test("shows_retry_attempt_and_cause", async () => {
   fakeShell(openRgbRefused);
   render(App);
 
-  expect(await screen.findByText("Retrying, attempt 3")).toBeTruthy();
-  expect(screen.getByText(/Attempt 3 failed\. Nothing answered/)).toBeTruthy();
-  expect(screen.getByText(/PrismForge keeps trying on its own/)).toBeTruthy();
+  expect(await screen.findByText("Retrying, retry 3 next")).toBeTruthy();
+  expect(screen.getByText("Nothing answered at the OpenRGB server at 127.0.0.1:6742.")).toBeTruthy();
+  expect(screen.getByText(/PrismForge tries again on its own\. Retry 3 comes next/)).toBeTruthy();
   expect(screen.getByRole("button", { name: "Stop retrying" })).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/Attempt \d+ failed/);
+});
+
+test("explains_a_lost_connection_without_inventing_failed_attempts", async () => {
+  fakeShell(openRgbLostWhileConnected);
+  render(App);
+
+  const notice = await screen.findByRole("status", { name: "Connection status" });
+  expect(notice.textContent).toContain("The connection was lost: the server closed the connection.");
+  expect(notice.textContent).toContain("Retry 1 comes next");
+  expect(screen.getByText("Retrying, retry 1 next")).toBeTruthy();
+  const list = screen.getByRole("navigation", { name: /Devices/ });
+  expect(within(list).getAllByText("Unavailable")).toHaveLength(2);
+  expect(screen.getByText(/Identify is off\. Not connected/)).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/Attempt \d+ failed|failed \d+ times/);
+});
+
+test("counts_retries_after_a_loss_as_the_core_does", async () => {
+  fakeShell(openRgbLostRetryFailed);
+  render(App);
+
+  expect(await screen.findByText("Retrying, retry 2 next")).toBeTruthy();
+  const notice = screen.getByRole("status", { name: "Connection status" });
+  expect(notice.textContent).toContain("did not answer the version request");
+  expect(notice.textContent).toContain("Retry 2 comes next");
+});
+
+test("explains_when_every_controller_was_rejected", async () => {
+  fakeShell(openRgbAllRejected);
+  render(App);
+
+  expect(await screen.findByRole("heading", { name: "No usable devices" })).toBeTruthy();
+  expect(screen.getByText("One controller sent data PrismForge could not read.")).toBeTruthy();
+  expect(screen.getByText(/PrismForge could not read the data of the 1 controller OpenRGB reported\. Diagnostics lists it with the reason\./)).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/reports no devices|other devices still work|Check the device list in OpenRGB/);
 });
 
 test("says_the_server_did_not_answer_the_version_request", async () => {
@@ -85,5 +123,5 @@ test("ignores_a_view_older_than_the_one_shown", async () => {
   await shell.pushView({ revision: 9, session: openRgbRefused });
 
   expect(await screen.findByRole("complementary", { name: "Demo mode" })).toBeTruthy();
-  expect(screen.queryByText("Retrying, attempt 3")).toBeNull();
+  expect(screen.queryByText(/^Retrying/)).toBeNull();
 });
