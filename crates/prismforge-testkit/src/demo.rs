@@ -62,7 +62,6 @@ impl DemoControls {
         self.wake.notify_one();
     }
 
-    /// Every later backend call waits this long before it does anything.
     pub fn set_call_delay(&self, delay: Duration) {
         self.lock().call_delay = delay;
     }

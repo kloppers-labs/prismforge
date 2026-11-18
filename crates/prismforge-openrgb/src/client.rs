@@ -174,7 +174,6 @@ where
             .await
     }
 
-    /// Sends UpdateMode (never SaveMode) with `mode` as the settings for mode `mode_index`.
     pub async fn update_mode(
         &mut self,
         id: u32,

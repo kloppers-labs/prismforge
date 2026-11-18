@@ -73,7 +73,6 @@ impl Inventory {
         })
     }
 
-    /// The device if colour output to it (or to its `zone`) can be valid.
     pub fn output_target(
         &self,
         reference: &DeviceRef,

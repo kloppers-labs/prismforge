@@ -251,12 +251,8 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
 
     fn connection_lost(&mut self, reason: StateReason, retry_attempt: u32) {
         if let Some(active) = self.identify.take() {
-            let failure = RestoreFailure::ConnectionLost {
-                reason: reason.clone(),
-            };
-            self.reply_identify(active.plan, active.reply, None, {
-                RestoreOutcome::NotRestored { failure }
-            });
+            let restore = not_restored_after_loss(&reason);
+            self.reply_identify(active.plan, active.reply, None, restore);
         }
         self.push(SessionEventKind::ConnectionLost {
             reason: reason.clone(),
@@ -309,12 +305,8 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         self.record_error(Operation::Identify, &error, lost.clone());
         match lost {
             Some(reason) => {
-                let failure = RestoreFailure::ConnectionLost {
-                    reason: reason.clone(),
-                };
-                self.reply_identify(plan, reply, Some(error), {
-                    RestoreOutcome::NotRestored { failure }
-                });
+                let restore = not_restored_after_loss(&reason);
+                self.reply_identify(plan, reply, Some(error), restore);
                 self.connection_lost(reason, 1);
             }
             None => {
@@ -394,7 +386,6 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
     }
 
-    /// The backend's reason when a call has left it disconnected.
     fn lost_reason(&self) -> Option<StateReason> {
         match self.backend.connection_state() {
             ConnectionState::Disconnected { reason } => {
@@ -488,6 +479,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 available,
             })
             .collect()
+    }
+}
+
+fn not_restored_after_loss(reason: &StateReason) -> RestoreOutcome {
+    RestoreOutcome::NotRestored {
+        failure: RestoreFailure::ConnectionLost {
+            reason: reason.clone(),
+        },
     }
 }
 
