@@ -6,6 +6,7 @@ mod device;
 mod error;
 mod identity;
 mod inventory;
+pub mod session;
 
 pub use backend::{BackendEvent, BackendInfo, RgbBackend};
 pub use capabilities::{

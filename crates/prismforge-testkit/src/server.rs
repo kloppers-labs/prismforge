@@ -118,7 +118,7 @@ impl FakeServer {
 
     pub fn connector(
         &self,
-    ) -> impl Fn() -> Ready<io::Result<DuplexStream>> + Send + Sync + 'static {
+    ) -> impl Fn() -> Ready<io::Result<DuplexStream>> + Send + Sync + 'static + use<> {
         let server = self.clone();
         move || ready(Ok(server.connect()))
     }
