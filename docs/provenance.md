@@ -6,6 +6,10 @@ This file records where PrismForge material comes from. Update it in the same ch
 
 All code in this repository is original PrismForge code. The repository contains no code, text or assets from OpenRGB, the OpenRGB Effects plugin, Lightloom, Artemis or SignalRGB.
 
+## Built-in effects
+
+The six built-in effects in `crates/prismforge-effects` are original PrismForge code: solid colour, breathing, gradient, rainbow wave, colour cycle and moving highlight. They were written on 2026-11-18 from general lighting behaviour and basic arithmetic. No code from OpenRGB, the OpenRGB Effects plugin, SignalRGB, Lightloom or Artemis was read, copied or translated for them. The colour wheel, the fades and the blends are standard arithmetic written for this project.
+
 ## Rules
 
 1. Record each outside source before you use it: project, version or commit, licence, and what you took.

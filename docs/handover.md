@@ -4,9 +4,11 @@ Last update: 2026-11-18.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and two hand checks are missing.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and two hand checks are missing. Task 4a, the effect engine without an interface, is built on the branch `task-4a-effects-engine`.
 
-The repository has a Rust workspace with three crates and a desktop app. `prismforge-core` holds the device types, the identity matching, the backend contract and the session. The session owns the backend, reconnects, keeps a readable snapshot, and runs the identify action. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
+The repository has a Rust workspace with four crates and a desktop app. `prismforge-effects` holds six original built-in effects as pure functions, their typed control definitions and the validation of stored effect instances. `prismforge-core` holds the device types, the identity matching, the backend contract, the scene and ownership types, and the session. The session owns the backend, reconnects, keeps a readable snapshot, runs the identify action, and runs effects through an output scheduler with explicit output ownership. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
+
+The session has commands for effects: list the effect definitions, apply or replace an effect on a device or zone, stop it, set the frame rate, declare or clear external control, and select a hardware mode. The snapshot shows the frame rate, the scene, and the owner and output condition of each device. The desktop app has no effects screen and no Tauri command for effects yet. Task 4b adds them.
 
 `apps/desktop` is a Tauri 2 app with a Svelte 5 and TypeScript interface. It has a connection screen, a device list with device details, an identify action, a diagnostics drawer and a labelled demo mode. The shell in `apps/desktop/src-tauri` owns at most one session. The interface types and the test fixtures are generated from the Rust code.
 
@@ -21,7 +23,10 @@ All tests pass on macOS and in Windows CI. Windows CI also builds the unsigned i
 | A runtime controller ID is never a device identity. Ambiguous devices get no output. | same |
 | Effects are the main feature. Own effect engine first, then Effects plugin support, then plugin editing only if a real-server test passes. | same |
 | The licence is GPL-3.0-or-later. | `docs/provenance.md` |
-| Identify restores the previous mode with a mode re-apply. PrismForge never saves a mode to device memory. Mode writes with user-edited settings wait for the effects task. | this file |
+| Identify restores the previous mode with a mode re-apply. PrismForge never saves a mode to device memory. Mode writes with user-edited settings wait for a later task. | this file |
+| Effects are pure functions of values, time, LED position and seed. The six built-in effects are original code. | `docs/decisions/0003-effects-engine.md` |
+| The session task also owns output: one batched write per device or zone per tick, 30 FPS by default, clamped to 1 to 60. Late ticks are skipped and counted, never queued. Static effects are written once. | same |
+| One owner per device: a PrismForge effect, a hardware mode selected through PrismForge, or another program the user declared. A declared device refuses effects until the user hands it over. Stopping the last effect restores the remembered state. | same |
 | One session task owns the backend. The desktop shell reads snapshots and sends commands through a queue with a fixed size. | this file |
 | Demo mode uses a simulated backend. Each simulated device carries the origin "simulated". A failed real connection never shows demo devices. | this file |
 | The desktop shell owns at most one session. A new session starts only after the previous one has stopped and its identify is restored. Disconnect ends the session. | `apps/desktop/README.md` |
@@ -35,7 +40,7 @@ The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 
 1. Task 1: OpenRGB boundary. **Complete.**
 2. Task 2: desktop connection and inventory slice. **Built.** Built and tested in Windows CI. A run on Windows, the missing screenshots and two hand checks are still open.
-3. Task 4: effect engine, output scheduler and output ownership.
+3. Task 4: effect engine, output scheduler and output ownership. **4a built** (engine, scheduler, ownership, session commands; no interface). 4b adds the effects screen, the parameter controls and the Tauri commands. Previews, the Effects plugin provider and the measurements come after 4b.
 4. Task 3: profiles.
 5. Task 5: component setup and layout.
 6. Task 6: lifecycle, packaging and validation on the target machine.
@@ -45,18 +50,21 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18, at the last code commit of Task 2b (desktop half of Task 2).
+Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18, at the last code commit of Task 4a.
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 113 tests. 41 in `prismforge-core`, 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 162 tests. 29 in `prismforge-effects`, 61 in `prismforge-core` (20 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
-| `cargo check -p prismforge-core -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
-| `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 24 interface tests |
-| `pnpm tauri:build --bundles app` in `apps/desktop` | Pass: `PrismForge.app`, 10.7 MiB, not signed |
+| `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 24 interface tests |
+
+`pnpm tauri:build --bundles app` last passed at the end of Task 2b (`PrismForge.app`, 10.7 MiB, not signed). Task 4a did not rebuild the app.
+
+The scheduler and ownership tests use simulated time and the demo backend or the fake server. They check recorded writes and snapshot counters: late ticks are skipped and counted and every frame is the frame for its own moment; a refused device makes 7 tries in a minute while another device gets about 1,800 frames; a static scene gets one frame and one more only after a scene change, a reconnect or an inventory change; a declared device gets nothing until the hand-over; after an OpenRGB restart with reused IDs every frame still reaches the same fixture device.
 
 Windows CI run 44320629268 on commit `548677b` (`windows-latest`) passed every step: format, both lint runs, `cargo test --workspace`, the binding drift check, `pnpm install --frozen-lockfile`, typecheck, interface tests and `pnpm tauri:build`. The artifact `prismforge-windows-unsigned` (about 5.2 MB) holds the MSI and NSIS installers. This is build and test evidence only. Nobody has installed or run the app on Windows. Commits after `548677b` have no CI result yet.
 
@@ -76,14 +84,16 @@ Not done:
 - Any run of the app on Windows.
 - Any test against a real OpenRGB server.
 - Any hardware write.
+- Any effect on real hardware, and any frame timing on a real machine.
 
 ## Next steps
 
-1. With the owner's consent and screen-capture permission, take the four missing screenshots and check the current build by hand, including closing the window during an identify.
-2. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
-3. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
-4. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did.
-5. Add persistence for the list of known devices. The profiles task needs it.
+1. Task 4b: an effects screen with parameter controls that render from the effect definitions, and Tauri commands for the session's effect and ownership commands.
+2. With the owner's consent and screen-capture permission, take the four missing screenshots and check the current build by hand, including closing the window during an identify.
+3. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
+4. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
+5. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
+6. Add persistence for the list of known devices. The profiles task needs it.
 
 ## Known issues
 
@@ -103,6 +113,14 @@ Not done:
 - **Disconnect ends the session.** Its diagnostics and its list of known devices are gone after a disconnect. Host and port reset to the defaults when the app restarts.
 - **Identify always lasts 3 seconds.** The shell sets it; there is no setting.
 - **Closing during an identify waits for the restore.** The app holds the exit until the session has stopped, so the window can close a moment before the process ends.
+- **No effects screen yet.** The engine, the scheduler and ownership exist only as session commands. Task 4b adds the interface.
+- **No real-machine evidence for effects.** All scheduler numbers come from simulated time. Real frame timing and CPU use are not measured.
+- **Colour frames are not confirmed.** The client does not read the acknowledgement of a colour write. "Frames written" counts frames sent without an error, not frames OpenRGB applied.
+- **Direct mode may be enabled more often than needed.** After each inventory refresh, PrismForge enables direct mode again on each effect device that does not report Direct Mode. If OpenRGB does not report it after "set custom mode", this repeats after every refresh. The fake server never reports it.
+- **A backend call in progress still delays a command.** At 30 FPS a command waits at most for one write. A hung call waits for the client timeout (2 seconds by default).
+- **Shutdown restore stops after 5 seconds.** Devices not restored by then keep the last effect frame.
+- **External control is only the user's statement.** PrismForge cannot see the Effects plugin or any other writer. Identify still works on a device declared external.
+- **Ownership and the scene are in memory only.** They end with the session. Profiles come later.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## Missing information from the owner

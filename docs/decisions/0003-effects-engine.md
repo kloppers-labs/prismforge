@@ -1,0 +1,75 @@
+# 0003 — Effect engine, output scheduler and output ownership
+
+- Status: accepted
+- Date: 2026-11-18
+- Scope: how PrismForge computes effects, sends frames and decides who controls a device
+
+## Current state
+
+PrismForge has its own effect engine. `crates/prismforge-effects` holds six built-in effects. The session in `crates/prismforge-core` runs them through an output scheduler and keeps a record of who controls each device. There is no interface for effects yet. **Nothing here has run against a real OpenRGB server or real hardware.** All evidence comes from the simulated demo backend and the scripted fake server, with simulated time.
+
+## Effect model
+
+1. **An effect is a pure function.** Its colour depends only on the validated values, the effect time, the LED position and a seed. It keeps no state between frames. Any frame can be computed for any time, so frames can be skipped freely.
+2. **The effects crate does no input or output.** It has no async runtime and reads no clock. The caller passes the time and the seed.
+3. **The six built-in effects are original PrismForge code.** They are solid colour, breathing, gradient, rainbow wave, colour cycle and moving highlight. They were written from general lighting behaviour. No code from another lighting program was read for them. See `docs/provenance.md`.
+4. **LED positions are linear for now.** Position 0.0 is the first LED of the device or zone, and 1.0 is the last. A single LED sits at 0.0. Positions outside 0.0 to 1.0 are clamped. A later layout task can pass other positions; `Effect::render` takes them as a list.
+5. **The seed is part of the contract.** No built-in effect uses it yet. The session passes 0. Random effects can use it later and stay reproducible.
+6. **Brightness works the same way for every effect.** It is a percent from 0 to 100, applied last with integer rounding. 0 gives black. 100 leaves the colours unchanged.
+7. **An effect reports when it is static.** Solid colour and gradient are always static. The others are static at speed 0. Every effect is static at brightness 0.
+8. **Speed is in cycles per minute.** Each effect says what one cycle is: one breath, one pass of the colour wheel, one round of the palette, or one run of the highlight.
+
+## Stored form of an effect instance
+
+An `EffectInstance` is the effect id and a map from control id to value. In JSON it looks like this:
+
+```json
+{ "effect": "gradient", "values": { "brightness": { "Number": 100 }, "direction": { "Direction": "Backward" }, "palette": { "Palette": [{ "r": 255, "g": 0, "b": 0 }, { "r": 0, "g": 0, "b": 255 }] } } }
+```
+
+- Effect ids and control ids are stable strings. They never change meaning.
+- A value is a colour, a palette, a whole number or a direction. Whole numbers keep the stored form exact.
+- Validation reports every problem at once, sorted by control id: unknown effect, unknown control, missing value, wrong type, out of range, between steps, and wrong palette length.
+- A control without a default is required. Solid colour's colour is the only required control.
+- Validation fills each missing optional value with its default. The snapshot shows the filled form.
+- A new control must have a default, so older stored instances stay valid.
+- The instance has no version field. Profiles will carry the schema version for everything they store.
+
+`EffectDefinition` describes each effect for an interface that does not know it: an id, a label, a description and typed controls. The control types are colour, palette (with a minimum and maximum count), speed (range, default, unit), direction, brightness and number (range, step, default, unit).
+
+## Scheduler rules
+
+1. **The session task owns output.** Frames go out from the same task that owns the backend. No other task calls the backend.
+2. **The frame rate is configurable and clamped.** The default is 30 frames per second. The session clamps any setting to 1 to 60, at start and on each change.
+3. **One batched write per target per tick.** A whole-device effect sends one device frame. A zone effect sends one zone frame. PrismForge never sends a command per LED.
+4. **Frames are coalesced, never queued.** Each tick renders the frame for that moment. If a write takes longer than a tick, the ticks that pass are skipped and counted. The next tick stays on the original grid. The 1 ms timer resolution does not slow the rate down.
+5. **Commands come first.** The loop handles identify deadlines, commands, backend events and stale inventories before frames. A command waits at most for the backend call in progress.
+6. **The loop never spins.** It wakes for output only when a frame or a retry is due. Paused, unavailable and fully written devices give no wake-up.
+7. **Static effects are written once.** They are written again only after a scene change, a reconnect, an inventory refresh or the end of an identify.
+8. **A refused write affects only its device.** The device waits 1 second, then 2, 4, 8 and 16 seconds, and then 16 seconds between tries. Other devices keep their cadence. A stale inventory pauses all output until the next refresh. It does not count as a refusal with a wait.
+9. **A lost connection pauses output.** After reconnect and refresh, each device gets direct mode again before its first frame. A device that is ambiguous, missing, without direct mode or with a changed zone gets no output. Its condition shows the reason.
+10. **The counters are real.** `frames_written` counts frames the backend accepted. `ticks_skipped` counts ticks dropped because a write was still busy. `output_writes_refused` counts refusals while the connection stayed open. `output_writes_failed` counts writes that ended the connection. The client does not read acknowledgements for colour frames, so "accepted" means sent without an error.
+
+## Ownership rules
+
+1. **One owner per device.** The owner is a PrismForge effect, a hardware mode selected through PrismForge, or another program that the user declared. A device that is not listed has no owner.
+2. **PrismForge cannot see other writers.** An external owner is only the user's statement. PrismForge never claims that the other program stopped. It never stops another program.
+3. **Applying an effect is an explicit command.** It is refused with a structured conflict while the user has declared the device external. The user must hand it over first with a separate command.
+4. **Declaring a device external stops PrismForge output on it.** PrismForge does not restore the device, because the restore would fight the other writer.
+5. **Taking a device remembers its state.** PrismForge stores the active mode and colours that the inventory reported, then enables direct mode.
+6. **Stopping the last effect on a device restores that state.** The restore uses the mode re-apply of identify and the same outcome words: restored, partly restored, not restored, unchanged. Before the restore, PrismForge checks that the device still has the remembered modes and LED count.
+7. **Ownership is per device.** A mode change affects every zone. Zone effects on one device share one take-over and one restore.
+8. **Selecting a hardware mode stops the effect on that device.** It re-applies an existing mode with its reported settings. It edits no settings and saves nothing to device memory.
+9. **Identify pauses an effect.** Identify lights the target. Then the effect resumes. Identify does not restore the hardware mode of a device that PrismForge runs an effect on.
+10. **A device PrismForge keeps in direct mode on purpose is not "previous state unknown".** That label comes only from a restore that did not finish.
+11. **Disconnect and shutdown restore first.** The session restores every device it runs effects on before it disconnects. It stops waiting after 5 seconds.
+12. **Output commands use their own error type.** `OutputError` holds session errors, the conflict, invalid effect values and "no effect on this target". Identify still uses `SessionError`.
+
+## Not verified
+
+- Any run against a real OpenRGB server.
+- Any frame on real hardware.
+- Frame timing on a real machine. All timing tests use simulated time.
+- How a real controller handles 30 frames per second. The client cannot see whether the server applied a frame.
+- Whether OpenRGB reports Direct Mode as the active mode after PrismForge selects it. If it does not, PrismForge enables direct mode again after each refresh. The fake server does not change the active mode.
+- Performance measurements. A later task measures CPU use and frame timing.

@@ -13,13 +13,13 @@ Every licence below is compatible with GPL-3.0-or-later. No dependency is GPL-2.
 
 | Crate | Version | Licence | Used by |
 |---|---|---|---|
-| `tokio` | 1.54.1 | MIT | all crates |
+| `tokio` | 1.54.1 | MIT | all crates except `prismforge-effects` |
 | `thiserror` | 2.0.21 | MIT OR Apache-2.0 | all crates |
 | `serde` | 1.0.229 | MIT OR Apache-2.0 | all crates |
 | `tauri` | 2.12.6 | Apache-2.0 OR MIT | desktop app |
 | `tauri-build` | 2.7.5 | Apache-2.0 OR MIT | desktop app, build time |
 | `ts-rs` | 12.0.1 | MIT | `ts` feature only, generates the TypeScript types |
-| `serde_json` | 1.0.154 | MIT OR Apache-2.0 | desktop app tests; also a Tauri dependency |
+| `serde_json` | 1.0.154 | MIT OR Apache-2.0 | desktop app tests and effects crate tests; also a Tauri dependency |
 
 ## Rust: transitive dependencies
 
