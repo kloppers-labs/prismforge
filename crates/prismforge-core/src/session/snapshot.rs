@@ -7,6 +7,7 @@ use crate::inventory::{DeviceIdentity, DeviceIssue};
 use crate::session::diagnostics::Diagnostics;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SessionSnapshot {
     pub connection: ConnectionState,
     pub backend: BackendInfo,
@@ -18,6 +19,7 @@ pub struct SessionSnapshot {
 
 /// A device from the last inventory; `available` is false while it is missing or the session is not connected.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SessionDevice {
     pub identity: DeviceIdentity,
     pub descriptor: DeviceDescriptor,
@@ -25,6 +27,7 @@ pub struct SessionDevice {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct IdentifyTarget {
     pub device: DeviceRef,
     pub zone: Option<usize>,

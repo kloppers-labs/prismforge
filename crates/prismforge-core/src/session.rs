@@ -45,6 +45,7 @@ impl Default for SessionConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum SessionError {
     #[error("the session is busy with earlier commands")]
     Busy,

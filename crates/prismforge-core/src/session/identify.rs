@@ -10,6 +10,7 @@ use crate::inventory::Inventory;
 pub const IDENTIFY_COLOR: Rgb = Rgb::new(255, 255, 255);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct IdentifyOutcome {
     pub device: DeviceRef,
     pub zone: Option<usize>,
@@ -19,6 +20,7 @@ pub struct IdentifyOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum RestoreOutcome {
     /// Lighting was refused before the device changed, so there was nothing to restore.
     Unchanged,
@@ -32,6 +34,7 @@ pub enum RestoreOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum RestoreFailure {
     /// Nothing is retried after a reconnect, because the device behind the reference may differ.
     ConnectionLost {

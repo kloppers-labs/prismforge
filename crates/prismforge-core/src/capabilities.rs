@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DeviceCapabilities {
     /// Index of the mode PrismForge treats as Direct Mode, if the device has one.
     pub direct_mode: Option<usize>,
@@ -21,6 +22,7 @@ impl DeviceCapabilities {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ZoneResizeBounds {
     pub zone: usize,
     pub min: u32,
@@ -28,12 +30,14 @@ pub struct ZoneResizeBounds {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ValueRange {
     pub min: u32,
     pub max: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum ModeDirection {
     LeftRight,
     UpDown,
@@ -42,6 +46,7 @@ pub enum ModeDirection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum ModePersistence {
     None,
     ManualSave,
@@ -49,6 +54,7 @@ pub enum ModePersistence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ModeDescriptor {
     pub name: String,
     pub speed: Option<ValueRange>,

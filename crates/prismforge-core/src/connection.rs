@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum ConnectionState {
     Disconnected { reason: Option<StateReason> },
     Connecting,
@@ -10,6 +11,7 @@ pub enum ConnectionState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum StateReason {
     ServerUnreachable,
     UnsupportedProtocol { server_version: Option<u32> },
@@ -20,6 +22,7 @@ pub enum StateReason {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum LossCause {
     Timeout,
     ServerClosed,

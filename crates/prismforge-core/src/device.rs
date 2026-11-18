@@ -9,6 +9,7 @@ use crate::identity::{DeviceFingerprint, ZoneShape};
 /// Persistent PrismForge reference to a physical device; never a backend runtime ID.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DeviceRef(String);
 
 impl DeviceRef {
@@ -28,12 +29,14 @@ impl fmt::Display for DeviceRef {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum BackendOrigin {
     OpenRgb,
     Simulated,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum DeviceKind {
     Motherboard,
     Memory,
@@ -60,6 +63,7 @@ pub enum DeviceKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum ZoneKind {
     Single,
     Linear,
@@ -72,12 +76,14 @@ pub enum ZoneKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MatrixSize {
     pub width: u32,
     pub height: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ZoneDescriptor {
     pub name: String,
     pub kind: ZoneKind,
@@ -88,6 +94,7 @@ pub struct ZoneDescriptor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DeviceDescriptor {
     pub origin: BackendOrigin,
     pub name: String,
