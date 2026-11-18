@@ -34,11 +34,6 @@ struct Scan {
     vanished: bool,
 }
 
-enum Target {
-    Device,
-    Zone(usize),
-}
-
 impl<C: Connector> OpenRgbBackend<C> {
     pub fn new(connector: C, config: ClientConfig) -> Self {
         Self {
@@ -195,25 +190,10 @@ impl<C: Connector> OpenRgbBackend<C> {
     }
 
     fn lookup(&self, device: &DeviceRef) -> Result<usize, BackendError> {
-        let inventory = self
-            .inventory
+        self.inventory
             .as_ref()
-            .ok_or(BackendError::StaleInventory)?;
-        if let Some(index) = inventory
-            .devices
-            .iter()
-            .position(|entry| entry.identity.reference() == Some(device))
-        {
-            return Ok(index);
-        }
-        let device = device.clone();
-        Err(if inventory.is_ambiguous(&device) {
-            BackendError::AmbiguousDevice { device }
-        } else if inventory.missing.contains(&device) {
-            BackendError::DeviceMissing { device }
-        } else {
-            BackendError::UnknownDevice { device }
-        })
+            .ok_or(BackendError::StaleInventory)?
+            .locate(device)
     }
 
     /// Inventory position of `device` in the live, current generation; refuses anything not provably that device.
@@ -231,34 +211,19 @@ impl<C: Connector> OpenRgbBackend<C> {
     fn resolve(
         &mut self,
         device: &DeviceRef,
-        target: &Target,
+        zone: Option<usize>,
         colors: Option<usize>,
     ) -> Result<u32, BackendError> {
         let index = self.locate_live(device)?;
         let descriptor = &self
             .inventory
             .as_ref()
-            .expect("lookup found an inventory")
-            .devices[index]
+            .expect("locate_live found an inventory")
+            .output_target(device, zone)?
             .descriptor;
-        if !descriptor.capabilities.has_direct_mode() {
-            return Err(BackendError::DirectModeUnavailable {
-                device: device.clone(),
-            });
-        }
-        let expected = match target {
-            Target::Device => descriptor.led_count,
-            Target::Zone(zone) => {
-                descriptor
-                    .zones
-                    .get(*zone)
-                    .ok_or(BackendError::ZoneOutOfRange {
-                        device: device.clone(),
-                        zone: *zone,
-                        zone_count: descriptor.zones.len(),
-                    })?
-                    .led_count
-            }
+        let expected = match zone {
+            Some(zone) => descriptor.zones[zone].led_count,
+            None => descriptor.led_count,
         };
         if let Some(actual) = colors.filter(|&actual| actual != expected) {
             return Err(BackendError::ColorCountMismatch {
@@ -394,7 +359,7 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
     }
 
     async fn enable_direct_mode(&mut self, device: &DeviceRef) -> Result<(), BackendError> {
-        let runtime_id = self.resolve(device, &Target::Device, None)?;
+        let runtime_id = self.resolve(device, None, None)?;
         let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
         match client.set_custom_mode(runtime_id).await {
             Ok(()) => Ok(()),
@@ -430,7 +395,7 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         device: &DeviceRef,
         colors: &[Rgb],
     ) -> Result<(), BackendError> {
-        let runtime_id = self.resolve(device, &Target::Device, Some(colors.len()))?;
+        let runtime_id = self.resolve(device, None, Some(colors.len()))?;
         let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
         let result = client.update_leds(runtime_id, colors).await;
         result.map_err(|error| self.fail(error))
@@ -442,7 +407,7 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         zone: usize,
         colors: &[Rgb],
     ) -> Result<(), BackendError> {
-        let runtime_id = self.resolve(device, &Target::Zone(zone), Some(colors.len()))?;
+        let runtime_id = self.resolve(device, Some(zone), Some(colors.len()))?;
         let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
         let result = client
             .update_zone_leds(runtime_id, zone as u32, colors)

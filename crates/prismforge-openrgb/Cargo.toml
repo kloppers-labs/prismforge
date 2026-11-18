@@ -16,5 +16,9 @@ tokio = { workspace = true, features = ["io-util", "net", "rt", "sync", "time"] 
 prismforge-testkit.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "test-util", "time"] }
 
+[[example]]
+name = "probe"
+test = true
+
 [lints]
 workspace = true
