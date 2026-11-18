@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-select-mode"
+description = "Enables the select_mode command without any pre-configured scope."
+commands.allow = ["select_mode"]
+
+[[permission]]
+identifier = "deny-select-mode"
+description = "Denies the select_mode command without any pre-configured scope."
+commands.deny = ["select_mode"]

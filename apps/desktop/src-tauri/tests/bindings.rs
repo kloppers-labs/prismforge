@@ -2,7 +2,8 @@
 
 mod generated;
 
-use prismforge_desktop::{CommandError, ShellView};
+use prismforge_desktop::{CommandError, EffectCatalog, ShellView};
+use prismforge_effects::{PreviewBatch, PreviewRequest};
 use ts_rs::{Config, TS};
 
 use generated::Generated;
@@ -15,6 +16,9 @@ fn committed_bindings_match_the_rust_types() {
         .with_out_dir(generated.scratch());
     ShellView::export_all(&config).expect("export ShellView");
     CommandError::export_all(&config).expect("export CommandError");
+    EffectCatalog::export_all(&config).expect("export EffectCatalog");
+    PreviewRequest::export_all(&config).expect("export PreviewRequest");
+    PreviewBatch::export_all(&config).expect("export PreviewBatch");
 
     generated.compare_or_update();
 }

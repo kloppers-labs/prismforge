@@ -114,7 +114,7 @@ impl<S: ViewSink> Shell<S> {
     }
 
     /// Queues while holding the lock, so a command never reaches a session that is being replaced.
-    async fn queue<F: Future>(
+    pub(crate) async fn queue<F: Future>(
         &self,
         command: impl FnOnce(&SessionHandle) -> F,
     ) -> Result<F, CommandError> {

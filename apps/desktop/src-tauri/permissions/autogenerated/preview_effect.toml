@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-effect"
+description = "Enables the preview_effect command without any pre-configured scope."
+commands.allow = ["preview_effect"]
+
+[[permission]]
+identifier = "deny-preview-effect"
+description = "Denies the preview_effect command without any pre-configured scope."
+commands.deny = ["preview_effect"]

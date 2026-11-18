@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-declare-external"
+description = "Enables the declare_external command without any pre-configured scope."
+commands.allow = ["declare_external"]
+
+[[permission]]
+identifier = "deny-declare-external"
+description = "Denies the declare_external command without any pre-configured scope."
+commands.deny = ["declare_external"]

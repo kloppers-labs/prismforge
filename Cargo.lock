@@ -2430,6 +2430,7 @@ name = "prismforge-desktop"
 version = "0.1.0"
 dependencies = [
  "prismforge-core",
+ "prismforge-effects",
  "prismforge-openrgb",
  "prismforge-testkit",
  "serde",

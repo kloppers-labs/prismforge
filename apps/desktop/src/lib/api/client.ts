@@ -24,7 +24,11 @@ function asFailure(error: unknown): Failure {
   if (error === "NoSession" || error === "EmptyHost") {
     return error;
   }
-  if (typeof error === "object" && error !== null && "Session" in error) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    ("Session" in error || "InvalidEffect" in error || "NoEffect" in error)
+  ) {
     return error as CommandError;
   }
   return { Unexpected: String(error) };
