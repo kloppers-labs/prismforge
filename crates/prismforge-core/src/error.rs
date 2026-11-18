@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::connection::LossCause;
 use crate::device::DeviceRef;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
@@ -15,8 +16,8 @@ pub enum BackendError {
     },
     #[error("{operation} timed out after {timeout_ms} ms")]
     Timeout { operation: String, timeout_ms: u64 },
-    #[error("connection lost: {detail}")]
-    ConnectionLost { detail: String },
+    #[error("connection lost ({cause:?}): {detail}")]
+    ConnectionLost { cause: LossCause, detail: String },
     #[error("protocol violation: {detail}")]
     ProtocolViolation { detail: String },
     #[error("server rejected {operation} with status {status}")]
@@ -36,6 +37,12 @@ pub enum BackendError {
         device: DeviceRef,
         zone: usize,
         zone_count: usize,
+    },
+    #[error("mode {mode} is out of range for device {device} with {mode_count} modes")]
+    ModeOutOfRange {
+        device: DeviceRef,
+        mode: usize,
+        mode_count: usize,
     },
     #[error("{actual} colours do not match {expected} LEDs on device {device}")]
     ColorCountMismatch {

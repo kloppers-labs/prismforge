@@ -12,7 +12,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::task::JoinHandle;
 
 use crate::fixture::{ControllerBlock, FixtureDevice};
-use crate::recording::{ColorWrite, ReceivedPacket};
+use crate::recording::{ColorWrite, ModeUpdate, ReceivedPacket};
 use crate::wire::{self, Writer, u32_at};
 
 const DUPLEX_BUFFER: usize = 64 * 1024;
@@ -32,6 +32,7 @@ struct State {
     received: Vec<ReceivedPacket>,
     connections: Vec<Connection>,
     silent_packets: HashSet<u32>,
+    rejected_packets: HashSet<u32>,
     reply_delays: HashMap<u32, Duration>,
     held_ack_packets: HashSet<u32>,
     held_acks: HashMap<usize, Vec<Vec<u8>>>,
@@ -66,6 +67,7 @@ impl FakeServer {
                 received: Vec::new(),
                 connections: Vec::new(),
                 silent_packets: HashSet::new(),
+                rejected_packets: HashSet::new(),
                 reply_delays: HashMap::new(),
                 held_ack_packets: HashSet::new(),
                 held_acks: HashMap::new(),
@@ -97,6 +99,15 @@ impl FakeServer {
         self.lock().silent_packets.insert(packet_id);
     }
 
+    pub fn unsilence(&self, packet_id: u32) {
+        self.lock().silent_packets.remove(&packet_id);
+    }
+
+    /// Acknowledges `packet_id` with an error status and applies nothing.
+    pub fn reject(&self, packet_id: u32) {
+        self.lock().rejected_packets.insert(packet_id);
+    }
+
     /// Withholds ACKs for `packet_id` until that connection's next packet arrives or they are released.
     pub fn hold_acks(&self, packet_id: u32) {
         self.lock().held_ack_packets.insert(packet_id);
@@ -118,7 +129,7 @@ impl FakeServer {
 
     pub fn connector(
         &self,
-    ) -> impl Fn() -> Ready<io::Result<DuplexStream>> + Send + Sync + 'static {
+    ) -> impl Fn() -> Ready<io::Result<DuplexStream>> + Send + Sync + 'static + use<> {
         let server = self.clone();
         move || ready(Ok(server.connect()))
     }
@@ -206,6 +217,13 @@ impl FakeServer {
             .collect()
     }
 
+    pub fn mode_updates(&self) -> Vec<ModeUpdate> {
+        self.received()
+            .iter()
+            .filter_map(ReceivedPacket::mode_update)
+            .collect()
+    }
+
     /// Yields to the runtime until `count` colour packets have arrived; panics if they never do.
     pub async fn wait_for_color_writes(&self, count: usize) -> Vec<ColorWrite> {
         for _ in 0..WAIT_ROUNDS {
@@ -253,6 +271,11 @@ impl State {
         }
         let mut replies = Vec::new();
         let mut status = wire::STATUS_OK;
+        if self.rejected_packets.contains(&packet_id) {
+            let ack = (*negotiated >= 6)
+                .then(|| wire::ack(device_id, packet_id, wire::STATUS_INVALID_DATA));
+            return (replies, ack);
+        }
         match packet_id {
             wire::REQUEST_PROTOCOL_VERSION => {
                 let Some(server_version) = self.protocol_version else {
@@ -301,10 +324,29 @@ impl State {
             wire::SET_CUSTOM_MODE if self.controller(device_id).is_none() => {
                 status = wire::STATUS_INVALID_ID;
             }
+            wire::UPDATE_MODE | wire::SAVE_MODE => {
+                status = mode_request_status(self.controller(device_id), payload);
+            }
             _ => {}
         }
         let ack = (*negotiated >= 6).then(|| wire::ack(device_id, packet_id, status));
         (replies, ack)
+    }
+}
+
+fn mode_request_status(controller: Option<&Controller>, payload: &[u8]) -> u32 {
+    let Some(controller) = controller else {
+        return wire::STATUS_INVALID_ID;
+    };
+    let modes = match &controller.block {
+        ControllerBlock::Device(device) => device.modes.len(),
+        ControllerBlock::Raw(_) => 0,
+    };
+    let index = u32_at(payload, 4).map(|index| index as i32);
+    match index {
+        _ if u32_at(payload, 0) != Some(payload.len() as u32) => wire::STATUS_INVALID_DATA,
+        Some(index) if index >= 0 && (index as usize) < modes => wire::STATUS_OK,
+        _ => wire::STATUS_INVALID_DATA,
     }
 }
 

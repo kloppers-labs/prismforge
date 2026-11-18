@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use prismforge_core::{BackendError, ConnectionState, IssueReason, RgbBackend, StateReason};
+use prismforge_core::{
+    BackendError, ConnectionState, IssueReason, LossCause, RgbBackend, StateReason,
+};
 use prismforge_openrgb::protocol::{FrameError, MAX_PACKET_SIZE};
 use prismforge_openrgb::{ClientError, OpenRgbClient};
 use prismforge_testkit::{ControllerBlock, FakeServer, wire};
@@ -135,7 +137,9 @@ async fn oversized_packet_closes_backend_connection() {
     assert_eq!(
         backend.connection_state(),
         &ConnectionState::Disconnected {
-            reason: Some(StateReason::ConnectionLost)
+            reason: Some(StateReason::ConnectionLost {
+                cause: LossCause::ProtocolViolation
+            })
         }
     );
 }

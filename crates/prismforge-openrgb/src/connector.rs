@@ -8,6 +8,10 @@ pub trait Connector: Send + Sync {
     type Stream: AsyncRead + AsyncWrite + Send + 'static;
 
     fn connect(&self) -> impl Future<Output = io::Result<Self::Stream>> + Send;
+
+    fn address(&self) -> Option<String> {
+        None
+    }
 }
 
 impl<F, Fut, S> Connector for F
@@ -42,6 +46,10 @@ impl TcpConnector {
 
 impl Connector for TcpConnector {
     type Stream = TcpStream;
+
+    fn address(&self) -> Option<String> {
+        Some(format!("{}:{}", self.host, self.port))
+    }
 
     async fn connect(&self) -> io::Result<TcpStream> {
         let stream = TcpStream::connect((self.host.as_str(), self.port)).await?;

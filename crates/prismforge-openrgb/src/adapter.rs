@@ -1,12 +1,13 @@
 use prismforge_core::{
-    BackendError, BackendEvent, ConnectionState, DeviceCapabilities, DeviceDescriptor,
-    DeviceIdentity, DeviceIssue, DeviceRef, Inventory, InventoryDevice, IssueReason, KnownDevice,
-    Reconciliation, Rgb, RgbBackend, StateReason, reconcile,
+    BackendError, BackendEvent, BackendInfo, BackendOrigin, ConnectionState, DeviceCapabilities,
+    DeviceDescriptor, DeviceIdentity, DeviceIssue, DeviceRef, Inventory, InventoryDevice,
+    IssueReason, KnownDevice, LossCause, Reconciliation, Rgb, RgbBackend, StateReason, reconcile,
 };
 use tokio::time::timeout;
 
 use crate::client::{ClientConfig, ClientError, MIN_PROTOCOL_VERSION, Notification, OpenRgbClient};
 use crate::connector::Connector;
+use crate::protocol::ModeData;
 use crate::translate::describe;
 
 pub struct OpenRgbBackend<C: Connector> {
@@ -17,18 +18,20 @@ pub struct OpenRgbBackend<C: Connector> {
     known: Vec<KnownDevice>,
     inventory: Option<Inventory>,
     runtime_ids: Vec<u32>,
+    reported_modes: Vec<Vec<ModeData>>,
     stale: bool,
 }
 
-struct Scan {
-    devices: Vec<(u32, DeviceDescriptor)>,
-    issues: Vec<DeviceIssue>,
-    vanished: bool,
+struct ScannedDevice {
+    runtime_id: u32,
+    descriptor: DeviceDescriptor,
+    modes: Vec<ModeData>,
 }
 
-enum Target {
-    Device,
-    Zone(usize),
+struct Scan {
+    devices: Vec<ScannedDevice>,
+    issues: Vec<DeviceIssue>,
+    vanished: bool,
 }
 
 impl<C: Connector> OpenRgbBackend<C> {
@@ -41,6 +44,7 @@ impl<C: Connector> OpenRgbBackend<C> {
             known: Vec::new(),
             inventory: None,
             runtime_ids: Vec::new(),
+            reported_modes: Vec::new(),
             stale: true,
         }
     }
@@ -67,19 +71,21 @@ impl<C: Connector> OpenRgbBackend<C> {
                 BackendEvent::InventoryChanged
             }
             Notification::Closed(error) => {
-                self.lose_connection();
+                let cause = loss_cause(&error);
+                self.lose_connection(cause);
                 BackendEvent::ConnectionLost {
+                    cause,
                     detail: error.to_string(),
                 }
             }
         }
     }
 
-    fn lose_connection(&mut self) {
+    fn lose_connection(&mut self, cause: LossCause) {
         self.client = None;
         self.stale = true;
         self.state = ConnectionState::Disconnected {
-            reason: Some(StateReason::ConnectionLost),
+            reason: Some(StateReason::ConnectionLost { cause }),
         };
     }
 
@@ -91,7 +97,7 @@ impl<C: Connector> OpenRgbBackend<C> {
     }
 
     fn fail(&mut self, error: ClientError) -> BackendError {
-        self.lose_connection();
+        self.lose_connection(loss_cause(&error));
         backend_error(error)
     }
 
@@ -142,15 +148,17 @@ impl<C: Connector> OpenRgbBackend<C> {
         }
         let mut devices = Vec::with_capacity(scan.devices.len());
         self.runtime_ids.clear();
-        for ((runtime_id, descriptor), identity) in scan.devices.into_iter().zip(identities) {
+        self.reported_modes.clear();
+        for (scanned, identity) in scan.devices.into_iter().zip(identities) {
             let identity = identity.expect("reconciliation classifies every current device");
             if let Some(reference) = identity.reference() {
-                self.remember(reference, &descriptor);
+                self.remember(reference, &scanned.descriptor);
             }
-            self.runtime_ids.push(runtime_id);
+            self.runtime_ids.push(scanned.runtime_id);
+            self.reported_modes.push(scanned.modes);
             devices.push(InventoryDevice {
                 identity,
-                descriptor,
+                descriptor: scanned.descriptor,
             });
         }
         let generation = self
@@ -182,34 +190,14 @@ impl<C: Connector> OpenRgbBackend<C> {
     }
 
     fn lookup(&self, device: &DeviceRef) -> Result<usize, BackendError> {
-        let inventory = self
-            .inventory
+        self.inventory
             .as_ref()
-            .ok_or(BackendError::StaleInventory)?;
-        if let Some(index) = inventory
-            .devices
-            .iter()
-            .position(|entry| entry.identity.reference() == Some(device))
-        {
-            return Ok(index);
-        }
-        let device = device.clone();
-        Err(if inventory.is_ambiguous(&device) {
-            BackendError::AmbiguousDevice { device }
-        } else if inventory.missing.contains(&device) {
-            BackendError::DeviceMissing { device }
-        } else {
-            BackendError::UnknownDevice { device }
-        })
+            .ok_or(BackendError::StaleInventory)?
+            .locate(device)
     }
 
-    /// Runtime ID for `device` in the current generation; refuses anything not provably that device.
-    fn resolve(
-        &mut self,
-        device: &DeviceRef,
-        target: &Target,
-        colors: Option<usize>,
-    ) -> Result<u32, BackendError> {
+    /// Inventory position of `device` in the live, current generation; refuses anything not provably that device.
+    fn locate_live(&mut self, device: &DeviceRef) -> Result<usize, BackendError> {
         self.absorb_notifications();
         if self.client.is_none() {
             return Err(BackendError::NotConnected);
@@ -217,31 +205,25 @@ impl<C: Connector> OpenRgbBackend<C> {
         if self.stale {
             return Err(BackendError::StaleInventory);
         }
-        let index = self.lookup(device)?;
+        self.lookup(device)
+    }
+
+    fn resolve(
+        &mut self,
+        device: &DeviceRef,
+        zone: Option<usize>,
+        colors: Option<usize>,
+    ) -> Result<u32, BackendError> {
+        let index = self.locate_live(device)?;
         let descriptor = &self
             .inventory
             .as_ref()
-            .expect("lookup found an inventory")
-            .devices[index]
+            .expect("locate_live found an inventory")
+            .output_target(device, zone)?
             .descriptor;
-        if !descriptor.capabilities.direct_mode {
-            return Err(BackendError::DirectModeUnavailable {
-                device: device.clone(),
-            });
-        }
-        let expected = match target {
-            Target::Device => descriptor.led_count,
-            Target::Zone(zone) => {
-                descriptor
-                    .zones
-                    .get(*zone)
-                    .ok_or(BackendError::ZoneOutOfRange {
-                        device: device.clone(),
-                        zone: *zone,
-                        zone_count: descriptor.zones.len(),
-                    })?
-                    .led_count
-            }
+        let expected = match zone {
+            Some(zone) => descriptor.zones[zone].led_count,
+            None => descriptor.led_count,
         };
         if let Some(actual) = colors.filter(|&actual| actual != expected) {
             return Err(BackendError::ColorCountMismatch {
@@ -261,7 +243,11 @@ impl<C: Connector> OpenRgbBackend<C> {
         };
         for id in client.controller_ids().await? {
             match client.controller_data(id).await {
-                Ok(data) => scan.devices.push((id, describe(&data))),
+                Ok(data) => scan.devices.push(ScannedDevice {
+                    runtime_id: id,
+                    descriptor: describe(&data),
+                    modes: data.modes,
+                }),
                 Err(ClientError::ControllerData {
                     controller_id,
                     error,
@@ -287,6 +273,15 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         &self.state
     }
 
+    fn info(&self) -> BackendInfo {
+        BackendInfo {
+            origin: BackendOrigin::OpenRgb,
+            address: self.connector.address(),
+            protocol_version: self.protocol_version(),
+            server_name: self.client.as_ref().and_then(OpenRgbClient::server_name),
+        }
+    }
+
     async fn connect(&mut self) -> Result<(), BackendError> {
         self.disconnect();
         self.state = ConnectionState::Connecting;
@@ -308,7 +303,9 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
                             server_version: *server_version,
                         }
                     }
-                    _ => StateReason::ConnectionLost,
+                    other => StateReason::ConnectionLost {
+                        cause: loss_cause(other),
+                    },
                 };
                 self.state = ConnectionState::Disconnected {
                     reason: Some(reason),
@@ -339,7 +336,7 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         let fingerprints: Vec<_> = scan
             .devices
             .iter()
-            .map(|(_, device)| device.fingerprint())
+            .map(|device| device.descriptor.fingerprint())
             .collect();
         let reconciliation = reconcile(&self.known, &fingerprints);
         self.adopt(scan, reconciliation);
@@ -362,11 +359,33 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
     }
 
     async fn enable_direct_mode(&mut self, device: &DeviceRef) -> Result<(), BackendError> {
-        let runtime_id = self.resolve(device, &Target::Device, None)?;
+        let runtime_id = self.resolve(device, None, None)?;
         let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
         match client.set_custom_mode(runtime_id).await {
             Ok(()) => Ok(()),
             Err(error @ ClientError::Rejected { .. }) => Err(backend_error(error)),
+            Err(error) => Err(self.fail(error)),
+        }
+    }
+
+    async fn reapply_mode(&mut self, device: &DeviceRef, mode: usize) -> Result<(), BackendError> {
+        let index = self.locate_live(device)?;
+        let modes = &self.reported_modes[index];
+        let settings = modes
+            .get(mode)
+            .ok_or(BackendError::ModeOutOfRange {
+                device: device.clone(),
+                mode,
+                mode_count: modes.len(),
+            })?
+            .clone();
+        let runtime_id = self.runtime_ids[index];
+        let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
+        match client.update_mode(runtime_id, mode, &settings).await {
+            Ok(()) => Ok(()),
+            Err(error @ (ClientError::Rejected { .. } | ClientError::UnencodableMode { .. })) => {
+                Err(backend_error(error))
+            }
             Err(error) => Err(self.fail(error)),
         }
     }
@@ -376,7 +395,7 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         device: &DeviceRef,
         colors: &[Rgb],
     ) -> Result<(), BackendError> {
-        let runtime_id = self.resolve(device, &Target::Device, Some(colors.len()))?;
+        let runtime_id = self.resolve(device, None, Some(colors.len()))?;
         let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
         let result = client.update_leds(runtime_id, colors).await;
         result.map_err(|error| self.fail(error))
@@ -388,12 +407,22 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         zone: usize,
         colors: &[Rgb],
     ) -> Result<(), BackendError> {
-        let runtime_id = self.resolve(device, &Target::Zone(zone), Some(colors.len()))?;
+        let runtime_id = self.resolve(device, Some(zone), Some(colors.len()))?;
         let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
         let result = client
             .update_zone_leds(runtime_id, zone as u32, colors)
             .await;
         result.map_err(|error| self.fail(error))
+    }
+}
+
+fn loss_cause(error: &ClientError) -> LossCause {
+    match error {
+        ClientError::Timeout { .. } => LossCause::Timeout,
+        ClientError::Closed { .. } => LossCause::ServerClosed,
+        ClientError::Io { .. } => LossCause::Transport,
+        ClientError::Abandoned => LossCause::CallAbandoned,
+        _ => LossCause::ProtocolViolation,
     }
 }
 
@@ -407,8 +436,11 @@ fn backend_error(error: ClientError) -> BackendError {
             operation: operation.into(),
             timeout_ms: after.as_millis() as u64,
         },
-        ClientError::Io { detail } | ClientError::Closed { detail } => {
-            BackendError::ConnectionLost { detail }
+        ClientError::Io { .. } | ClientError::Closed { .. } | ClientError::Abandoned => {
+            BackendError::ConnectionLost {
+                cause: loss_cause(&error),
+                detail: error.to_string(),
+            }
         }
         ClientError::Rejected {
             packet_id, status, ..

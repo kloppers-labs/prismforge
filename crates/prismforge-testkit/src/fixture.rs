@@ -1,4 +1,4 @@
-use crate::wire::Writer;
+use crate::wire::{Reader, Writer};
 
 const FLAG_HAS_SPEED: u32 = 1 << 0;
 const FLAG_HAS_DIRECTION_LR: u32 = 1 << 1;
@@ -109,6 +109,27 @@ impl FixtureMode {
         }
     }
 
+    pub fn decode(input: &mut Reader) -> Self {
+        let mut mode = Self {
+            name: input.string(),
+            flags: input.u32(),
+            speed_min: input.u32(),
+            speed_max: input.u32(),
+            brightness_min: input.u32(),
+            brightness_max: input.u32(),
+            colors_min: input.u32(),
+            colors_max: input.u32(),
+            speed: input.u32(),
+            brightness: input.u32(),
+            direction: input.u32(),
+            color_mode: input.u32(),
+            colors: Vec::new(),
+        };
+        let count = input.u16();
+        mode.colors = (0..count).map(|_| input.color()).collect();
+        mode
+    }
+
     fn encode(&self, out: &mut Writer) {
         out.string(&self.name)
             .u32(self.flags)
@@ -175,6 +196,7 @@ pub struct FixtureDevice {
     pub modes: Vec<FixtureMode>,
     pub active_mode: i32,
     pub zones: Vec<FixtureZone>,
+    pub led_colors: Vec<[u8; 3]>,
     pub led_count_override: Option<u16>,
 }
 
@@ -192,6 +214,7 @@ impl FixtureDevice {
             modes: vec![FixtureMode::direct(), FixtureMode::static_color()],
             active_mode: 0,
             zones: Vec::new(),
+            led_colors: Vec::new(),
             led_count_override: None,
         }
     }
@@ -240,6 +263,17 @@ impl FixtureDevice {
         self
     }
 
+    pub fn active_mode(mut self, index: i32) -> Self {
+        self.active_mode = index;
+        self
+    }
+
+    /// LEDs past the end of `colors` report black.
+    pub fn led_colors(mut self, colors: Vec<[u8; 3]>) -> Self {
+        self.led_colors = colors;
+        self
+    }
+
     pub fn without_direct_mode(self) -> Self {
         self.modes(vec![FixtureMode::static_color(), FixtureMode::breathing()])
     }
@@ -273,8 +307,8 @@ impl FixtureDevice {
             body.string(&format!("LED {index}"));
         }
         body.u16(leds);
-        for _ in 0..leds {
-            body.color([0, 0, 0]);
+        for index in 0..leds as usize {
+            body.color(self.led_colors.get(index).copied().unwrap_or([0, 0, 0]));
         }
         body.u16(0).u32(0).string(&self.name).u32(1).byte(0);
         let body = body.into_bytes();

@@ -13,8 +13,17 @@ pub enum ConnectionState {
 pub enum StateReason {
     ServerUnreachable,
     UnsupportedProtocol { server_version: Option<u32> },
-    ConnectionLost,
+    ConnectionLost { cause: LossCause },
     InventoryStale,
     ControllerDataRejected { controllers: usize },
     AmbiguousDevices { devices: usize },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LossCause {
+    Timeout,
+    ServerClosed,
+    Transport,
+    ProtocolViolation,
+    CallAbandoned,
 }

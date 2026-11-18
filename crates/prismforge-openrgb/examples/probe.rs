@@ -3,7 +3,7 @@
 use std::process::ExitCode;
 
 use prismforge_core::{DeviceIdentity, DeviceRef, InventoryDevice, Rgb, RgbBackend};
-use prismforge_openrgb::{ClientConfig, OpenRgbBackend, TcpConnector};
+use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend, TcpConnector};
 
 const USAGE: &str =
     "usage: probe [--host HOST] [--port PORT] [--device REF --color RRGGBB [--zone INDEX]]";
@@ -73,19 +73,17 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn apply(
-    backend: &mut OpenRgbBackend<TcpConnector>,
+async fn apply<C: Connector>(
+    backend: &mut OpenRgbBackend<C>,
     write: &Write,
 ) -> Result<(), prismforge_core::BackendError> {
     let descriptor = &backend
         .inventory()
-        .and_then(|inventory| inventory.device(&write.device))
-        .ok_or(prismforge_core::BackendError::UnknownDevice {
-            device: write.device.clone(),
-        })?
+        .ok_or(prismforge_core::BackendError::StaleInventory)?
+        .output_target(&write.device, write.zone)?
         .descriptor;
     let led_count = match write.zone {
-        Some(zone) => descriptor.zones.get(zone).map_or(0, |zone| zone.led_count),
+        Some(zone) => descriptor.zones[zone].led_count,
         None => descriptor.led_count,
     };
     let colors = vec![write.color; led_count];
@@ -121,7 +119,7 @@ fn print_device(device: &InventoryDevice) {
     }
     let capabilities = &descriptor.capabilities;
     println!(
-        "  direct mode: {}, saves to device memory: {}, active mode: {:?}",
+        "  direct mode: {:?}, saves to device memory: {}, active mode: {:?}",
         capabilities.direct_mode, capabilities.saves_to_device_memory, capabilities.active_mode
     );
     for mode in &capabilities.modes {
@@ -173,4 +171,79 @@ fn parse_color(text: &str) -> Result<Rgb, String> {
         .ok_or(format!("invalid colour {text}; expected RRGGBB"))?;
     let [_, r, g, b] = value.to_be_bytes();
     Ok(Rgb::new(r, g, b))
+}
+
+#[cfg(test)]
+mod tests {
+    use prismforge_core::{BackendError, Rgb, RgbBackend};
+    use prismforge_openrgb::{ClientConfig, OpenRgbBackend};
+    use prismforge_testkit::{FakeServer, FixtureDevice, wire};
+
+    use super::{Write, apply};
+
+    fn hardware_writes(server: &FakeServer) -> usize {
+        server
+            .received()
+            .iter()
+            .filter(|packet| {
+                [
+                    wire::SET_CUSTOM_MODE,
+                    wire::UPDATE_LEDS,
+                    wire::UPDATE_ZONE_LEDS,
+                    wire::UPDATE_MODE,
+                    wire::SAVE_MODE,
+                ]
+                .contains(&packet.packet_id)
+            })
+            .count()
+    }
+
+    async fn refused_write(device: FixtureDevice, zone: Option<usize>) -> (BackendError, usize) {
+        let server = FakeServer::new();
+        server.add_device(0, device);
+        let mut backend = OpenRgbBackend::new(server.connector(), ClientConfig::default());
+        backend.connect().await.expect("connect");
+        let inventory = backend.refresh_inventory().await.expect("inventory");
+        let write = Write {
+            device: inventory.devices[0]
+                .identity
+                .reference()
+                .cloned()
+                .expect("resolved"),
+            color: Rgb::new(255, 0, 0),
+            zone,
+        };
+
+        let error = apply(&mut backend, &write).await.unwrap_err();
+        backend.refresh_inventory().await.expect("barrier");
+        (error, hardware_writes(&server))
+    }
+
+    #[tokio::test]
+    async fn out_of_range_zone_sends_no_hardware_write() {
+        let device = FixtureDevice::new("alpha", "Strip").zone("Strip", 3);
+
+        let (error, writes) = refused_write(device, Some(1)).await;
+
+        assert!(
+            matches!(error, BackendError::ZoneOutOfRange { zone: 1, .. }),
+            "{error:?}"
+        );
+        assert_eq!(writes, 0);
+    }
+
+    #[tokio::test]
+    async fn device_without_direct_mode_sends_no_hardware_write() {
+        let device = FixtureDevice::new("alpha", "Strip")
+            .zone("Strip", 3)
+            .without_direct_mode();
+
+        let (error, writes) = refused_write(device, None).await;
+
+        assert!(
+            matches!(error, BackendError::DirectModeUnavailable { .. }),
+            "{error:?}"
+        );
+        assert_eq!(writes, 0);
+    }
 }

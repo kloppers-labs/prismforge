@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use prismforge_core::{BackendError, ConnectionState, RgbBackend, StateReason};
+use prismforge_core::{BackendError, ConnectionState, LossCause, RgbBackend, StateReason};
 use prismforge_openrgb::{OpenRgbBackend, TcpConnector};
 use prismforge_testkit::{FakeServer, wire};
 use tokio::time::Instant;
@@ -131,7 +131,9 @@ async fn times_out_request_without_reply() {
     assert_eq!(
         backend.connection_state(),
         &ConnectionState::Disconnected {
-            reason: Some(StateReason::ConnectionLost)
+            reason: Some(StateReason::ConnectionLost {
+                cause: LossCause::Timeout
+            })
         }
     );
 }

@@ -12,6 +12,8 @@ pub const DETECTION_PROGRESS_CHANGED: u32 = 102;
 pub const UPDATE_LEDS: u32 = 1050;
 pub const UPDATE_ZONE_LEDS: u32 = 1051;
 pub const SET_CUSTOM_MODE: u32 = 1100;
+pub const UPDATE_MODE: u32 = 1101;
+pub const SAVE_MODE: u32 = 1102;
 pub const SIGNAL_UPDATE: u32 = 1150;
 
 pub const STATUS_OK: u32 = 0;
@@ -90,4 +92,55 @@ pub fn u32_at(bytes: &[u8], offset: usize) -> Option<u32> {
 pub fn u16_at(bytes: &[u8], offset: usize) -> Option<u16> {
     let slice = bytes.get(offset..offset + 2)?;
     Some(u16::from_le_bytes(slice.try_into().ok()?))
+}
+
+/// Reads little-endian protocol fields; panics on short input because recordings are test evidence.
+pub struct Reader<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> Reader<'a> {
+    pub fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    pub fn u16(&mut self) -> u16 {
+        u16::from_le_bytes(self.take(2).try_into().expect("two bytes"))
+    }
+
+    pub fn u32(&mut self) -> u32 {
+        u32::from_le_bytes(self.take(4).try_into().expect("four bytes"))
+    }
+
+    pub fn i32(&mut self) -> i32 {
+        i32::from_le_bytes(self.take(4).try_into().expect("four bytes"))
+    }
+
+    pub fn string(&mut self) -> String {
+        let length = self.u16() as usize;
+        let bytes = self.take(length);
+        let (text, terminator) = bytes.split_at(length - 1);
+        assert_eq!(terminator, [0], "string is not NUL-terminated");
+        String::from_utf8(text.to_vec()).expect("string is UTF-8")
+    }
+
+    pub fn color(&mut self) -> [u8; 3] {
+        let bytes = self.take(4);
+        [bytes[0], bytes[1], bytes[2]]
+    }
+
+    pub fn remaining(&self) -> usize {
+        self.bytes.len() - self.offset
+    }
+
+    fn take(&mut self, count: usize) -> &'a [u8] {
+        let end = self.offset + count;
+        let slice = self
+            .bytes
+            .get(self.offset..end)
+            .unwrap_or_else(|| panic!("needed {count} bytes at offset {}", self.offset));
+        self.offset = end;
+        slice
+    }
 }
