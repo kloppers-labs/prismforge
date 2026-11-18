@@ -4,6 +4,7 @@ mod files;
 mod notice;
 mod portable;
 mod registry;
+mod service;
 mod settings;
 mod summary;
 
@@ -32,10 +33,11 @@ pub use envelope::{
 pub use files::{FileOps, StdFileOps};
 pub use notice::{NoticeEvent, StoreNotice};
 pub use registry::{Registry, RegistryDevice, ZoneName};
+pub use service::{ApplyOutcome, ConnectTrigger, Profiles};
 pub use settings::Settings;
 pub use summary::{
-    ExportedProfile, ImportError, ImportReport, ProfileDetails, ProfileSummary, ResolutionCounts,
-    StoreSummary, UnreadableProfile, UnsupportedEffect,
+    ExportReport, ExportedProfile, ImportError, ImportReport, ProfileDetails, ProfileSummary,
+    ResolutionCounts, StoreSummary, UnreadableProfile, UnsupportedEffect,
 };
 
 /// Largest file `import` accepts.
@@ -275,6 +277,36 @@ impl ProfileStore {
             bytes: encode_export(&portable),
             omitted_fields,
         })
+    }
+
+    /// Writes the export to `destination` through a synced temporary file; no backup is kept there.
+    pub fn export_to(
+        &self,
+        id: &ProfileId,
+        destination: &Path,
+    ) -> Result<ExportReport, StoreError> {
+        let exported = self.export(id)?;
+        let file = StoreFile {
+            path: destination.to_path_buf(),
+            name: destination
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        };
+        durable::write(self.ops.as_ref(), &file, &exported.bytes, &|_| false)?;
+        Ok(ExportReport {
+            omitted_fields: exported.omitted_fields,
+        })
+    }
+
+    pub fn import_file(
+        &mut self,
+        source: &Path,
+        devices: &[SessionDevice],
+    ) -> Result<ImportReport, ImportError> {
+        let bytes = durable::read_bounded(self.ops.as_ref(), source, IMPORT_LIMIT)
+            .map_err(|problem| ImportError::Unreadable { problem })?;
+        self.import(&bytes, devices)
     }
 
     /// Checks the whole file before anything is stored, then stores it as a new profile.

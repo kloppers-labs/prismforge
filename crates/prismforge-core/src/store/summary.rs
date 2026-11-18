@@ -72,6 +72,13 @@ pub struct ExportedProfile {
     pub omitted_fields: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ExportReport {
+    /// Unknown fields from a newer version, left out because they could hold private data.
+    pub omitted_fields: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ImportReport {

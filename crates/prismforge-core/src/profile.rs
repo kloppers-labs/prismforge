@@ -1,9 +1,16 @@
+mod apply;
+mod capture;
 mod codec;
 mod effects;
 mod model;
 mod resolve;
 mod validate;
 
+pub(crate) use apply::is_live;
+pub use apply::{
+    ApplyError, ApplyReport, FrameRateOutcome, ItemOutcome, ItemReport, ProfileItem, SkipReason,
+    apply,
+};
 pub(crate) use codec::{decode_export, decode_local, encode_export, encode_local};
 pub use effects::EffectProblem;
 pub use model::{
