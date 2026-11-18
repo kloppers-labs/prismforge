@@ -39,7 +39,7 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 on 2026-11-18, at the last code co
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 31 tests in `prismforge-core` (20 session tests), 49 tests in `prismforge-openrgb` (2 in the probe example), 9 tests in `prismforge-testkit` |
+| `cargo test --workspace` | Pass: 39 tests in `prismforge-core` (28 session tests), 49 tests in `prismforge-openrgb` (2 in the probe example), 9 tests in `prismforge-testkit` |
 | `cargo check --workspace --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only) |
 
 Not run:
@@ -63,10 +63,10 @@ Not run:
 - **A stopped backend call costs the connection.** The next call closes the connection and the caller must connect again. The session runs every call to its end, so this happens only to code that calls the backend directly.
 - **Device strings must be valid UTF-8.** A device with a different text encoding is reported as an issue and cannot be used.
 - **Mode re-apply is not confirmed by the server.** OpenRGB answers UpdateMode with status OK also when it rejects the mode settings. Identify reports "restored" when every restore request was accepted. Only a later inventory refresh shows the active mode.
-- **Identify restore is best effort.** It uses the mode and colours that the last inventory reported. If another program changed the device after that refresh, identify restores the older state. PrismForge cannot see other writers, such as the Effects plugin.
-- **Reconnect does not stop by itself.** The session retries with a delay that grows to a fixed cap (30 seconds by default) until the user disconnects. An unsupported server version is not retried.
+- **Identify restore is best effort.** It uses the mode and colours that the last inventory reported. If another program changed the device after that refresh, identify restores the older state. PrismForge cannot see other writers, such as the Effects plugin. The session refreshes the inventory after each identify. If an earlier identify was not restored and the device still reports Direct Mode, the next identify reports "partly restored, previous state unknown".
+- **Reconnect does not stop by itself.** The session retries with a delay that grows to a fixed cap (30 seconds by default) until the user disconnects. A server that reports a protocol below 6 is not retried. A server that does not answer the version request is retried; while it retries, the state shows "unsupported protocol" without a version, because an old server and a hung server look the same.
 - **The list of known devices is in memory only.** After an application restart, a device with a serial number that moved to a new location gets a new reference.
-- **Test gaps:** segments and zone modes have no tests. The identify outcomes "partly restored" and "lighting failed" have no tests.
+- **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## Missing information from the owner
 
