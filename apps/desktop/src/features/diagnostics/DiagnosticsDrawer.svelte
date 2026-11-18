@@ -15,6 +15,11 @@
           ["Inventory refreshes", session.diagnostics.counters.inventory_refreshes],
           ["Failed refreshes", session.diagnostics.counters.refresh_failures],
           ["Commands refused as busy", session.diagnostics.counters.commands_refused_busy],
+          ["Frames written", session.diagnostics.counters.frames_written],
+          ["Ticks skipped", session.diagnostics.counters.ticks_skipped],
+          ["Writes refused", session.diagnostics.counters.output_writes_refused],
+          ["Writes that ended the connection", session.diagnostics.counters.output_writes_failed],
+          ["Output wake-ups", session.diagnostics.counters.output_wakeups],
         ]
       : [],
   );
@@ -85,6 +90,20 @@
         {#each counters as [label, value] (label)}
           <dt>{label}</dt>
           <dd class="numeric">{value}</dd>
+        {/each}
+      </dl>
+    </section>
+
+    <section aria-labelledby="output-title">
+      <h3 id="output-title">Output</h3>
+      <dl>
+        <dt>Frame rate</dt>
+        <dd class="numeric">{session.output.frame_rate} per second</dd>
+        <dt>Scene</dt>
+        <dd class="code">{raw(session.output.scene.assignments)}</dd>
+        {#each session.output.devices as output (output.device)}
+          <dt class="code">{output.device}</dt>
+          <dd class="code">{raw(output.owner)} {raw(output.condition)}</dd>
         {/each}
       </dl>
     </section>

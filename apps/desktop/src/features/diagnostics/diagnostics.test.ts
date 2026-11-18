@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
-import { openRgbDegraded, openRgbRefused } from "../../test/fixtures/sessions";
+import { demoEffectsRunning, openRgbDegraded, openRgbRefused } from "../../test/fixtures/sessions";
 
 async function openDiagnostics() {
   await fireEvent.click(await screen.findByRole("button", { name: "Diagnostics" }));
@@ -39,4 +39,24 @@ test("shows_the_last_error_and_real_counters", async () => {
 
   await fireEvent.keyDown(window, { key: "Escape" });
   expect(screen.queryByRole("complementary", { name: "Diagnostics" })).toBeNull();
+});
+
+test("shows_output_counters_and_owners_in_diagnostics_only", async () => {
+  fakeShell(demoEffectsRunning);
+  render(App);
+  await screen.findByRole("navigation", { name: /Devices/ });
+  expect(document.body.textContent).not.toMatch(/Frames written|Ticks skipped/);
+
+  const drawer = await openDiagnostics();
+
+  const counters = within(drawer).getByRole("heading", { name: "Counters" }).parentElement as HTMLElement;
+  const counter = (label: string) => within(counters).getByText(label).nextElementSibling?.textContent;
+  const real = demoEffectsRunning.diagnostics.counters;
+  expect(counter("Frames written")).toBe(String(real.frames_written));
+  expect(counter("Ticks skipped")).toBe(String(real.ticks_skipped));
+  expect(counter("Writes refused")).toBe(String(real.output_writes_refused));
+  expect(counter("Writes that ended the connection")).toBe(String(real.output_writes_failed));
+  expect(Number(counter("Frames written"))).toBeGreaterThan(0);
+  expect(within(drawer).getByText("30 per second")).toBeTruthy();
+  expect(within(drawer).getByText(/"Refused":\{"error":\{"Rejected"/)).toBeTruthy();
 });
