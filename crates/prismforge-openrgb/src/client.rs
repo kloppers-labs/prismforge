@@ -12,7 +12,7 @@ use crate::protocol::{
     decode_controller_ids, decode_u32, encode_packet, encode_string, encode_u32,
     encode_update_leds, encode_update_zone_leds, packet_id, parse_controller_data,
 };
-use crate::reader::{self, Pending, PendingSlot, ReaderStatus, Reply, io_failure};
+use crate::reader::{self, Completion, Pending, PendingSlot, ReaderStatus, Reply, io_failure};
 
 pub const CLIENT_PROTOCOL_VERSION: u32 = 6;
 pub const MIN_PROTOCOL_VERSION: u32 = 6;
@@ -83,6 +83,7 @@ pub struct OpenRgbClient<S> {
     protocol_version: u32,
     seen_list_epoch: u64,
     failure: Option<ClientError>,
+    exchange_open: bool,
 }
 
 impl<S> OpenRgbClient<S>
@@ -109,6 +110,7 @@ where
             protocol_version: 0,
             seen_list_epoch: 0,
             failure: None,
+            exchange_open: false,
         };
         let server_version = client.request_server_version().await?;
         client.protocol_version = server_version.min(CLIENT_PROTOCOL_VERSION);
@@ -131,7 +133,7 @@ where
     pub async fn controller_ids(&mut self) -> Result<Vec<u32>, ClientError> {
         let packet = packet_id::REQUEST_CONTROLLER_COUNT;
         let reply = self
-            .request(0, packet, &[], "controller count request")
+            .request(0, packet, &[], Completion::Ack, "controller count request")
             .await?;
         let payload = self.expect_payload(packet, reply)?;
         decode_controller_ids(&payload).map_err(|error| self.malformed(packet, error))
@@ -140,30 +142,37 @@ where
     pub async fn controller_data(&mut self, id: u32) -> Result<ControllerData, ClientError> {
         let packet = packet_id::REQUEST_CONTROLLER_DATA;
         let version = encode_u32(self.protocol_version);
-        match self
-            .request(id, packet, &version, "controller data request")
-            .await?
-        {
-            Reply::Payload(payload) => {
-                parse_controller_data(&payload).map_err(|error| ClientError::ControllerData {
-                    controller_id: id,
-                    error,
-                })
-            }
-            Reply::Ack(_) => Err(ClientError::ControllerNotFound { controller_id: id }),
-        }
+        let reply = self
+            .request(
+                id,
+                packet,
+                &version,
+                Completion::Ack,
+                "controller data request",
+            )
+            .await?;
+        let payload = reply
+            .payload
+            .ok_or(ClientError::ControllerNotFound { controller_id: id })?;
+        parse_controller_data(&payload).map_err(|error| ClientError::ControllerData {
+            controller_id: id,
+            error,
+        })
     }
 
     pub async fn set_custom_mode(&mut self, id: u32) -> Result<(), ClientError> {
         let packet = packet_id::SET_CUSTOM_MODE;
-        match self.request(id, packet, &[], "custom mode request").await? {
-            Reply::Ack(ACK_STATUS_OK) => Ok(()),
-            Reply::Ack(status) => Err(ClientError::Rejected {
+        let reply = self
+            .request(id, packet, &[], Completion::Ack, "custom mode request")
+            .await?;
+        match (reply.payload, reply.status) {
+            (None, Some(ACK_STATUS_OK)) => Ok(()),
+            (None, Some(status)) => Err(ClientError::Rejected {
                 packet_id: packet,
                 device_id: id,
                 status,
             }),
-            Reply::Payload(_) => Err(self.malformed(packet, "unexpected reply payload")),
+            _ => Err(self.malformed(packet, "unexpected reply payload")),
         }
     }
 
@@ -222,7 +231,13 @@ where
         let packet = packet_id::REQUEST_PROTOCOL_VERSION;
         let offer = encode_u32(CLIENT_PROTOCOL_VERSION);
         match self
-            .request(0, packet, &offer, "protocol version request")
+            .request(
+                0,
+                packet,
+                &offer,
+                Completion::Payload,
+                "protocol version request",
+            )
             .await
         {
             Ok(reply) => {
@@ -241,17 +256,16 @@ where
         device_id: u32,
         packet_id: u32,
         payload: &[u8],
+        completion: Completion,
         operation: &'static str,
     ) -> Result<Reply, ClientError> {
-        self.ensure_open()?;
+        self.begin_exchange()?;
         let (reply, response) = oneshot::channel();
-        self.pending.set(Pending {
-            device_id,
-            packet_id,
-            reply,
-        });
+        self.pending
+            .set(Pending::new(device_id, packet_id, completion, reply));
         if let Err(error) = self.ensure_open() {
             self.pending.take();
+            self.exchange_open = false;
             return Err(error);
         }
         let packet = encode_packet(device_id, packet_id, payload);
@@ -266,6 +280,7 @@ where
         };
         let outcome = timeout(self.config.request_timeout, exchange).await;
         self.pending.take();
+        self.exchange_open = false;
         match outcome {
             Ok(Ok(reply)) => Ok(reply),
             Ok(Err(error)) => Err(self.fail(error)),
@@ -283,9 +298,11 @@ where
         payload: &[u8],
         operation: &'static str,
     ) -> Result<(), ClientError> {
-        self.ensure_open()?;
+        self.begin_exchange()?;
         let packet = encode_packet(device_id, packet_id, payload);
-        match timeout(self.config.request_timeout, self.writer.write_all(&packet)).await {
+        let outcome = timeout(self.config.request_timeout, self.writer.write_all(&packet)).await;
+        self.exchange_open = false;
+        match outcome {
             Ok(Ok(())) => Ok(()),
             Ok(Err(error)) => Err(self.fail(io_failure(error))),
             Err(_) => Err(self.fail(ClientError::Timeout {
@@ -296,10 +313,22 @@ where
     }
 
     fn expect_payload(&mut self, packet_id: u32, reply: Reply) -> Result<Vec<u8>, ClientError> {
-        match reply {
-            Reply::Payload(payload) => Ok(payload),
-            Reply::Ack(_) => Err(self.malformed(packet_id, "acknowledged without a reply")),
+        match reply.payload {
+            Some(payload) => Ok(payload),
+            None => Err(self.malformed(packet_id, "acknowledged without a reply")),
         }
+    }
+
+    /// A dropped request future may leave its reply or ACK unread, so the next exchange closes the connection.
+    fn begin_exchange(&mut self) -> Result<(), ClientError> {
+        self.ensure_open()?;
+        if self.exchange_open {
+            return Err(self.fail(ClientError::Closed {
+                detail: "an earlier request was abandoned mid-exchange".into(),
+            }));
+        }
+        self.exchange_open = true;
+        Ok(())
     }
 
     fn ensure_open(&self) -> Result<(), ClientError> {

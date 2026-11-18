@@ -33,6 +33,8 @@ struct State {
     connections: Vec<Connection>,
     silent_packets: HashSet<u32>,
     reply_delays: HashMap<u32, Duration>,
+    held_ack_packets: HashSet<u32>,
+    held_acks: HashMap<usize, Vec<Vec<u8>>>,
     session: u32,
     next_connection: usize,
 }
@@ -44,6 +46,7 @@ struct Controller {
 }
 
 struct Connection {
+    id: usize,
     outgoing: UnboundedSender<Vec<u8>>,
     tasks: [JoinHandle<()>; 2],
 }
@@ -64,6 +67,8 @@ impl FakeServer {
                 connections: Vec::new(),
                 silent_packets: HashSet::new(),
                 reply_delays: HashMap::new(),
+                held_ack_packets: HashSet::new(),
+                held_acks: HashMap::new(),
                 session: 0,
                 next_connection: 0,
             })),
@@ -90,6 +95,21 @@ impl FakeServer {
 
     pub fn silence(&self, packet_id: u32) {
         self.lock().silent_packets.insert(packet_id);
+    }
+
+    /// Withholds ACKs for `packet_id` until that connection's next packet arrives or they are released.
+    pub fn hold_acks(&self, packet_id: u32) {
+        self.lock().held_ack_packets.insert(packet_id);
+    }
+
+    pub fn release_held_acks(&self) {
+        let mut state = self.lock();
+        let held = std::mem::take(&mut state.held_acks);
+        for connection in &state.connections {
+            for ack in held.get(&connection.id).into_iter().flatten() {
+                let _ = connection.outgoing.send(ack.clone());
+            }
+        }
     }
 
     pub fn delay_replies(&self, packet_id: u32, delay: Duration) {
@@ -120,6 +140,7 @@ impl FakeServer {
         ));
         let write_task = tokio::spawn(forward(queue, writer));
         state.connections.push(Connection {
+            id: connection,
             outgoing,
             tasks: [serve_task, write_task],
         });
@@ -226,16 +247,16 @@ impl State {
         device_id: u32,
         packet_id: u32,
         payload: &[u8],
-    ) -> Vec<Vec<u8>> {
+    ) -> (Vec<Vec<u8>>, Option<Vec<u8>>) {
         if self.silent_packets.contains(&packet_id) {
-            return Vec::new();
+            return (Vec::new(), None);
         }
         let mut replies = Vec::new();
         let mut status = wire::STATUS_OK;
         match packet_id {
             wire::REQUEST_PROTOCOL_VERSION => {
                 let Some(server_version) = self.protocol_version else {
-                    return Vec::new();
+                    return (Vec::new(), None);
                 };
                 let requested = u32_at(payload, 0).unwrap_or(0);
                 *negotiated = requested.min(server_version);
@@ -282,10 +303,8 @@ impl State {
             }
             _ => {}
         }
-        if *negotiated >= 6 {
-            replies.push(wire::ack(device_id, packet_id, status));
-        }
-        replies
+        let ack = (*negotiated >= 6).then(|| wire::ack(device_id, packet_id, status));
+        (replies, ack)
     }
 }
 
@@ -317,7 +336,15 @@ async fn serve(
             let target = state
                 .controller(device_id)
                 .map(|controller| controller.label.clone());
-            let replies = state.respond(&mut negotiated, device_id, packet_id, &payload);
+            let mut replies = state.held_acks.remove(&connection).unwrap_or_default();
+            let (frames, ack) = state.respond(&mut negotiated, device_id, packet_id, &payload);
+            replies.extend(frames);
+            match ack {
+                Some(ack) if state.held_ack_packets.contains(&packet_id) => {
+                    state.held_acks.entry(connection).or_default().push(ack);
+                }
+                ack => replies.extend(ack),
+            }
             state.received.push(ReceivedPacket {
                 session,
                 connection,

@@ -7,15 +7,52 @@ use tokio::sync::{oneshot, watch};
 use crate::client::ClientError;
 use crate::protocol::{HEADER_LEN, PacketHeader, decode_ack, packet_id};
 
-pub(crate) enum Reply {
-    Payload(Vec<u8>),
-    Ack(u32),
+/// At protocol 6 the server ACKs every packet after any reply, so an exchange that ends on its own ACK leaves none behind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Completion {
+    Payload,
+    Ack,
+}
+
+pub(crate) struct Reply {
+    pub payload: Option<Vec<u8>>,
+    pub status: Option<u32>,
 }
 
 pub(crate) struct Pending {
-    pub device_id: u32,
-    pub packet_id: u32,
-    pub reply: oneshot::Sender<Result<Reply, ClientError>>,
+    device_id: u32,
+    packet_id: u32,
+    completion: Completion,
+    payload: Option<Vec<u8>>,
+    reply: oneshot::Sender<Result<Reply, ClientError>>,
+}
+
+impl Pending {
+    pub fn new(
+        device_id: u32,
+        packet_id: u32,
+        completion: Completion,
+        reply: oneshot::Sender<Result<Reply, ClientError>>,
+    ) -> Self {
+        Self {
+            device_id,
+            packet_id,
+            completion,
+            payload: None,
+            reply,
+        }
+    }
+
+    pub fn fail(self, error: ClientError) {
+        let _ = self.reply.send(Err(error));
+    }
+
+    fn finish(self, status: Option<u32>) {
+        let _ = self.reply.send(Ok(Reply {
+            payload: self.payload,
+            status,
+        }));
+    }
 }
 
 #[derive(Default)]
@@ -30,12 +67,32 @@ impl PendingSlot {
         self.lock().take()
     }
 
-    fn take_matching(&self, device_id: u32, packet_id: u32) -> Option<Pending> {
+    fn on_payload(&self, device_id: u32, packet_id: u32, payload: Vec<u8>) {
+        let mut slot = self.lock();
+        let Some(pending) = slot
+            .as_mut()
+            .filter(|pending| pending.device_id == device_id && pending.packet_id == packet_id)
+        else {
+            return;
+        };
+        pending.payload.get_or_insert(payload);
+        if pending.completion == Completion::Payload
+            && let Some(pending) = slot.take()
+        {
+            pending.finish(None);
+        }
+    }
+
+    fn on_ack(&self, device_id: u32, acked_packet_id: u32, status: u32) {
         let mut slot = self.lock();
         let matches = slot.as_ref().is_some_and(|pending| {
-            pending.device_id == device_id && pending.packet_id == packet_id
+            pending.completion == Completion::Ack
+                && pending.device_id == device_id
+                && pending.packet_id == acked_packet_id
         });
-        if matches { slot.take() } else { None }
+        if matches && let Some(pending) = slot.take() {
+            pending.finish(Some(status));
+        }
     }
 
     fn lock(&self) -> MutexGuard<'_, Option<Pending>> {
@@ -67,7 +124,7 @@ pub(crate) async fn run<S: AsyncRead>(
     // Publish closure before failing the pending request so a request registered concurrently sees one of them.
     status.send_modify(|status| status.closed = Some(error.clone()));
     if let Some(waiting) = pending.take() {
-        let _ = waiting.reply.send(Err(error));
+        waiting.fail(error);
     }
 }
 
@@ -93,21 +150,10 @@ fn route(
         packet_id::DEVICE_LIST_UPDATED => status.send_modify(|status| status.list_epoch += 1),
         packet_id::ACK => {
             if let Ok(ack) = decode_ack(&payload) {
-                deliver(
-                    pending,
-                    header.device_id,
-                    ack.packet_id,
-                    Reply::Ack(ack.status),
-                );
+                pending.on_ack(header.device_id, ack.packet_id, ack.status);
             }
         }
-        other => deliver(pending, header.device_id, other, Reply::Payload(payload)),
-    }
-}
-
-fn deliver(pending: &PendingSlot, device_id: u32, packet_id: u32, reply: Reply) {
-    if let Some(waiting) = pending.take_matching(device_id, packet_id) {
-        let _ = waiting.reply.send(Ok(reply));
+        other => pending.on_payload(header.device_id, other, payload),
     }
 }
 
