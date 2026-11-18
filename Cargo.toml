@@ -1,0 +1,21 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+publish = false
+license = "GPL-3.0-or-later"
+repository = "https://github.com/kloppers-labs/prismforge"
+
+[workspace.dependencies]
+prismforge-core = { path = "crates/prismforge-core" }
+prismforge-openrgb = { path = "crates/prismforge-openrgb" }
+prismforge-testkit = { path = "crates/prismforge-testkit" }
+serde = { version = "=1.0.229", features = ["derive"] }
+thiserror = "=2.0.21"
+tokio = { version = "=1.54.1", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
