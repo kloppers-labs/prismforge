@@ -1,6 +1,8 @@
 mod connection;
 mod diagnostics;
 mod identify;
+mod output;
+mod ownership;
 mod queue;
 mod restart;
 mod support;

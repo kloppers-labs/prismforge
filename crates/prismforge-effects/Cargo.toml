@@ -1,0 +1,22 @@
+[package]
+name = "prismforge-effects"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+ts = ["dep:ts-rs"]
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = "=1.0.154"
+
+[lints]
+workspace = true

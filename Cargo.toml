@@ -11,6 +11,7 @@ repository = "https://github.com/kloppers-labs/prismforge"
 
 [workspace.dependencies]
 prismforge-core = { path = "crates/prismforge-core" }
+prismforge-effects = { path = "crates/prismforge-effects" }
 prismforge-openrgb = { path = "crates/prismforge-openrgb" }
 prismforge-testkit = { path = "crates/prismforge-testkit" }
 serde = { version = "=1.0.229", features = ["derive"] }

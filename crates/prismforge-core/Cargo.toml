@@ -8,9 +8,10 @@ license.workspace = true
 repository.workspace = true
 
 [features]
-ts = ["dep:ts-rs"]
+ts = ["dep:ts-rs", "prismforge-effects/ts"]
 
 [dependencies]
+prismforge-effects.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 ts-rs = { workspace = true, optional = true }

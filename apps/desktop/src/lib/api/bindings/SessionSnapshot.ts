@@ -4,6 +4,7 @@ import type { ConnectionState } from "./ConnectionState";
 import type { DeviceIssue } from "./DeviceIssue";
 import type { Diagnostics } from "./Diagnostics";
 import type { IdentifyTarget } from "./IdentifyTarget";
+import type { OutputStatus } from "./OutputStatus";
 import type { SessionDevice } from "./SessionDevice";
 
-export type SessionSnapshot = { connection: ConnectionState, backend: BackendInfo, devices: Array<SessionDevice>, issues: Array<DeviceIssue>, identify: IdentifyTarget | null, diagnostics: Diagnostics, };
+export type SessionSnapshot = { connection: ConnectionState, backend: BackendInfo, devices: Array<SessionDevice>, issues: Array<DeviceIssue>, identify: IdentifyTarget | null, output: OutputStatus, diagnostics: Diagnostics, };

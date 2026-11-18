@@ -6,7 +6,7 @@ PrismForge has no subscription, no account, no advertisements and no telemetry.
 
 ## Status
 
-PrismForge is at an early stage. The first desktop app shows the connection, the devices that OpenRGB reports, and an identify action. It has no effects, profiles or layout yet.
+PrismForge is at an early stage. The first desktop app shows the connection, the devices that OpenRGB reports, and an identify action. The effect engine exists in Rust, but the app has no effects screen yet. It has no profiles or layout yet.
 
 | Part | Status |
 |---|---|
@@ -17,7 +17,9 @@ PrismForge is at an early stage. The first desktop app shows the connection, the
 | Run of the desktop app on Windows | **Not done** |
 | Test against a real OpenRGB server | **Not done** |
 | Test on real hardware | **Not done** |
-| Effects, profiles, layout, tray, autostart | Not started |
+| Effect engine: six original effects, output scheduler at 30 FPS, output ownership | Built in Rust. Tested with the demo backend and the fake server in simulated time only. No effects screen yet. |
+| Effects screen, previews, Effects plugin provider | Not started |
+| Profiles, layout, tray, autostart | Not started |
 
 ## Requirements
 
@@ -68,7 +70,8 @@ cargo run -p prismforge-openrgb --example probe -- --device <ref from listing> -
 
 | Path | Content |
 |---|---|
-| `crates/prismforge-core` | Device types, capabilities, errors, identity matching, backend contract. No input or output. |
+| `crates/prismforge-effects` | The built-in effects as pure functions, their control definitions and instance validation. No input or output. |
+| `crates/prismforge-core` | Device types, capabilities, errors, identity matching, backend contract, scene and ownership types, and the session with its output scheduler. |
 | `crates/prismforge-openrgb` | OpenRGB SDK client and the adapter for the backend contract. |
 | `crates/prismforge-testkit` | Scripted fake OpenRGB server, device fixtures for tests, and the simulated demo backend. |
 | `apps/desktop` | Svelte and TypeScript interface. |

@@ -1,11 +1,12 @@
+use prismforge_effects::Rgb;
 use serde::{Deserialize, Serialize};
 
 use crate::backend::RgbBackend;
-use crate::color::Rgb;
 use crate::connection::StateReason;
 use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::inventory::Inventory;
+use crate::session::previous::PreviousState;
 
 pub const IDENTIFY_COLOR: Rgb = Rgb::new(255, 255, 255);
 
@@ -52,24 +53,12 @@ pub enum RestoreFailure {
 pub(crate) struct IdentifyPlan {
     pub device: DeviceRef,
     pub zone: Option<usize>,
-    pub previous_state_known: bool,
+    pub previous: PreviousState,
     lit_leds: usize,
-    steps: Vec<RestoreStep>,
-    previous_colors: Vec<Rgb>,
-}
-
-enum RestoreStep {
-    Mode { index: usize, name: String },
-    Colors,
 }
 
 pub(crate) struct LightError {
     pub device_changed: bool,
-    pub error: BackendError,
-}
-
-pub(crate) struct RestoreError {
-    pub steps_done: usize,
     pub error: BackendError,
 }
 
@@ -82,30 +71,13 @@ impl IdentifyPlan {
         state_suspect: bool,
     ) -> Result<Self, BackendError> {
         let descriptor = &inventory.output_target(device, zone)?.descriptor;
-        let capabilities = &descriptor.capabilities;
-        let restore_mode = capabilities
-            .active_mode
-            .filter(|_| !capabilities.in_direct_mode())
-            .and_then(|index| Some((index, capabilities.modes.get(index)?)));
-        let mut steps = Vec::new();
-        if let Some((index, mode)) = restore_mode {
-            steps.push(RestoreStep::Mode {
-                index,
-                name: mode.name.clone(),
-            });
-        }
-        if restore_mode.is_none_or(|(_, mode)| mode.per_led_color) {
-            steps.push(RestoreStep::Colors);
-        }
         Ok(Self {
             device: device.clone(),
             zone,
-            previous_state_known: capabilities.active_mode.is_some() && !state_suspect,
+            previous: PreviousState::capture(device, descriptor, state_suspect),
             lit_leds: zone.map_or(descriptor.led_count, |zone| {
                 descriptor.zones[zone].led_count
             }),
-            steps,
-            previous_colors: descriptor.colors.clone(),
         })
     }
 
@@ -126,49 +98,5 @@ impl IdentifyPlan {
             device_changed: true,
             error,
         })
-    }
-
-    /// Runs the restore steps after the first `skip`; the count in an error includes the skipped ones.
-    pub async fn restore<B: RgbBackend>(
-        &self,
-        backend: &mut B,
-        skip: usize,
-    ) -> Result<(), RestoreError> {
-        for (position, step) in self.steps.iter().enumerate().skip(skip) {
-            let result = match step {
-                RestoreStep::Mode { index, .. } => backend.reapply_mode(&self.device, *index).await,
-                RestoreStep::Colors => {
-                    backend
-                        .write_device_frame(&self.device, &self.previous_colors)
-                        .await
-                }
-            };
-            result.map_err(|error| RestoreError {
-                steps_done: position,
-                error,
-            })?;
-        }
-        Ok(())
-    }
-
-    /// Checks that a refreshed inventory still resolves this reference to a device with the remembered shape.
-    pub fn still_matches(&self, inventory: &Inventory) -> Result<(), RestoreFailure> {
-        let index = inventory
-            .locate(&self.device)
-            .map_err(|error| RestoreFailure::Refused { error })?;
-        let descriptor = &inventory.devices[index].descriptor;
-        let modes_match = self.steps.iter().all(|step| match step {
-            RestoreStep::Mode { index, name } => descriptor
-                .capabilities
-                .modes
-                .get(*index)
-                .is_some_and(|mode| &mode.name == name),
-            RestoreStep::Colors => descriptor.led_count == self.previous_colors.len(),
-        });
-        if modes_match {
-            Ok(())
-        } else {
-            Err(RestoreFailure::TargetChanged)
-        }
     }
 }

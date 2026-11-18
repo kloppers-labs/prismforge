@@ -880,6 +880,13 @@ export const demoConnected: SessionSnapshot = {
   ],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": null,
     "counters": {
@@ -887,7 +894,12 @@ export const demoConnected: SessionSnapshot = {
       "connect_failures": 0,
       "inventory_refreshes": 1,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -1796,6 +1808,13 @@ export const demoIdentifying: SessionSnapshot = {
     "device": "demo-motherboard",
     "zone": 1
   },
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": null,
     "counters": {
@@ -1803,7 +1822,12 @@ export const demoIdentifying: SessionSnapshot = {
       "connect_failures": 0,
       "inventory_refreshes": 1,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -2245,6 +2269,13 @@ export const openRgbConnected: SessionSnapshot = {
   ],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": null,
     "counters": {
@@ -2252,7 +2283,12 @@ export const openRgbConnected: SessionSnapshot = {
       "connect_failures": 0,
       "inventory_refreshes": 1,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3018,6 +3054,13 @@ export const openRgbDegraded: SessionSnapshot = {
     }
   ],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": null,
     "counters": {
@@ -3025,7 +3068,12 @@ export const openRgbDegraded: SessionSnapshot = {
       "connect_failures": 0,
       "inventory_refreshes": 2,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3359,6 +3407,13 @@ export const openRgbLostWhileConnected: SessionSnapshot = {
   ],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": null,
     "counters": {
@@ -3366,7 +3421,12 @@ export const openRgbLostWhileConnected: SessionSnapshot = {
       "connect_failures": 0,
       "inventory_refreshes": 1,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3680,6 +3740,13 @@ export const openRgbLostRetryFailed: SessionSnapshot = {
   ],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": {
       "at_ms": 2500,
@@ -3697,7 +3764,12 @@ export const openRgbLostRetryFailed: SessionSnapshot = {
       "connect_failures": 1,
       "inventory_refreshes": 1,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3803,6 +3875,13 @@ export const openRgbAllRejected: SessionSnapshot = {
     }
   ],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": null,
     "counters": {
@@ -3810,7 +3889,12 @@ export const openRgbAllRejected: SessionSnapshot = {
       "connect_failures": 0,
       "inventory_refreshes": 1,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3853,6 +3937,13 @@ export const openRgbRefused: SessionSnapshot = {
   "devices": [],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": {
       "at_ms": 1500,
@@ -3869,7 +3960,12 @@ export const openRgbRefused: SessionSnapshot = {
       "connect_failures": 3,
       "inventory_refreshes": 0,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3971,6 +4067,13 @@ export const openRgbConnecting: SessionSnapshot = {
   "devices": [],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": null,
     "counters": {
@@ -3978,7 +4081,12 @@ export const openRgbConnecting: SessionSnapshot = {
       "connect_failures": 0,
       "inventory_refreshes": 0,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": []
   }
@@ -4004,6 +4112,13 @@ export const openRgbNoVersionAnswer: SessionSnapshot = {
   "devices": [],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": {
       "at_ms": 2000,
@@ -4021,7 +4136,12 @@ export const openRgbNoVersionAnswer: SessionSnapshot = {
       "connect_failures": 1,
       "inventory_refreshes": 0,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -4076,6 +4196,13 @@ export const openRgbOldServer: SessionSnapshot = {
   "devices": [],
   "issues": [],
   "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
   "diagnostics": {
     "last_error": {
       "at_ms": 0,
@@ -4093,7 +4220,12 @@ export const openRgbOldServer: SessionSnapshot = {
       "connect_failures": 1,
       "inventory_refreshes": 0,
       "refresh_failures": 0,
-      "commands_refused_busy": 0
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
