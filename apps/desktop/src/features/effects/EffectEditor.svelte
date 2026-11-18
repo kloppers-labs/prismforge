@@ -88,7 +88,7 @@
       <p class="blocked">Choose an effect above.</p>
     {/if}
     {#if stopReason}
-      <p id="stop-blocked" class="visually-hidden">{stopReason}</p>
+      <p id="stop-blocked" class="blocked">Stop is off. {stopReason}</p>
     {/if}
 
     {#if feedback?.kind === "failed"}
