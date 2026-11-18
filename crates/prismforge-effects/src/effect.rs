@@ -4,6 +4,9 @@ use crate::builtin::Program;
 use crate::builtin::controls::BRIGHTNESS;
 use crate::color::{Rgb, dimmed};
 use crate::instance::EffectInstance;
+use crate::position::linear_positions;
+
+const STRIP_SEED: u64 = 0;
 
 /// A validated effect ready to render; every frame depends only on its inputs.
 #[derive(Debug, Clone)]
@@ -31,6 +34,11 @@ impl Effect {
     /// True when the output never changes with time, so one write is enough.
     pub fn is_static(&self) -> bool {
         self.brightness == 0 || self.program.is_static()
+    }
+
+    /// One device or zone with `led_count` LEDs in a line, as the session writes it and the preview shows it.
+    pub fn render_strip(&self, time: Duration, led_count: usize) -> Vec<Rgb> {
+        self.render(time, &linear_positions(led_count), STRIP_SEED)
     }
 
     /// Colours for `positions`, which together form one target; the seed is reserved for random effects.

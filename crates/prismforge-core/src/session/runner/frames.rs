@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 
-use prismforge_effects::linear_positions;
 use tokio::time::Instant;
 
 use crate::backend::RgbBackend;
@@ -11,8 +10,6 @@ use crate::session::diagnostics::Operation;
 use crate::session::output::{EffectOutput, Step, Tick};
 use crate::session::runner::{Link, Session};
 use crate::session::snapshot::PauseReason;
-
-const SEED: u64 = 0;
 
 enum Flow {
     Next,
@@ -189,7 +186,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             (start, descriptor.zones[zone].led_count)
         });
         let time = now.saturating_duration_since(running.started);
-        let colors = running.effect.render(time, &linear_positions(leds), SEED);
+        let colors = running.effect.render_strip(time, leds);
         let written = match target.zone {
             Some(zone) => self.backend.write_zone_frame(device, zone, &colors).await,
             None => self.backend.write_device_frame(device, &colors).await,
