@@ -1,0 +1,18 @@
+[package]
+name = "prismforge-openrgb"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+prismforge-core.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "rt", "sync", "time"] }
+
+[dev-dependencies]
+prismforge-testkit.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "test-util", "time"] }
+
+[lints]
+workspace = true

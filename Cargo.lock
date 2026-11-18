@@ -40,6 +40,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prismforge-openrgb"
+version = "0.1.0"
+dependencies = [
+ "prismforge-core",
+ "prismforge-testkit",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "prismforge-testkit"
 version = "0.1.0"
 dependencies = [
