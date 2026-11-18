@@ -8,6 +8,7 @@ use prismforge_core::{
     DeviceIdentity, DeviceRef, Inventory, InventoryDevice, LossCause, Rgb, RgbBackend, StateReason,
 };
 use tokio::sync::Notify;
+use tokio::time::Instant;
 
 use inventory::{DemoDevice, demo_devices};
 
@@ -33,12 +34,13 @@ pub enum DemoOutput {
 
 #[derive(Default)]
 struct Shared {
-    outputs: Vec<DemoOutput>,
+    outputs: Vec<(Instant, DemoOutput)>,
     fail_connect: bool,
     call_delay: Duration,
     pending_loss: Option<LossCause>,
     inventory_changed: bool,
     hidden_active_modes: Vec<DeviceRef>,
+    refused_writes: Vec<DeviceRef>,
 }
 
 /// Test and preview handle for a [`DemoBackend`]; clones share the same simulation.
@@ -72,12 +74,25 @@ impl DemoControls {
         self.lock().call_delay = delay;
     }
 
+    /// Later colour frames for `device` are rejected, like a controller that refuses its writes.
+    pub fn refuse_writes(&self, device: &DeviceRef) {
+        self.lock().refused_writes.push(device.clone());
+    }
+
     pub fn outputs(&self) -> Vec<DemoOutput> {
+        self.timed_outputs()
+            .into_iter()
+            .map(|(_, output)| output)
+            .collect()
+    }
+
+    /// Each output with the time its call completed.
+    pub fn timed_outputs(&self) -> Vec<(Instant, DemoOutput)> {
         self.lock().outputs.clone()
     }
 
     fn record(&self, output: DemoOutput) {
-        self.lock().outputs.push(output);
+        self.lock().outputs.push((Instant::now(), output));
     }
 
     fn lock(&self) -> MutexGuard<'_, Shared> {
@@ -174,6 +189,12 @@ impl DemoBackend {
         zone: Option<usize>,
         colors: &[Rgb],
     ) -> Result<(), BackendError> {
+        if self.controls.lock().refused_writes.contains(device) {
+            return Err(BackendError::Rejected {
+                operation: "simulated colour write".into(),
+                status: 1,
+            });
+        }
         let descriptor = &self.current().output_target(device, zone)?.descriptor;
         let expected = zone.map_or(descriptor.led_count, |zone| {
             descriptor.zones[zone].led_count
