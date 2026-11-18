@@ -1,13 +1,13 @@
 mod commands;
+mod exit;
 mod forward;
 mod publisher;
 mod shell;
 mod view;
 
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
+pub use exit::{ExitGuard, stop_then_exit};
 pub use forward::forward;
 pub use publisher::{Publisher, ViewSink};
 pub use shell::{Shell, ShellConfig};
@@ -25,17 +25,12 @@ impl ViewSink for WindowSink {
     }
 }
 
-#[derive(Default)]
-struct Exit {
-    stopping: AtomicBool,
-}
-
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let sink = WindowSink(app.handle().clone());
             app.manage(Shell::new(sink, ShellConfig::default()));
-            app.manage(Exit::default());
+            app.manage(ExitGuard::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -51,18 +46,17 @@ pub fn run() {
         .run(on_run_event);
 }
 
-/// Holds the exit until the session has stopped, so a running identify is restored first.
 fn on_run_event(app: &AppHandle, event: RunEvent) {
     let RunEvent::ExitRequested { api, .. } = event else {
         return;
     };
-    if app.state::<Exit>().stopping.swap(true, Ordering::SeqCst) {
+    if !app.state::<ExitGuard>().hold() {
         return;
     }
     api.prevent_exit();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        app.state::<DesktopShell>().stop().await;
-        app.exit(0);
+        let shell = app.state::<DesktopShell>();
+        stop_then_exit(&shell, || app.exit(0)).await;
     });
 }
