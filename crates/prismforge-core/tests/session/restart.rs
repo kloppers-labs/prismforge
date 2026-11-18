@@ -50,7 +50,7 @@ async fn backend_restart_reconnects_and_keeps_references_on_their_devices() {
     assert_eq!(reference(&reconnected, "SN-alpha"), alpha);
     assert_eq!(reference(&reconnected, "SN-beta"), beta);
     assert!(reconnected.devices.iter().all(|device| device.available));
-    assert_eq!(reconnected.diagnostics.counters.inventory_refreshes, 2);
+    assert_eq!(reconnected.diagnostics.counters.inventory_refreshes, 3);
     server.wait_for_color_writes(4).await;
     let packets = output_packets(&server);
     assert_eq!(packets.len(), 6, "{packets:?}");

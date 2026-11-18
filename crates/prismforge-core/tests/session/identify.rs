@@ -264,3 +264,207 @@ async fn identify_finishes_even_when_the_caller_stops_waiting() {
         ]
     );
 }
+
+fn breathing_strip(label: &str) -> FixtureDevice {
+    strip(label, 3)
+        .modes(vec![
+            FixtureMode::direct(),
+            FixtureMode::static_color(),
+            FixtureMode::breathing(),
+        ])
+        .active_mode(2)
+}
+
+#[tokio::test(start_paused = true)]
+async fn inventory_change_while_lighting_is_refreshed_then_restored() {
+    let server = FakeServer::new();
+    server.add_device(0, breathing_strip("alpha"));
+    let handle = support::connected_openrgb(&server).await;
+    let alpha = reference(&handle.snapshot(), "SN-alpha");
+    server.delay_replies(wire::SET_CUSTOM_MODE, Duration::from_millis(100));
+
+    let running = tokio::spawn(handle.identify(alpha.clone(), None, BLINK));
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    server.notify_device_list_updated();
+    let outcome = running.await.expect("task").expect("identify");
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    let again = handle
+        .identify(alpha.clone(), None, BLINK)
+        .await
+        .expect("second identify");
+
+    assert_eq!(
+        outcome.light_failure,
+        Some(BackendError::StaleInventory),
+        "{outcome:?}"
+    );
+    assert_eq!(outcome.restore, RestoreOutcome::Restored);
+    let updates = server.mode_updates();
+    assert_eq!(updates[0].target.as_deref(), Some("alpha"));
+    assert_eq!(updates[0].mode_index, 2);
+    assert_eq!(updates[0].mode, FixtureMode::breathing());
+    assert_eq!(again.light_failure, None);
+    assert_eq!(again.restore, RestoreOutcome::Restored);
+    assert_eq!(
+        handle.snapshot().connection,
+        prismforge_core::ConnectionState::Connected
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn restore_after_a_rescan_never_writes_to_an_ambiguous_device() {
+    let server = FakeServer::new();
+    server.add_device(0, breathing_strip("alpha"));
+    let handle = support::connected_openrgb(&server).await;
+    let alpha = reference(&handle.snapshot(), "SN-alpha");
+    server.delay_replies(wire::SET_CUSTOM_MODE, Duration::from_millis(100));
+
+    let running = tokio::spawn(handle.identify(alpha.clone(), None, BLINK));
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    server.add_device(1, breathing_strip("alpha"));
+    server.notify_device_list_updated();
+    let outcome = running.await.expect("task").expect("identify");
+
+    assert_eq!(
+        outcome.restore,
+        RestoreOutcome::NotRestored {
+            failure: RestoreFailure::Refused {
+                error: BackendError::AmbiguousDevice {
+                    device: alpha.clone()
+                }
+            }
+        }
+    );
+    let packets: Vec<u32> = output_packets(&server)
+        .iter()
+        .map(|packet| packet.packet_id)
+        .collect();
+    assert_eq!(packets, [wire::SET_CUSTOM_MODE]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn refused_lighting_changes_nothing_and_says_so() {
+    let server = FakeServer::new();
+    server.add_device(0, breathing_strip("alpha"));
+    server.reject(wire::SET_CUSTOM_MODE);
+    let handle = support::connected_openrgb(&server).await;
+    let alpha = reference(&handle.snapshot(), "SN-alpha");
+
+    let outcome = handle
+        .identify(alpha.clone(), None, BLINK)
+        .await
+        .expect("identify");
+
+    assert!(
+        matches!(outcome.light_failure, Some(BackendError::Rejected { .. })),
+        "{outcome:?}"
+    );
+    assert_eq!(outcome.restore, RestoreOutcome::Unchanged);
+    handle.refresh().await.expect("barrier");
+    let packets: Vec<u32> = output_packets(&server)
+        .iter()
+        .map(|packet| packet.packet_id)
+        .collect();
+    assert_eq!(packets, [wire::SET_CUSTOM_MODE]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn refresh_during_identify_does_not_poison_the_next_identify() {
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    let handle = start(backend, config());
+    handle.connect().await.expect("connect");
+    let gpu = DeviceRef::new("demo-graphics-card");
+    let gpu_mode = |handle: &prismforge_core::session::SessionHandle| {
+        handle
+            .snapshot()
+            .devices
+            .into_iter()
+            .find(|device| device.identity.reference() == Some(&gpu))
+            .and_then(|device| device.descriptor.capabilities.active_mode)
+    };
+
+    let running = tokio::spawn(handle.identify(gpu.clone(), None, BLINK));
+    wait_until(&handle, |snapshot| snapshot.identify.is_some()).await;
+    handle.refresh().await.expect("refresh while lit");
+    let first = running.await.expect("task").expect("first identify");
+    let after_first = gpu_mode(&handle);
+    let outputs_before_second = controls.outputs().len();
+    let second = handle
+        .identify(gpu.clone(), None, BLINK)
+        .await
+        .expect("second identify");
+
+    assert_eq!(first.restore, RestoreOutcome::Restored);
+    assert_eq!(after_first, Some(2));
+    assert_eq!(second.restore, RestoreOutcome::Restored);
+    assert_eq!(
+        controls.outputs()[outputs_before_second..],
+        [
+            DemoOutput::DirectMode {
+                device: gpu.clone()
+            },
+            DemoOutput::DeviceFrame {
+                device: gpu.clone(),
+                colors: vec![IDENTIFY_COLOR; 12]
+            },
+            DemoOutput::ModeReapplied {
+                device: gpu.clone(),
+                mode: 2
+            },
+        ]
+    );
+    assert_eq!(gpu_mode(&handle), Some(2));
+}
+
+#[tokio::test(start_paused = true)]
+async fn identify_after_an_unrestored_identify_says_the_previous_state_is_unknown() {
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    let handle = start(backend, config());
+    handle.connect().await.expect("connect");
+    let gpu = DeviceRef::new("demo-graphics-card");
+
+    let running = tokio::spawn(handle.identify(gpu.clone(), None, BLINK));
+    wait_until(&handle, |snapshot| snapshot.identify.is_some()).await;
+    controls.lose_connection(LossCause::Timeout);
+    let interrupted = running.await.expect("task").expect("first identify");
+    wait_until(&handle, is_connected).await;
+    let second = handle
+        .identify(gpu.clone(), None, BLINK)
+        .await
+        .expect("second identify");
+
+    assert!(
+        matches!(interrupted.restore, RestoreOutcome::NotRestored { .. }),
+        "{interrupted:?}"
+    );
+    assert_eq!(
+        second.restore,
+        RestoreOutcome::PartlyRestored {
+            failure: RestoreFailure::PreviousStateUnknown
+        }
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn unknown_previous_mode_is_not_reported_as_restored() {
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    let gpu = DeviceRef::new("demo-graphics-card");
+    controls.hide_active_mode(&gpu);
+    let handle = start(backend, config());
+    handle.connect().await.expect("connect");
+
+    let outcome = handle
+        .identify(gpu.clone(), None, BLINK)
+        .await
+        .expect("identify");
+
+    assert_eq!(
+        outcome.restore,
+        RestoreOutcome::PartlyRestored {
+            failure: RestoreFailure::PreviousStateUnknown
+        }
+    );
+}

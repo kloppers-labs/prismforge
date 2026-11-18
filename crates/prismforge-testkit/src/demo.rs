@@ -38,6 +38,7 @@ struct Shared {
     call_delay: Duration,
     pending_loss: Option<LossCause>,
     inventory_changed: bool,
+    hidden_active_modes: Vec<DeviceRef>,
 }
 
 /// Test and preview handle for a [`DemoBackend`]; clones share the same simulation.
@@ -60,6 +61,11 @@ impl DemoControls {
     pub fn change_inventory(&self) {
         self.lock().inventory_changed = true;
         self.wake.notify_one();
+    }
+
+    /// Later inventories report no active mode for `device`, like a backend that cannot read it.
+    pub fn hide_active_mode(&self, device: &DeviceRef) {
+        self.lock().hidden_active_modes.push(device.clone());
     }
 
     pub fn set_call_delay(&self, delay: Duration) {
@@ -252,16 +258,23 @@ impl RgbBackend for DemoBackend {
             .inventory
             .as_ref()
             .map_or(1, |previous| previous.generation + 1);
+        let hidden = self.controls.lock().hidden_active_modes.clone();
         let devices = self
             .devices
             .iter()
-            .map(|device| InventoryDevice {
-                identity: if generation == 1 {
-                    DeviceIdentity::New(device.reference.clone())
-                } else {
-                    DeviceIdentity::Matched(device.reference.clone())
-                },
-                descriptor: device.descriptor.clone(),
+            .map(|device| {
+                let mut descriptor = device.descriptor.clone();
+                if hidden.contains(&device.reference) {
+                    descriptor.capabilities.active_mode = None;
+                }
+                InventoryDevice {
+                    identity: if generation == 1 {
+                        DeviceIdentity::New(device.reference.clone())
+                    } else {
+                        DeviceIdentity::Matched(device.reference.clone())
+                    },
+                    descriptor,
+                }
             })
             .collect();
         self.stale = false;

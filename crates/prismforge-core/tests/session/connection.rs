@@ -227,3 +227,43 @@ async fn reconnect_backs_off_to_a_cap_one_attempt_at_a_time_until_disconnect() {
         starts.len() as u64
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn unanswered_version_request_keeps_retrying_until_the_server_answers() {
+    let server = FakeServer::new();
+    server.add_device(0, strip("alpha", 3));
+    let handle = support::connected_openrgb(&server).await;
+
+    server.silence(wire::REQUEST_PROTOCOL_VERSION);
+    server.disconnect_all();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    let hung = handle.snapshot();
+    server.unsilence(wire::REQUEST_PROTOCOL_VERSION);
+    let recovered = wait_until(&handle, is_connected).await;
+
+    assert!(is_retrying(&hung), "{:?}", hung.connection);
+    assert!(
+        hung.diagnostics.counters.connect_attempts > 10,
+        "{:?}",
+        hung.diagnostics.counters
+    );
+    assert!(recovered.devices.iter().all(|device| device.available));
+}
+
+#[tokio::test(start_paused = true)]
+async fn inventory_change_during_a_refresh_triggers_another_refresh() {
+    let server = FakeServer::new();
+    server.add_device(0, strip("alpha", 3));
+    let handle = support::connected_openrgb(&server).await;
+    server.delay_replies(wire::REQUEST_CONTROLLER_DATA, Duration::from_millis(100));
+
+    let refresh = tokio::spawn(handle.refresh());
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    server.notify_device_list_updated();
+    refresh.await.expect("task").expect("refresh");
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    let snapshot = handle.snapshot();
+    assert_eq!(snapshot.connection, ConnectionState::Connected);
+    assert_eq!(snapshot.diagnostics.counters.inventory_refreshes, 3);
+}

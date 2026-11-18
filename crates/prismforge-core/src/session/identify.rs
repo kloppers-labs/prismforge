@@ -20,9 +20,15 @@ pub struct IdentifyOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RestoreOutcome {
+    /// Lighting was refused before the device changed, so there was nothing to restore.
+    Unchanged,
     Restored,
-    PartlyRestored { failure: RestoreFailure },
-    NotRestored { failure: RestoreFailure },
+    PartlyRestored {
+        failure: RestoreFailure,
+    },
+    NotRestored {
+        failure: RestoreFailure,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -34,15 +40,29 @@ pub enum RestoreFailure {
     Refused {
         error: BackendError,
     },
+    /// The remembered state may be an earlier identify's own output, or no active mode was reported.
+    PreviousStateUnknown,
+    /// After a rescan the device no longer has the remembered modes or LED count; nothing was written.
+    TargetChanged,
 }
 
 pub(crate) struct IdentifyPlan {
     pub device: DeviceRef,
     pub zone: Option<usize>,
+    pub previous_state_known: bool,
     lit_leds: usize,
-    restore_mode: Option<usize>,
-    restore_colors: bool,
+    steps: Vec<RestoreStep>,
     previous_colors: Vec<Rgb>,
+}
+
+enum RestoreStep {
+    Mode { index: usize, name: String },
+    Colors,
+}
+
+pub(crate) struct LightError {
+    pub device_changed: bool,
+    pub error: BackendError,
 }
 
 pub(crate) struct RestoreError {
@@ -56,55 +76,96 @@ impl IdentifyPlan {
         inventory: &Inventory,
         device: &DeviceRef,
         zone: Option<usize>,
+        state_suspect: bool,
     ) -> Result<Self, BackendError> {
         let descriptor = &inventory.output_target(device, zone)?.descriptor;
         let capabilities = &descriptor.capabilities;
         let restore_mode = capabilities
             .active_mode
-            .filter(|_| !capabilities.in_direct_mode());
-        let restore_colors = restore_mode.is_none_or(|mode| {
-            capabilities
-                .modes
-                .get(mode)
-                .is_some_and(|mode| mode.per_led_color)
-        });
+            .filter(|_| !capabilities.in_direct_mode())
+            .and_then(|index| Some((index, capabilities.modes.get(index)?)));
+        let mut steps = Vec::new();
+        if let Some((index, mode)) = restore_mode {
+            steps.push(RestoreStep::Mode {
+                index,
+                name: mode.name.clone(),
+            });
+        }
+        if restore_mode.is_none_or(|(_, mode)| mode.per_led_color) {
+            steps.push(RestoreStep::Colors);
+        }
         Ok(Self {
             device: device.clone(),
             zone,
+            previous_state_known: capabilities.active_mode.is_some() && !state_suspect,
             lit_leds: zone.map_or(descriptor.led_count, |zone| {
                 descriptor.zones[zone].led_count
             }),
-            restore_mode,
-            restore_colors,
+            steps,
             previous_colors: descriptor.colors.clone(),
         })
     }
 
-    pub async fn light<B: RgbBackend>(&self, backend: &mut B) -> Result<(), BackendError> {
-        backend.enable_direct_mode(&self.device).await?;
+    pub async fn light<B: RgbBackend>(&self, backend: &mut B) -> Result<(), LightError> {
+        backend
+            .enable_direct_mode(&self.device)
+            .await
+            .map_err(|error| LightError {
+                device_changed: false,
+                error,
+            })?;
         let colors = vec![IDENTIFY_COLOR; self.lit_leds];
-        match self.zone {
+        let written = match self.zone {
             Some(zone) => backend.write_zone_frame(&self.device, zone, &colors).await,
             None => backend.write_device_frame(&self.device, &colors).await,
-        }
+        };
+        written.map_err(|error| LightError {
+            device_changed: true,
+            error,
+        })
     }
 
-    pub async fn restore<B: RgbBackend>(&self, backend: &mut B) -> Result<(), RestoreError> {
-        let mut steps_done = 0;
-        let fail = |steps_done, error| RestoreError { steps_done, error };
-        if let Some(mode) = self.restore_mode {
-            backend
-                .reapply_mode(&self.device, mode)
-                .await
-                .map_err(|error| fail(steps_done, error))?;
-            steps_done += 1;
-        }
-        if self.restore_colors {
-            backend
-                .write_device_frame(&self.device, &self.previous_colors)
-                .await
-                .map_err(|error| fail(steps_done, error))?;
+    /// Runs the restore steps after the first `skip`; the count in an error includes the skipped ones.
+    pub async fn restore<B: RgbBackend>(
+        &self,
+        backend: &mut B,
+        skip: usize,
+    ) -> Result<(), RestoreError> {
+        for (position, step) in self.steps.iter().enumerate().skip(skip) {
+            let result = match step {
+                RestoreStep::Mode { index, .. } => backend.reapply_mode(&self.device, *index).await,
+                RestoreStep::Colors => {
+                    backend
+                        .write_device_frame(&self.device, &self.previous_colors)
+                        .await
+                }
+            };
+            result.map_err(|error| RestoreError {
+                steps_done: position,
+                error,
+            })?;
         }
         Ok(())
+    }
+
+    /// Checks that a refreshed inventory still resolves this reference to a device with the remembered shape.
+    pub fn still_matches(&self, inventory: &Inventory) -> Result<(), RestoreFailure> {
+        let index = inventory
+            .locate(&self.device)
+            .map_err(|error| RestoreFailure::Refused { error })?;
+        let descriptor = &inventory.devices[index].descriptor;
+        let modes_match = self.steps.iter().all(|step| match step {
+            RestoreStep::Mode { index, name } => descriptor
+                .capabilities
+                .modes
+                .get(*index)
+                .is_some_and(|mode| &mode.name == name),
+            RestoreStep::Colors => descriptor.led_count == self.previous_colors.len(),
+        });
+        if modes_match {
+            Ok(())
+        } else {
+            Err(RestoreFailure::TargetChanged)
+        }
     }
 }

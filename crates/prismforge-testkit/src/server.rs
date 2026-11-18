@@ -32,6 +32,7 @@ struct State {
     received: Vec<ReceivedPacket>,
     connections: Vec<Connection>,
     silent_packets: HashSet<u32>,
+    rejected_packets: HashSet<u32>,
     reply_delays: HashMap<u32, Duration>,
     held_ack_packets: HashSet<u32>,
     held_acks: HashMap<usize, Vec<Vec<u8>>>,
@@ -66,6 +67,7 @@ impl FakeServer {
                 received: Vec::new(),
                 connections: Vec::new(),
                 silent_packets: HashSet::new(),
+                rejected_packets: HashSet::new(),
                 reply_delays: HashMap::new(),
                 held_ack_packets: HashSet::new(),
                 held_acks: HashMap::new(),
@@ -95,6 +97,15 @@ impl FakeServer {
 
     pub fn silence(&self, packet_id: u32) {
         self.lock().silent_packets.insert(packet_id);
+    }
+
+    pub fn unsilence(&self, packet_id: u32) {
+        self.lock().silent_packets.remove(&packet_id);
+    }
+
+    /// Acknowledges `packet_id` with an error status and applies nothing.
+    pub fn reject(&self, packet_id: u32) {
+        self.lock().rejected_packets.insert(packet_id);
     }
 
     /// Withholds ACKs for `packet_id` until that connection's next packet arrives or they are released.
@@ -260,6 +271,11 @@ impl State {
         }
         let mut replies = Vec::new();
         let mut status = wire::STATUS_OK;
+        if self.rejected_packets.contains(&packet_id) {
+            let ack = (*negotiated >= 6)
+                .then(|| wire::ack(device_id, packet_id, wire::STATUS_INVALID_DATA));
+            return (replies, ack);
+        }
         match packet_id {
             wire::REQUEST_PROTOCOL_VERSION => {
                 let Some(server_version) = self.protocol_version else {
