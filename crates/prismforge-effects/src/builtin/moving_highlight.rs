@@ -14,7 +14,7 @@ pub(crate) struct MovingHighlight {
     background: Rgb,
     speed: u32,
     direction: Direction,
-    half_width: f64,
+    width: f64,
 }
 
 pub(crate) fn definition() -> EffectDefinition {
@@ -36,7 +36,7 @@ pub(crate) fn definition() -> EffectDefinition {
                 Some(Rgb::new(0, 0, 0)),
             ),
             controls::speed(
-                "Runs from one end to the other per minute. 0 keeps the band out of sight.",
+                "Rounds along the LEDs per minute. 0 holds the band still on the first LED.",
                 240,
                 30,
             ),
@@ -62,7 +62,7 @@ impl MovingHighlight {
             background: values.color(BACKGROUND),
             speed: values.number(SPEED),
             direction: values.direction(DIRECTION),
-            half_width: f64::from(values.number(WIDTH)) / 200.0,
+            width: f64::from(values.number(WIDTH)) / 100.0,
         }
     }
 
@@ -70,15 +70,14 @@ impl MovingHighlight {
         self.speed == 0
     }
 
-    /// The band enters before the first LED and leaves after the last, so each run starts dark.
-    pub fn color_at(&self, seconds: f64, position: f64) -> Rgb {
-        let travel = 1.0 + 2.0 * self.half_width;
-        let centre = phase(seconds, self.speed) * travel - self.half_width;
-        let distance = (self.direction.orient(position) - centre).abs();
-        mix(
-            self.background,
-            self.color,
-            1.0 - distance / self.half_width,
-        )
+    /// The band runs round the LEDs as a ring and is at least two LEDs wide, so one LED is always at least half lit.
+    pub fn color_at(&self, seconds: f64, position: f64, leds: usize) -> Rgb {
+        let ring = leds.max(1) as f64;
+        let place = self.direction.orient(position) * (ring - 1.0);
+        let centre = phase(seconds, self.speed) * ring;
+        let gap = (place - centre).rem_euclid(ring);
+        let distance = gap.min(ring - gap);
+        let half_width = (self.width * ring / 2.0).max(1.0);
+        mix(self.background, self.color, 1.0 - distance / half_width)
     }
 }

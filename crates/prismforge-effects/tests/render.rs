@@ -90,11 +90,56 @@ fn moving_highlight_lights_the_led_under_its_centre() {
         ],
     );
 
-    assert_eq!(frame(&highlight, 0, LEDS), vec![BLUE; LEDS]);
     assert_eq!(
-        frame(&highlight, 500, LEDS),
+        frame(&highlight, 0, LEDS),
+        vec![WHITE, BLUE, BLUE, BLUE, BLUE]
+    );
+    assert_eq!(
+        frame(&highlight, 400, LEDS),
         vec![BLUE, BLUE, WHITE, BLUE, BLUE]
     );
+}
+
+fn narrow_highlight() -> prismforge_effects::Effect {
+    effect(
+        "moving-highlight",
+        &[
+            ("color", color(WHITE)),
+            ("background", color(BLACK)),
+            ("speed", number(60)),
+            ("width", number(5)),
+        ],
+    )
+}
+
+#[test]
+fn moving_highlight_always_lights_at_least_one_led() {
+    let highlight = narrow_highlight();
+    for leds in [1, 2, 3, 5, 60] {
+        for millis in (0..1_000).step_by(5) {
+            let colors = frame(&highlight, millis, leds);
+            assert!(
+                colors.iter().any(|color| color.r >= 128),
+                "{leds} LEDs at {millis} ms: {colors:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn moving_highlight_is_continuous_where_the_cycle_wraps() {
+    let highlight = narrow_highlight();
+    for leds in [1, 2, 3, 5, 60] {
+        let start = frame(&highlight, 0, leds);
+        assert_eq!(frame(&highlight, 1_000, leds), start, "{leds} LEDs");
+        let before_wrap = frame(&highlight, 999, leds);
+        for (late, early) in before_wrap.iter().zip(&start) {
+            assert!(
+                late.r.abs_diff(early.r) <= 16,
+                "{leds} LEDs: {late:?} then {early:?}"
+            );
+        }
+    }
 }
 
 #[test]

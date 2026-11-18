@@ -33,21 +33,23 @@ impl Effect {
         self.brightness == 0 || self.program.is_static()
     }
 
-    /// No built-in effect varies with `seed`; it is part of the contract so random effects stay reproducible.
-    pub fn color_at(&self, time: Duration, position: f64, _seed: u64) -> Rgb {
-        let position = if position.is_nan() {
-            0.0
-        } else {
-            position.clamp(0.0, 1.0)
-        };
-        let color = self.program.color_at(time.as_secs_f64(), position);
-        dimmed(color, self.brightness)
-    }
-
-    pub fn render(&self, time: Duration, positions: &[f64], seed: u64) -> Vec<Rgb> {
+    /// Colours for `positions`, which together form one target; the seed is reserved for random effects.
+    pub fn render(&self, time: Duration, positions: &[f64], _seed: u64) -> Vec<Rgb> {
+        let seconds = time.as_secs_f64();
+        let leds = positions.len();
         positions
             .iter()
-            .map(|&position| self.color_at(time, position, seed))
+            .map(|&position| {
+                let position = if position.is_nan() {
+                    0.0
+                } else {
+                    position.clamp(0.0, 1.0)
+                };
+                dimmed(
+                    self.program.color_at(seconds, position, leds),
+                    self.brightness,
+                )
+            })
             .collect()
     }
 }
