@@ -19,9 +19,11 @@ Every licence below is compatible with GPL-3.0-or-later. No dependency is GPL-2.
 | `tauri` | 2.12.6 | Apache-2.0 OR MIT | desktop app |
 | `tauri-build` | 2.7.5 | Apache-2.0 OR MIT | desktop app, build time |
 | `ts-rs` | 12.0.1 | MIT | `ts` feature only, generates the TypeScript types |
-| `serde_json` | 1.0.154 | MIT OR Apache-2.0 | desktop app tests and effects crate tests; also a Tauri dependency |
+| `serde_json` | 1.0.154 | MIT OR Apache-2.0 | `prismforge-core` (profile and store files, with the `preserve_order` feature), desktop app tests, effects crate tests; also a Tauri dependency |
 
 ## Rust: transitive dependencies
+
+The `preserve_order` feature of `serde_json` adds `indexmap` 2.14.2 (Apache-2.0 OR MIT) and `foldhash` 0.2.0 (Zlib) to its dependencies. Both were already in `Cargo.lock` through Tauri, so the counts below did not change.
 
 `Cargo.lock` holds 428 third-party crates for all platforms, most of them from Tauri. The count per licence on 2026-11-18:
 
