@@ -6,6 +6,8 @@ members = ["crates/*"]
 edition = "2024"
 rust-version = "1.99"
 publish = false
+license = "GPL-3.0-or-later"
+repository = "https://github.com/kloppers-labs/prismforge"
 
 [workspace.dependencies]
 prismforge-core = { path = "crates/prismforge-core" }
