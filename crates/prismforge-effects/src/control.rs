@@ -174,6 +174,10 @@ impl ControlKind {
 }
 
 impl Bounds {
+    pub(crate) fn clamp(self, value: u32) -> u32 {
+        value.clamp(self.min, self.max)
+    }
+
     fn check(self, value: u32) -> Result<(), ValueProblem> {
         if (self.min..=self.max).contains(&value) {
             Ok(())

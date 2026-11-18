@@ -7,6 +7,7 @@ mod definition;
 mod effect;
 mod instance;
 mod position;
+mod preview;
 mod registry;
 
 pub use color::Rgb;
@@ -18,4 +19,5 @@ pub use definition::EffectDefinition;
 pub use effect::Effect;
 pub use instance::{EffectInstance, InstanceError, ValueError};
 pub use position::linear_positions;
+pub use preview::{PREVIEW_LIMITS, PreviewBatch, PreviewLimits, PreviewRequest, preview};
 pub use registry::{definitions, prepare};

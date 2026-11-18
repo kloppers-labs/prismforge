@@ -6,7 +6,7 @@
 
 ## Current state
 
-PrismForge has its own effect engine. `crates/prismforge-effects` holds six built-in effects. The session in `crates/prismforge-core` runs them through an output scheduler and keeps a record of who controls each device. There is no interface for effects yet. **Nothing here has run against a real OpenRGB server or real hardware.** All evidence comes from the simulated demo backend and the scripted fake server, with simulated time.
+PrismForge has its own effect engine. `crates/prismforge-effects` holds six built-in effects. The session in `crates/prismforge-core` runs them through an output scheduler and keeps a record of who controls each device. The desktop app has an effects screen and Tauri commands for them (Task 4b). **Nothing here has run against a real OpenRGB server or real hardware.** All evidence comes from the simulated demo backend and the scripted fake server, with simulated time, and from a hand check of the built app in demo mode.
 
 ## Effect model
 
@@ -17,7 +17,9 @@ PrismForge has its own effect engine. `crates/prismforge-effects` holds six buil
 5. **The seed is part of the contract.** No built-in effect uses it yet. The session passes 0. Random effects can use it later and stay reproducible.
 6. **Brightness works the same way for every effect.** It is a percent from 0 to 100, applied last with integer rounding. 0 gives black. 100 leaves the colours unchanged.
 7. **An effect reports when it is static.** Solid colour and gradient are always static. The others are static at speed 0. Every effect is static at brightness 0.
-8. **Speed is in cycles per minute.** Each effect says what one cycle is: one breath, one pass of the colour wheel, one round of the palette, or one run of the highlight.
+8. **Speed is in cycles per minute.** Each effect says what one cycle is: one breath, one pass of the colour wheel, one round of the palette, or one round of the highlight.
+9. **The moving highlight runs round the target as a ring.** Its centre moves over the LEDs of the target and wraps from the last LED to the first without a jump. Its band is at least two LEDs wide, so at least one LED is always at least half lit, also on a target with one, two or three LEDs. The effect gets the LED count from the list of positions that `Effect::render` receives.
+10. **One renderer turns an effect into a device or zone frame.** `Effect::render_strip` renders the LEDs of a target in a line with seed 0. The session writes its output. The preview shows its output.
 
 ## Stored form of an effect instance
 
@@ -45,10 +47,11 @@ An `EffectInstance` is the effect id and a map from control id to value. In JSON
 4. **Frames are coalesced, never queued.** Each write renders the frame for the moment it starts. If a tick is not finished when the next tick is due, the ticks that pass are skipped and counted. The next tick stays on the original grid. The 1 ms timer resolution does not slow the rate down.
 5. **Commands and output take turns.** A command waits at most for the one backend call in progress. A tick is a queue of single backend calls: direct mode where needed, then one frame per target. Between two calls, the loop handles a waiting command, then makes the rest of the calls of that tick. After a command that ran while output was due, output goes next. A stream of commands therefore cannot stop output, and output cannot block commands for longer than one call.
 6. **The loop never spins.** A device is due only when it has a backend call to make: direct mode to enable, or an effect that needs a frame. Paused, unavailable and fully written devices are never due, and a refused device is due only at its retry time. So every output wake-up either makes at least one backend call, or ends a saved tick whose devices are no longer due; after that, the next wake-up is in the future or there is none. Stopping an effect clears its device's refusal. The counter `output_wakeups` counts these wake-ups.
-7. **Static effects are written once.** They are written again only after a scene change, a reconnect, an inventory refresh or the end of an identify.
-8. **A refused write affects only its device.** The device waits 1 second, then 2, 4, 8 and 16 seconds, and then 16 seconds between tries. Other devices keep their cadence. A stale inventory pauses all output until the next refresh. It does not count as a refusal with a wait.
-9. **A lost connection pauses output.** After reconnect and refresh, each device gets direct mode again before its first frame. A device that is ambiguous, missing, without direct mode or with a changed zone gets no output. Its condition shows the reason.
-10. **The counters are real.** `frames_written` counts frames the backend accepted. `ticks_skipped` counts ticks dropped because the tick before them was not finished, including commands handled between its calls. `output_writes_refused` counts refusals while the connection stayed open. `output_writes_failed` counts writes that ended the connection. `output_wakeups` counts the times the loop woke up for output. The client does not read acknowledgements for colour frames, so "accepted" means sent without an error.
+7. **Re-applying keeps the animation running.** Applying the same effect id to the same target again keeps the effect's start time. The new values apply from the next frame, so a changed setting does not restart the animation. Another effect, or the same effect on another target, starts at time zero.
+8. **Static effects are written once.** They are written again only after a scene change, a reconnect, an inventory refresh or the end of an identify.
+9. **A refused write affects only its device.** The device waits 1 second, then 2, 4, 8 and 16 seconds, and then 16 seconds between tries. Other devices keep their cadence. A stale inventory pauses all output until the next refresh. It does not count as a refusal with a wait.
+10. **A lost connection pauses output.** After reconnect and refresh, each device gets direct mode again before its first frame. A device that is ambiguous, missing, without direct mode or with a changed zone gets no output. Its condition shows the reason.
+11. **The counters are real.** `frames_written` counts frames the backend accepted. `ticks_skipped` counts ticks dropped because the tick before them was not finished, including commands handled between its calls. `output_writes_refused` counts refusals while the connection stayed open. `output_writes_failed` counts writes that ended the connection. `output_wakeups` counts the times the loop woke up for output. The client does not read acknowledgements for colour frames, so "accepted" means sent without an error.
 
 ## Ownership rules
 
@@ -65,6 +68,24 @@ An `EffectInstance` is the effect id and a map from control id to value. In JSON
 11. **Disconnect and shutdown restore first.** The session restores every device it runs effects on before it disconnects. It stops waiting after 5 seconds. Devices it did not restore keep their remembered state for the next take-over and report "previous state unknown" until then.
 12. **Output commands use their own error type.** `OutputError` holds session errors (including the conflict), invalid effect values and "no effect on this target". Identify uses `SessionError`.
 
+## Effects interface
+
+1. **The interface knows no effect.** It renders every control from the typed control definitions: colour, palette, speed, direction, brightness and number. It has no code for a single effect.
+2. **Rust is the authority on values.** The interface checks ranges, steps, palette lengths and colour text before it sends, for quick feedback. The validation errors that Rust returns are shown next to their control.
+3. **A running effect updates in place, but the user's last explicit action wins.** A changed setting is applied again 300 ms after the last change only when, at that moment, the newest view shows this effect on this target, no apply, stop, mode or ownership call for the device is in flight, and Apply is not blocked. Stop, a hardware mode, a declaration or hand-back, a change of target, leaving the effects screen and disconnecting cancel a pending change. After them, nothing is sent automatically for that device or target until the user presses Apply. The stop itself blocks re-apply, so a view that arrives late cannot restart the effect. The start-time rule keeps the animation running.
+7. **Status lines come from the newest view or are past-tense results.** Owner, output condition and frame rate in use come from the view. A command result says what was accepted ("PrismForge accepted Breathing for Logo"). It is cleared when a later action on the device succeeds or a newer view contradicts it.
+4. **Commands use only the session handle.** Effect commands go through the shell to `SessionHandle`. They return `CommandError`, which keeps validation errors, "no effect on this target" and session errors apart.
+5. **The interface says only what the user declared and what PrismForge did.** "Another program controls this device" records the user's statement. "Hand back to PrismForge" records that the other program no longer writes. PrismForge never says that it stopped another program.
+6. **Software effects and hardware modes are named apart.** A PrismForge effect runs only while PrismForge runs and is connected. A hardware mode runs on the device itself. Nothing is saved yet, and the screen says so where the user applies an effect.
+
+## Preview
+
+1. **Rust renders the preview.** The command `preview_effect` validates the instance, then renders frames with `Effect::render_strip`. It reads no clock and uses no session and no backend.
+2. **A preview batch is bounded.** The request names the instance, the LED count, the start time, the frame count and the interval. The LED count is clamped to 1 to 60, the frame count to 1 to 90 and the interval to 20 to 1,000 ms. A static effect gets one frame.
+3. **The interface only plays frames.** It asks for 50 frames 40 ms apart and plays them in a strip. It asks for the next batch when the batch runs out, and again 200 ms after a setting changes.
+4. **The preview stops when nobody can see it.** It stops asking and animating when its panel is closed or the window is hidden. With reduced motion it asks for one frame and shows it still.
+5. **The preview cannot change lighting.** It calls only `preview_effect`. Physical output never depends on the window.
+
 ## Not verified
 
 - Any run against a real OpenRGB server.
@@ -73,4 +94,6 @@ An `EffectInstance` is the effect id and a map from control id to value. In JSON
 - How a real controller handles 30 frames per second. The client cannot see whether the server applied a frame.
 - Whether OpenRGB reports Direct Mode as the active mode after PrismForge selects it. If it does not, PrismForge enables direct mode again after each refresh. The fake server does not change the active mode.
 - What a fresh capture remembers on such a server. If the server never reports Direct Mode but reports the colours PrismForge wrote, a fresh capture of a device in a per-LED mode remembers PrismForge's own last frame as the colours to restore. A later stop then writes that frame back and reports "restored".
-- Performance measurements. A later task measures CPU use and frame timing.
+- Performance measurements. A later task measures CPU use and frame timing, including the preview's cost in the WebView.
+- The effects screen on Windows. It was run by hand on macOS in demo mode only, through the accessibility tree, without screenshots.
+- Whether a real device shows what the preview shows. The preview shows the pattern for LEDs in a line; the device layout is unknown.

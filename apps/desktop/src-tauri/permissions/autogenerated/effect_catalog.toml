@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-effect-catalog"
+description = "Enables the effect_catalog command without any pre-configured scope."
+commands.allow = ["effect_catalog"]
+
+[[permission]]
+identifier = "deny-effect-catalog"
+description = "Denies the effect_catalog command without any pre-configured scope."
+commands.deny = ["effect_catalog"]

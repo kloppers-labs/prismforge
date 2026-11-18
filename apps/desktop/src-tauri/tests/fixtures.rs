@@ -1,3 +1,4 @@
+mod effect_fixtures;
 mod generated;
 
 use std::io;
@@ -15,7 +16,7 @@ use tokio::io::DuplexStream;
 use generated::Generated;
 
 const ADDRESS: &str = "127.0.0.1:6742";
-const BLINK: Duration = Duration::from_secs(3);
+pub(crate) const BLINK: Duration = Duration::from_secs(3);
 const GRAPHICS_CARD: &str = "demo-graphics-card";
 const DEVICE_TYPE_GPU: i32 = 2;
 const DEVICE_TYPE_KEYBOARD: i32 = 5;
@@ -53,6 +54,7 @@ impl Connector for Refusing {
 
 struct Module {
     types: &'static str,
+    annotation: String,
     exports: Vec<String>,
 }
 
@@ -60,14 +62,24 @@ impl Module {
     fn new(types: &'static str) -> Self {
         Self {
             types,
+            annotation: types.into(),
             exports: Vec::new(),
+        }
+    }
+
+    fn nullable(types: &'static str) -> Self {
+        Self {
+            annotation: format!("{types} | null"),
+            ..Self::new(types)
         }
     }
 
     fn add(&mut self, name: &str, value: &impl Serialize) {
         let json = serde_json::to_string_pretty(value).expect("serialise fixture");
-        self.exports
-            .push(format!("export const {name}: {} = {json};\n", self.types));
+        self.exports.push(format!(
+            "export const {name}: {} = {json};\n",
+            self.annotation
+        ));
     }
 
     fn render(&self) -> String {
@@ -85,7 +97,7 @@ fn start<B: RgbBackend + Send + 'static>(backend: B) -> SessionHandle {
     handle
 }
 
-async fn wait_until(
+pub(crate) async fn wait_until(
     handle: &SessionHandle,
     condition: impl FnMut(&SessionSnapshot) -> bool,
 ) -> SessionSnapshot {
@@ -97,14 +109,14 @@ async fn wait_until(
         .clone()
 }
 
-fn openrgb(server: &FakeServer) -> SessionHandle {
+pub(crate) fn openrgb(server: &FakeServer) -> SessionHandle {
     start(OpenRgbBackend::new(
         Local(server.clone()),
         ClientConfig::default(),
     ))
 }
 
-fn breathing_strip(label: &str, name: &str) -> FixtureDevice {
+pub(crate) fn breathing_strip(label: &str, name: &str) -> FixtureDevice {
     FixtureDevice::new(label, name)
         .serial(&format!("SN-{label}"))
         .location(&format!("usb:{label}"))
@@ -140,7 +152,7 @@ fn twin(label: &str) -> FixtureDevice {
     FixtureDevice::new(label, "Fixture Fan").zone("Ring", 8)
 }
 
-async fn demo_connected() -> (SessionHandle, prismforge_testkit::DemoControls) {
+pub(crate) async fn demo_connected() -> (SessionHandle, prismforge_testkit::DemoControls) {
     let backend = DemoBackend::new();
     let controls = backend.controls();
     let handle = start(backend);
@@ -293,7 +305,7 @@ async fn openrgb_failures(sessions: &mut Module) {
     sessions.add("openRgbOldServer", &refused.snapshot());
 }
 
-fn reference(snapshot: &SessionSnapshot, serial: &str) -> DeviceRef {
+pub(crate) fn reference(snapshot: &SessionSnapshot, serial: &str) -> DeviceRef {
     snapshot
         .devices
         .iter()
@@ -319,8 +331,21 @@ async fn committed_fixtures_match_real_sessions() {
     openrgb_losses(&mut sessions).await;
     openrgb_failures(&mut sessions).await;
     openrgb_outcomes(&mut outcomes).await;
+    let mut catalog = Module::new("EffectCatalog");
+    let mut stops = Module::nullable("RestoreOutcome");
+    let mut errors = Module::new("CommandError");
+    let mut previews = Module::new("PreviewBatch");
+    effect_fixtures::sessions(&mut sessions).await;
+    effect_fixtures::catalog(&mut catalog).await;
+    effect_fixtures::stops(&mut stops).await;
+    effect_fixtures::errors(&mut errors).await;
+    effect_fixtures::previews(&mut previews);
 
     generated.write("sessions.ts", &sessions.render());
     generated.write("outcomes.ts", &outcomes.render());
+    generated.write("catalog.ts", &catalog.render());
+    generated.write("stops.ts", &stops.render());
+    generated.write("errors.ts", &errors.render());
+    generated.write("previews.ts", &previews.render());
     generated.compare_or_update();
 }

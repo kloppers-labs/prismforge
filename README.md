@@ -6,7 +6,7 @@ PrismForge has no subscription, no account, no advertisements and no telemetry.
 
 ## Status
 
-PrismForge is at an early stage. The first desktop app shows the connection, the devices that OpenRGB reports, and an identify action. The effect engine exists in Rust, but the app has no effects screen yet. It has no profiles or layout yet.
+PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone. PrismForge has no profiles or layout yet, so nothing is saved.
 
 | Part | Status |
 |---|---|
@@ -17,8 +17,9 @@ PrismForge is at an early stage. The first desktop app shows the connection, the
 | Run of the desktop app on Windows | **Not done** |
 | Test against a real OpenRGB server | **Not done** |
 | Test on real hardware | **Not done** |
-| Effect engine: six original effects, output scheduler at 30 FPS, output ownership | Built in Rust. Tested with the demo backend and the fake server in simulated time only. No effects screen yet. |
-| Effects screen, previews, Effects plugin provider | Not started |
+| Effect engine: six original effects, output scheduler at 30 FPS, output ownership | Built in Rust. Tested with the demo backend and the fake server in simulated time only. |
+| Effects screen: targets, generated parameter controls, preview, apply and stop, hardware modes, another program's control, frame rate | Built. Run by hand in demo mode on macOS (Apple Silicon) through the accessibility tree only. |
+| Effects plugin provider, performance measurements | Not started |
 | Profiles, layout, tray, autostart | Not started |
 
 ## Requirements
@@ -52,6 +53,14 @@ The app starts on the connection screen. Nothing connects until you choose:
 
 - **Connect to OpenRGB**: give the host and port of the OpenRGB SDK server. The default is `127.0.0.1` and `6742`.
 - **Explore demo mode**: five simulated devices. A striped banner labels demo mode on every screen. Demo mode sends nothing to hardware.
+
+After a connection, **Devices** shows the device list and identify. **Effects** runs an effect:
+
+1. Choose a device or one of its zones. Each device shows its owner: none, a PrismForge effect, a hardware mode selected in PrismForge, or another program that you named.
+2. Choose an effect and set its values. The controls come from the effect's definition. A preview shows the pattern, not the device.
+3. Choose **Apply effect**. A PrismForge effect runs only while PrismForge runs and is connected. Closing the window quits PrismForge, stops its effects and asks OpenRGB to put back the earlier lighting. Nothing is saved yet.
+
+PrismForge cannot see other programs, such as the OpenRGB Effects plugin, and cannot stop them. If another program controls a device, say so on the effects screen. PrismForge then sends nothing to that device until you hand it back.
 
 ![The connection screen](docs/screenshots/connection.png)
 

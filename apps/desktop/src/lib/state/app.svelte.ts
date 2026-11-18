@@ -2,8 +2,11 @@ import { api, type Answer, type Failure } from "../api/client";
 import type { DeviceRef } from "../api/bindings/DeviceRef";
 import type { IdentifyOutcome } from "../api/bindings/IdentifyOutcome";
 import type { ShellView } from "../api/bindings/ShellView";
+import { EffectsState } from "../../features/effects/state.svelte";
 
 export type Work = "connect" | "demo" | "disconnect" | "refresh";
+
+export type Screen = "devices" | "effects";
 
 export type IdentifyTarget = { device: DeviceRef; zone: number | null };
 
@@ -20,6 +23,8 @@ export class AppState {
   identifiedOnce = $state(false);
   selected = $state<string | null>(null);
   diagnosticsOpen = $state(false);
+  screen = $state<Screen>("devices");
+  readonly effects = new EffectsState(() => this.view);
 
   get session() {
     return this.view.session;
@@ -49,6 +54,7 @@ export class AppState {
   }
 
   disconnect() {
+    this.effects.leave();
     return this.run("disconnect", api.disconnect);
   }
 
@@ -68,6 +74,7 @@ export class AppState {
   private startSession(work: Work, action: () => Promise<Answer<ShellView>>) {
     this.identify = null;
     this.selected = null;
+    this.effects.reset();
     return this.run(work, action);
   }
 

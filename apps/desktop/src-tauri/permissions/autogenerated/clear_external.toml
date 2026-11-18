@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-clear-external"
+description = "Enables the clear_external command without any pre-configured scope."
+commands.allow = ["clear_external"]
+
+[[permission]]
+identifier = "deny-clear-external"
+description = "Denies the clear_external command without any pre-configured scope."
+commands.deny = ["clear_external"]

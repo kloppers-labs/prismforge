@@ -3,12 +3,12 @@ use std::time::Duration;
 
 use prismforge_core::session::{OutputCondition, SessionConfig, SessionHandle};
 use prismforge_core::{BackendError, DeviceRef, LossCause, OutputTarget, Rgb};
-use prismforge_effects::{linear_positions, prepare};
-use prismforge_testkit::DemoOutput;
+use prismforge_effects::{ControlValue, EffectInstance, linear_positions, prepare};
+use prismforge_testkit::{DemoControls, DemoOutput};
 use tokio::time::{Instant, sleep, sleep_until};
 
 use crate::support::{
-    GPU, GPU_LEDS, MEMORY, MOTHERBOARD, config, demo, device_frames, direct_mode_calls,
+    GPU, GPU_LEDS, MEMORY, MOTHERBOARD, config, demo, device_frames, direct_mode_calls, effect,
     is_connected, is_retrying, output_of, rainbow, solid, wait_until, whole,
 };
 
@@ -513,4 +513,81 @@ async fn every_output_condition_wakes_the_loop_only_for_real_work() {
 
     handle.stop_effect(whole(GPU)).await.expect("stop");
     assert_eq!(wakeups_over(&handle, 60).await, 0, "empty scene again");
+}
+
+fn last_frame(controls: &DemoControls) -> (Instant, Vec<Rgb>) {
+    controls
+        .timed_outputs()
+        .into_iter()
+        .rev()
+        .find_map(|(at, output)| match output {
+            DemoOutput::DeviceFrame { colors, .. } | DemoOutput::ZoneFrame { colors, .. } => {
+                Some((at, colors))
+            }
+            _ => None,
+        })
+        .expect("a frame")
+}
+
+fn rendered(instance: &EffectInstance, time: Duration) -> Vec<Rgb> {
+    prepare(instance)
+        .expect("valid")
+        .render(time, &linear_positions(GPU_LEDS), 0)
+}
+
+#[tokio::test(start_paused = true)]
+async fn reapplying_the_same_effect_on_the_same_target_keeps_its_start_time() {
+    let (handle, controls) = demo(config()).await;
+    let dimmed = effect("rainbow-wave", &[("brightness", ControlValue::Number(50))]);
+    handle
+        .apply_effect(whole(GPU), rainbow())
+        .await
+        .expect("apply");
+    let started = Instant::now();
+    sleep(Duration::from_millis(1_000)).await;
+
+    handle
+        .apply_effect(whole(GPU), dimmed.clone())
+        .await
+        .expect("reapply");
+    let reapplied = Instant::now();
+    sleep(Duration::from_millis(100)).await;
+
+    let (at, colors) = last_frame(&controls);
+    assert_eq!(colors, rendered(&dimmed, at - started));
+    assert_ne!(colors, rendered(&dimmed, at - reapplied));
+}
+
+#[tokio::test(start_paused = true)]
+async fn another_effect_or_another_target_starts_at_time_zero() {
+    let (handle, controls) = demo(config()).await;
+    let breathing = effect("breathing", &[]);
+    let logo = OutputTarget {
+        device: DeviceRef::new(GPU),
+        zone: Some(0),
+    };
+    handle
+        .apply_effect(whole(GPU), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(1_000)).await;
+
+    handle
+        .apply_effect(whole(GPU), breathing.clone())
+        .await
+        .expect("switch effect");
+    let switched = Instant::now();
+    sleep(Duration::from_millis(700)).await;
+    let (at, colors) = last_frame(&controls);
+    assert_eq!(colors, rendered(&breathing, at - switched));
+
+    handle
+        .apply_effect(logo, breathing.clone())
+        .await
+        .expect("switch target");
+    let moved = Instant::now();
+    sleep(Duration::from_millis(700)).await;
+    let (at, colors) = last_frame(&controls);
+    assert_eq!(colors, rendered(&breathing, at - moved));
+    assert_ne!(colors, rendered(&breathing, at - switched));
 }

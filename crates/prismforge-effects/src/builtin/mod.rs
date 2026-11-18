@@ -70,14 +70,14 @@ impl Program {
         }
     }
 
-    pub fn color_at(&self, seconds: f64, position: f64) -> Rgb {
+    pub fn color_at(&self, seconds: f64, position: f64, leds: usize) -> Rgb {
         match self {
             Self::Solid(effect) => effect.color_at(),
             Self::Breathing(effect) => effect.color_at(seconds),
             Self::Gradient(effect) => effect.color_at(position),
             Self::RainbowWave(effect) => effect.color_at(seconds, position),
             Self::ColorCycle(effect) => effect.color_at(seconds),
-            Self::MovingHighlight(effect) => effect.color_at(seconds, position),
+            Self::MovingHighlight(effect) => effect.color_at(seconds, position, leds),
         }
     }
 }

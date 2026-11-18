@@ -11,6 +11,12 @@ export function failureText(failure: Failure): string {
   if ("Unexpected" in failure) {
     return `PrismForge could not run this request: ${failure.Unexpected}`;
   }
+  if ("InvalidEffect" in failure) {
+    return "Some effect settings are not valid. The settings below show which.";
+  }
+  if ("NoEffect" in failure) {
+    return "No PrismForge effect runs on this target.";
+  }
   const error = failure.Session;
   if (error === "Busy") {
     return "PrismForge is still working on earlier requests. Wait a moment, then try again.";

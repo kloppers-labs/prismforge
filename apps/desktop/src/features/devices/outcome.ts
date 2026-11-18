@@ -48,17 +48,17 @@ export function describeOutcome(outcome: IdentifyOutcome, server: string): Outco
     return {
       settled: false,
       headline: "Only part of the earlier lighting was put back.",
-      details: [...lit, failureText(failure, server), "Set the lighting again in OpenRGB if the device looks wrong."],
+      details: [...lit, restoreFailureText(failure, server), "Set the lighting again in OpenRGB if the device looks wrong."],
     };
   }
   return {
     settled: false,
     headline: "The earlier lighting was not put back. The device may stay white.",
-    details: [...lit, failureText(restore.NotRestored.failure, server), "Set the lighting again in OpenRGB, or run identify again."],
+    details: [...lit, restoreFailureText(restore.NotRestored.failure, server), "Set the lighting again in OpenRGB, or run identify again."],
   };
 }
 
-function failureText(failure: RestoreFailure, server: string): string {
+export function restoreFailureText(failure: RestoreFailure, server: string): string {
   if (failure === "PreviousStateUnknown") {
     return "PrismForge did not know the earlier lighting of this device.";
   }

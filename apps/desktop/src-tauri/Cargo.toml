@@ -12,13 +12,14 @@ repository.workspace = true
 name = "prismforge_desktop"
 
 [features]
-ts = ["dep:ts-rs", "prismforge-core/ts"]
+ts = ["dep:ts-rs", "prismforge-core/ts", "prismforge-effects/ts"]
 
 [build-dependencies]
 tauri-build = { version = "=2.7.5", features = [] }
 
 [dependencies]
 prismforge-core.workspace = true
+prismforge-effects.workspace = true
 prismforge-openrgb.workspace = true
 prismforge-testkit.workspace = true
 serde.workspace = true

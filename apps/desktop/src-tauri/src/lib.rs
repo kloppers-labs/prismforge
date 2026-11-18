@@ -1,4 +1,5 @@
 mod commands;
+mod effects;
 mod exit;
 mod forward;
 mod publisher;
@@ -7,6 +8,7 @@ mod view;
 
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
+pub use effects::{EffectCatalog, preview_effect};
 pub use exit::{ExitGuard, stop_then_exit};
 pub use forward::forward;
 pub use publisher::{Publisher, ViewSink};
@@ -40,6 +42,14 @@ pub fn run() {
             commands::disconnect,
             commands::refresh,
             commands::identify,
+            commands::effect_catalog,
+            commands::apply_effect,
+            commands::stop_effect,
+            commands::select_mode,
+            commands::declare_external,
+            commands::clear_external,
+            commands::set_frame_rate,
+            commands::preview_effect,
         ])
         .build(tauri::generate_context!())
         .expect("PrismForge could not start")

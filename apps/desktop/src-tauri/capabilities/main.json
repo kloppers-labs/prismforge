@@ -11,6 +11,14 @@
     "allow-start-demo",
     "allow-disconnect",
     "allow-refresh",
-    "allow-identify"
+    "allow-identify",
+    "allow-effect-catalog",
+    "allow-apply-effect",
+    "allow-stop-effect",
+    "allow-select-mode",
+    "allow-declare-external",
+    "allow-clear-external",
+    "allow-set-frame-rate",
+    "allow-preview-effect"
   ]
 }
