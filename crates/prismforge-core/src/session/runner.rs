@@ -127,17 +127,21 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             let listening = matches!(self.link, Link::Connected);
             let auto_refresh = self.auto_refresh_at();
             let frame = self.output_due();
+            let frame_first = frame.is_some() && self.output.frame_owed;
             let wake = tokio::select! {
                 biased;
                 () = sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
                     Wake::Deadline
                 }
+                () = sleep_until(frame.unwrap_or_else(Instant::now)), if frame_first => Wake::Frame,
                 command = self.commands.recv() => command.map_or(Wake::Closed, Wake::Command),
                 event = self.backend.next_event(), if listening => Wake::Event(event),
                 () = sleep_until(auto_refresh.unwrap_or_else(Instant::now)), if auto_refresh.is_some() => {
                     Wake::StaleInventory
                 }
-                () = sleep_until(frame.unwrap_or_else(Instant::now)), if frame.is_some() => Wake::Frame,
+                () = sleep_until(frame.unwrap_or_else(Instant::now)), if frame.is_some() && !frame_first => {
+                    Wake::Frame
+                }
             };
             match wake {
                 Wake::Deadline => self.on_deadline().await,
@@ -146,7 +150,10 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                     let _ = self.refresh_or_lose(1).await;
                 }
                 Wake::Event(event) => self.on_event(event).await,
-                Wake::Command(command) => self.on_command(command).await,
+                Wake::Command(command) => {
+                    self.output.frame_owed = frame.is_some_and(|at| at <= Instant::now());
+                    self.on_command(command).await;
+                }
                 Wake::Frame => self.on_frame().await,
                 Wake::Closed => break,
             }

@@ -7,6 +7,7 @@ use crate::inventory::Inventory;
 use crate::session::identify::RestoreFailure;
 
 /// The mode and colours the inventory reported for a device before PrismForge changed it.
+#[derive(Clone)]
 pub(crate) struct PreviousState {
     pub device: DeviceRef,
     pub known: bool,
@@ -14,6 +15,7 @@ pub(crate) struct PreviousState {
     colors: Vec<Rgb>,
 }
 
+#[derive(Clone)]
 enum RestoreStep {
     Mode { index: usize, name: String },
     Colors,
@@ -49,13 +51,13 @@ impl PreviousState {
         }
     }
 
-    /// Nothing to restore: the device stays with PrismForge's own effect, which resumes by itself.
-    pub fn kept(device: &DeviceRef) -> Self {
+    /// The colours a device showed under PrismForge's own effects, written back as one frame.
+    pub fn shown(device: &DeviceRef, colors: Vec<Rgb>) -> Self {
         Self {
             device: device.clone(),
             known: true,
-            steps: Vec::new(),
-            colors: Vec::new(),
+            steps: vec![RestoreStep::Colors],
+            colors,
         }
     }
 

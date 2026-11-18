@@ -24,6 +24,9 @@ export function failureText(failure: Failure): string {
   if ("InvalidDuration" in error) {
     return "The identify time is outside the allowed range.";
   }
+  if ("OutputConflict" in error) {
+    return "You said another program controls this device. PrismForge sends nothing to it until you hand it back.";
+  }
   return backendErrorText(error.Backend);
 }
 

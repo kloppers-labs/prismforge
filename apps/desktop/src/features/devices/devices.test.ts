@@ -134,6 +134,17 @@ test("shows_busy_without_retrying", async () => {
   expect((screen.getByRole("button", { name: "Identify device" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
+test("explains_identify_refused_for_a_device_another_program_controls", async () => {
+  const conflict = { OutputConflict: { device: "demo-motherboard", owner: { External: { label: "OpenRGB Effects plugin" } } } };
+  fakeShell(demoConnected, { identify: refuse({ Session: conflict }) });
+  render(App);
+  await select("Demo Motherboard");
+
+  await fireEvent.click(screen.getByRole("button", { name: "Identify device" }));
+
+  expect(await screen.findByText(/^You said another program controls this device\. PrismForge sends nothing to it until you hand it back\.$/)).toBeTruthy();
+});
+
 test("sends_the_selected_zone", async () => {
   const shell = fakeShell(demoConnected, { identify: () => outcomes.restored });
   render(App);

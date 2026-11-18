@@ -301,3 +301,42 @@ async fn connection_loss_pauses_output_until_direct_mode_is_enabled_again() {
         OutputCondition::Running
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_command_waits_for_at_most_one_write_while_effects_run() {
+    const SLOW_CALL: Duration = Duration::from_millis(25);
+    let (handle, controls) = demo(config()).await;
+    for device in [GPU, MEMORY, MOTHERBOARD] {
+        handle
+            .apply_effect(whole(device), rainbow())
+            .await
+            .expect("apply");
+    }
+    controls.set_call_delay(SLOW_CALL);
+
+    let mut slowest = Duration::ZERO;
+    for _ in 0..40 {
+        sleep(Duration::from_millis(7)).await;
+        let asked = Instant::now();
+        handle.set_frame_rate(30).await.expect("set frame rate");
+        slowest = slowest.max(asked.elapsed());
+    }
+    assert!(slowest <= SLOW_CALL, "a command waited {slowest:?}");
+
+    let before = handle.snapshot().diagnostics.counters.frames_written;
+    let senders: Vec<_> = (0..3)
+        .map(|_| {
+            let handle = handle.clone();
+            tokio::spawn(async move {
+                for _ in 0..20 {
+                    handle.refresh().await.expect("refresh");
+                }
+            })
+        })
+        .collect();
+    for sender in senders {
+        sender.await.expect("sender");
+    }
+    let during = handle.snapshot().diagnostics.counters.frames_written - before;
+    assert!(during >= 30, "{during} frames while commands kept coming");
+}

@@ -67,6 +67,12 @@ pub enum SessionError {
     IdentifyInProgress { device: DeviceRef },
     #[error("identify duration must be above zero and at most {max_ms} ms")]
     InvalidDuration { max_ms: u64 },
+    /// The user said another program controls this device; nothing is sent until they hand it back.
+    #[error("{device} is controlled by {owner:?}")]
+    OutputConflict {
+        device: DeviceRef,
+        owner: OutputOwner,
+    },
     #[error(transparent)]
     Backend(#[from] BackendError),
 }
@@ -76,12 +82,6 @@ pub enum SessionError {
 pub enum OutputError {
     #[error(transparent)]
     Session(#[from] SessionError),
-    /// The user said another program controls this device; they must hand it over first.
-    #[error("{device} is controlled by {owner:?}")]
-    Conflict {
-        device: DeviceRef,
-        owner: OutputOwner,
-    },
     #[error(transparent)]
     InvalidEffect(#[from] InstanceError),
     #[error("no effect runs on {target:?}")]

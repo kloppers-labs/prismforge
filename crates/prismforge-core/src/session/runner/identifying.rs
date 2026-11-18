@@ -60,12 +60,13 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 max_ms: max.as_millis() as u64,
             });
         }
-        let inventory = self.live_inventory()?;
         let device = &request.device;
+        self.ensure_not_external(device)?;
+        let inventory = self.live_inventory()?;
         let suspect = self.state_suspect(device, inventory);
         let mut plan = IdentifyPlan::new(inventory, device, request.zone, suspect)?;
-        if self.output.effect(device).is_some() {
-            plan.previous = PreviousState::kept(device);
+        if let Some(output) = self.output.effect(device) {
+            plan.previous = PreviousState::shown(device, output.shown.clone());
         }
         Ok(plan)
     }

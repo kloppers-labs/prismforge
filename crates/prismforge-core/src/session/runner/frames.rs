@@ -5,7 +5,7 @@ use crate::backend::RgbBackend;
 use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::session::diagnostics::Operation;
-use crate::session::output::EffectOutput;
+use crate::session::output::{EffectOutput, Tick};
 use crate::session::runner::{Link, Session};
 use crate::session::snapshot::PauseReason;
 
@@ -16,6 +16,9 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
     pub(super) fn output_due(&self) -> Option<Instant> {
         if self.output_pause().is_some() {
             return None;
+        }
+        if let Some(tick) = &self.output.tick {
+            return Some(tick.fired);
         }
         self.output
             .effects()
@@ -59,35 +62,56 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
     }
 
-    /// Writes the frame for now to every device that is due; ticks that pass meanwhile are skipped, never queued.
+    /// Writes the frame for now to each due device; waiting commands go between two devices, and passed ticks are skipped.
     pub(super) async fn on_frame(&mut self) {
-        let fired = Instant::now();
-        let on_cadence = self.output.next_tick <= fired;
-        let due: Vec<DeviceRef> = self
-            .output
-            .effects()
-            .filter(|(device, output)| {
-                self.device_due(device, output)
-                    .is_some_and(|due| due <= fired)
-            })
-            .map(|(device, _)| device.clone())
-            .collect();
-        for device in due {
-            if !self.write_device(&device, fired).await {
-                break;
+        self.output.frame_owed = false;
+        let mut tick = match self.output.tick.take() {
+            Some(tick) => tick,
+            None => self.start_tick(),
+        };
+        while let Some(device) = tick.remaining.pop_front() {
+            let still_due = self.output.effect(&device).is_some_and(|output| {
+                self.device_due(&device, output)
+                    .is_some_and(|due| due <= Instant::now())
+            });
+            if still_due && !self.write_device(&device).await {
+                return;
+            }
+            if !tick.remaining.is_empty() && !self.commands.is_empty() {
+                self.output.tick = Some(tick);
+                return;
             }
         }
-        if on_cadence {
-            self.counters.ticks_skipped += self.output.advance(fired, Instant::now());
+        if tick.on_cadence {
+            self.counters.ticks_skipped += self.output.advance(tick.fired, Instant::now());
         }
     }
 
-    /// One batched write per assigned target; returns false once the connection is gone.
-    async fn write_device(&mut self, device: &DeviceRef, fired: Instant) -> bool {
+    fn start_tick(&self) -> Tick {
+        let fired = Instant::now();
+        Tick {
+            fired,
+            on_cadence: self.output.next_tick <= fired,
+            remaining: self
+                .output
+                .effects()
+                .filter(|(device, output)| {
+                    self.device_due(device, output)
+                        .is_some_and(|due| due <= fired)
+                })
+                .map(|(device, _)| device.clone())
+                .collect(),
+        }
+    }
+
+    /// One batched write per assigned target, rendered for the moment it starts; false once the connection is gone.
+    async fn write_device(&mut self, device: &DeviceRef) -> bool {
+        let now = Instant::now();
         let (Some(inventory), Some(output)) = (&self.inventory, self.output.effect(device)) else {
             return true;
         };
         let mut frames = Vec::new();
+        let mut led_count = output.shown.len();
         for (index, running) in output.effects.iter().enumerate() {
             if running.written && running.effect.is_static() {
                 continue;
@@ -99,9 +123,16 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             let leds = running.target.zone.map_or(descriptor.led_count, |zone| {
                 descriptor.zones[zone].led_count
             });
-            let time = fired.saturating_duration_since(running.started);
+            let start = running.target.zone.map_or(0, |zone| {
+                descriptor.zones[..zone]
+                    .iter()
+                    .map(|zone| zone.led_count)
+                    .sum()
+            });
+            let time = now.saturating_duration_since(running.started);
             let colors = running.effect.render(time, &linear_positions(leds), SEED);
-            frames.push((index, running.target.zone, colors));
+            frames.push((index, running.target.zone, start, colors));
+            led_count = descriptor.led_count;
         }
         if !output.direct_mode {
             if let Err(error) = self.backend.enable_direct_mode(device).await {
@@ -111,7 +142,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 output.direct_mode = true;
             }
         }
-        for (index, zone, colors) in frames {
+        for (index, zone, start, colors) in frames {
             let written = match zone {
                 Some(zone) => self.backend.write_zone_frame(device, zone, &colors).await,
                 None => self.backend.write_device_frame(device, &colors).await,
@@ -120,12 +151,11 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 return self.refused(device, error);
             }
             self.counters.frames_written += 1;
-            if let Some(running) = self
-                .output
-                .effect_mut(device)
-                .and_then(|output| output.effects.get_mut(index))
-            {
-                running.written = true;
+            if let Some(output) = self.output.effect_mut(device) {
+                output.show(start, &colors, led_count);
+                if let Some(running) = output.effects.get_mut(index) {
+                    running.written = true;
+                }
             }
         }
         if let Some(output) = self.output.effect_mut(device) {

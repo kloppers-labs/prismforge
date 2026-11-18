@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::time::Duration;
 
-use prismforge_effects::Effect;
+use prismforge_effects::{Effect, Rgb};
 use tokio::time::Instant;
 
 use crate::device::DeviceRef;
@@ -21,6 +21,18 @@ pub(crate) struct Output {
     pub frame_rate: u32,
     pub next_tick: Instant,
     pub claims: BTreeMap<DeviceRef, Claim>,
+    /// States of devices PrismForge changed and has not restored; the next take-over reuses them.
+    pub remembered: BTreeMap<DeviceRef, PreviousState>,
+    /// A tick that stopped between two devices to let a command through.
+    pub tick: Option<Tick>,
+    /// Set when a command ran while output was due, so output goes next.
+    pub frame_owed: bool,
+}
+
+pub(crate) struct Tick {
+    pub fired: Instant,
+    pub on_cadence: bool,
+    pub remaining: VecDeque<DeviceRef>,
 }
 
 pub(crate) enum Claim {
@@ -31,6 +43,8 @@ pub(crate) enum Claim {
 
 pub(crate) struct EffectOutput {
     pub previous: PreviousState,
+    /// Per LED, what PrismForge last wrote, or what the inventory reported at take-over.
+    pub shown: Vec<Rgb>,
     pub effects: Vec<Running>,
     pub direct_mode: bool,
     pub refusal: Option<Refusal>,
@@ -55,6 +69,9 @@ impl Output {
             frame_rate: MIN_FRAME_RATE,
             next_tick: Instant::now(),
             claims: BTreeMap::new(),
+            remembered: BTreeMap::new(),
+            tick: None,
+            frame_owed: false,
         };
         output.set_frame_rate(frame_rate);
         output
@@ -125,6 +142,7 @@ impl Output {
     }
 
     pub fn after_reconnect(&mut self) {
+        self.tick = None;
         for claim in self.claims.values_mut() {
             if let Claim::Effect(output) = claim {
                 output.direct_mode = false;
@@ -168,9 +186,10 @@ impl Claim {
 }
 
 impl EffectOutput {
-    pub fn new(previous: PreviousState, first: Running) -> Self {
+    pub fn new(previous: PreviousState, shown: Vec<Rgb>, first: Running) -> Self {
         Self {
             previous,
+            shown,
             effects: vec![first],
             direct_mode: true,
             refusal: None,
@@ -197,6 +216,13 @@ impl EffectOutput {
         self.effects
             .iter()
             .any(|running| !running.written || !running.effect.is_static())
+    }
+
+    pub fn show(&mut self, start: usize, colors: &[Rgb], led_count: usize) {
+        self.shown.resize(led_count, Rgb::default());
+        if let Some(leds) = self.shown.get_mut(start..start + colors.len()) {
+            leds.copy_from_slice(colors);
+        }
     }
 
     pub fn refuse(&mut self, error: BackendError, now: Instant) {

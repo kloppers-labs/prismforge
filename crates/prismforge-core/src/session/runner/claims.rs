@@ -60,16 +60,18 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         let target = assignment.target;
         let device = target.device.clone();
         self.ensure_free(&device)?;
-        let previous = {
+        let take_over = {
             let inventory = self.live_inventory()?;
             let descriptor = &inventory.output_target(&device, target.zone)?.descriptor;
             let suspect = self.state_suspect(&device, inventory);
-            self.output
-                .effect(&device)
-                .is_none()
-                .then(|| PreviousState::capture(&device, descriptor, suspect))
+            self.output.effect(&device).is_none().then(|| {
+                let previous = self.output.remembered.get(&device).cloned();
+                let previous = previous
+                    .unwrap_or_else(|| PreviousState::capture(&device, descriptor, suspect));
+                (previous, descriptor.colors.clone())
+            })
         };
-        if let Some(previous) = previous {
+        if let Some((previous, shown)) = take_over {
             if let Err(error) = self.backend.enable_direct_mode(&device).await {
                 let lost = self.lost_reason();
                 self.record_error(Operation::Output, &error, lost);
@@ -77,7 +79,8 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 return Err(error.into());
             }
             let running = running(target, effect);
-            let output = EffectOutput::new(previous, running);
+            let output = EffectOutput::new(previous, shown, running);
+            self.output.remembered.remove(&device);
             self.output.claims.insert(device, Claim::Effect(output));
         } else if let Some(output) = self.output.effect_mut(&device) {
             output.assign(running(target, effect));
@@ -122,6 +125,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         self.output
             .claims
             .insert(device.clone(), Claim::HardwareMode { mode });
+        self.output.remembered.remove(&device);
         self.unrestored.retain(|unrestored| unrestored != &device);
         self.settle(&device, true).await;
         Ok(())
@@ -137,6 +141,9 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         {
             return Err(BackendError::UnknownDevice { device }.into());
         }
+        if let Some(output) = self.output.take_effect(&device) {
+            self.keep_unrestored(output.previous);
+        }
         self.output.claims.insert(device, Claim::External { label });
         Ok(())
     }
@@ -149,21 +156,50 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             .map(|(device, _)| device.clone())
             .collect();
         let release = async {
-            for device in devices {
-                if let Some(output) = self.output.take_effect(&device) {
+            for device in &devices {
+                if let Some(output) = self.output.take_effect(device) {
                     self.release(output).await;
                 }
             }
         };
         // Cutting a restore short costs only the connection, which closes right after.
         let _ = tokio::time::timeout(RELEASE_LIMIT, release).await;
+        for device in &devices {
+            if let Some(output) = self.output.take_effect(device) {
+                self.keep_unrestored(output.previous);
+            } else if self.output.remembered.contains_key(device) {
+                self.note_unrestored(device);
+            }
+        }
+    }
+
+    /// Keeps a state PrismForge did not restore, so the next take-over can still restore it.
+    fn keep_unrestored(&mut self, previous: PreviousState) {
+        self.note_unrestored(&previous.device);
         self.output
-            .claims
-            .retain(|_, claim| !matches!(claim, Claim::Effect(_)));
+            .remembered
+            .insert(previous.device.clone(), previous);
+    }
+
+    fn note_unrestored(&mut self, device: &DeviceRef) {
+        if !self.unrestored.contains(device) {
+            self.unrestored.push(device.clone());
+        }
     }
 
     async fn release(&mut self, output: EffectOutput) -> RestoreOutcome {
         let previous = output.previous;
+        self.output
+            .remembered
+            .insert(previous.device.clone(), previous.clone());
+        let outcome = self.restore_previous(&previous).await;
+        if outcome == RestoreOutcome::Restored {
+            self.output.remembered.remove(&previous.device);
+        }
+        outcome
+    }
+
+    async fn restore_previous(&mut self, previous: &PreviousState) -> RestoreOutcome {
         if let Some(reason) = self.link_down() {
             let outcome = not_restored_after_loss(&reason);
             self.note_restore(&previous.device, &outcome);
@@ -178,15 +214,19 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             self.note_restore(&previous.device, &outcome);
             return outcome;
         }
-        let outcome = self.restore(&previous).await;
+        let outcome = self.restore(previous).await;
         self.note_restore(&previous.device, &outcome);
         outcome
     }
 
-    fn ensure_free(&self, device: &DeviceRef) -> Result<(), OutputError> {
+    fn ensure_free(&self, device: &DeviceRef) -> Result<(), SessionError> {
         self.ensure_not_identifying(device)?;
+        self.ensure_not_external(device)
+    }
+
+    pub(super) fn ensure_not_external(&self, device: &DeviceRef) -> Result<(), SessionError> {
         match self.output.claims.get(device) {
-            Some(Claim::External { label }) => Err(OutputError::Conflict {
+            Some(Claim::External { label }) => Err(SessionError::OutputConflict {
                 device: device.clone(),
                 owner: OutputOwner::External {
                     label: label.clone(),

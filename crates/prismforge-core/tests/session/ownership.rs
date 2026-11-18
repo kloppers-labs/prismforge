@@ -10,8 +10,9 @@ use prismforge_testkit::{DemoBackend, DemoOutput, FakeServer, FixtureDevice, wir
 use tokio::time::{Instant, sleep};
 
 use crate::support::{
-    self, GPU, GPU_LEDS, LIGHT_BAR, config, demo, device_frames, effect, is_connected, is_retrying,
-    output_of, output_packets, rainbow, reference, solid, strip, wait_until, whole,
+    self, GPU, GPU_LEDS, LIGHT_BAR, MEMORY, MOTHERBOARD, config, demo, device_frames, effect,
+    is_connected, is_retrying, output_of, output_packets, rainbow, reference, solid, strip,
+    wait_until, whole,
 };
 
 const PLUGIN: &str = "OpenRGB Effects plugin";
@@ -37,10 +38,10 @@ async fn refuses_conflicting_output_owner() {
     };
     assert_eq!(
         refused,
-        Err(OutputError::Conflict {
+        Err(OutputError::Session(SessionError::OutputConflict {
             device: gpu(),
             owner: external.clone()
-        })
+        }))
     );
     assert!(controls.outputs().is_empty());
     assert_eq!(
@@ -447,4 +448,196 @@ async fn effect_resumes_on_the_same_device_after_a_restart_with_reused_ids() {
             .iter()
             .all(|&packet| packet == (1, wire::UPDATE_LEDS))
     );
+}
+
+fn motherboard_zone(zone: usize) -> OutputTarget {
+    OutputTarget {
+        device: DeviceRef::new(MOTHERBOARD),
+        zone: Some(zone),
+    }
+}
+
+fn colours(snapshot: &prismforge_core::session::SessionSnapshot, device: &str) -> Vec<Rgb> {
+    snapshot
+        .devices
+        .iter()
+        .find(|entry| entry.identity.reference().map(DeviceRef::as_str) == Some(device))
+        .map(|entry| entry.descriptor.colors.clone())
+        .expect("device listed")
+}
+
+#[tokio::test(start_paused = true)]
+async fn identify_of_a_whole_device_puts_back_the_leds_no_effect_covers() {
+    let (handle, _controls) = demo(config()).await;
+    let before = colours(&handle.snapshot(), MOTHERBOARD);
+    handle
+        .apply_effect(motherboard_zone(1), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+
+    let outcome = handle
+        .identify(DeviceRef::new(MOTHERBOARD), None, BLINK)
+        .await
+        .expect("identify");
+    sleep(Duration::from_millis(100)).await;
+    handle.refresh().await.expect("refresh");
+    let after = colours(&handle.snapshot(), MOTHERBOARD);
+
+    assert_eq!(outcome.restore, RestoreOutcome::Restored);
+    assert_eq!(after[..6], before[..6]);
+    assert_eq!(after[36..], before[36..]);
+    assert!(after[6..36].iter().any(|colour| *colour != IDENTIFY_COLOR));
+}
+
+#[tokio::test(start_paused = true)]
+async fn identify_of_another_zone_puts_back_that_zone() {
+    let (handle, _controls) = demo(config()).await;
+    let before = colours(&handle.snapshot(), MOTHERBOARD);
+    handle
+        .apply_effect(motherboard_zone(1), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+
+    let outcome = handle
+        .identify(DeviceRef::new(MOTHERBOARD), Some(2), BLINK)
+        .await
+        .expect("identify");
+    sleep(Duration::from_millis(100)).await;
+    handle.refresh().await.expect("refresh");
+    let after = colours(&handle.snapshot(), MOTHERBOARD);
+
+    assert_eq!(outcome.restore, RestoreOutcome::Restored);
+    assert_eq!(after[36..], before[36..]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_original_mode_survives_an_external_declaration_and_hand_back() {
+    let (handle, controls) = demo(config()).await;
+    handle
+        .apply_effect(whole(GPU), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+    handle.refresh().await.expect("refresh");
+    handle
+        .declare_external(gpu(), PLUGIN.into())
+        .await
+        .expect("declare");
+    handle.clear_external(gpu()).await.expect("hand back");
+    handle
+        .apply_effect(whole(GPU), rainbow())
+        .await
+        .expect("apply again");
+    sleep(Duration::from_millis(100)).await;
+
+    let restore = handle.stop_effect(whole(GPU)).await.expect("stop");
+
+    assert_eq!(restore, Some(RestoreOutcome::Restored));
+    assert_eq!(
+        controls.outputs().last(),
+        Some(&DemoOutput::ModeReapplied {
+            device: gpu(),
+            mode: 2
+        })
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn devices_the_shutdown_restore_did_not_reach_report_an_unknown_previous_state() {
+    let (handle, controls) = demo(config()).await;
+    for device in [GPU, MEMORY] {
+        handle
+            .apply_effect(whole(device), solid(Rgb::new(1, 2, 3)))
+            .await
+            .expect("apply");
+    }
+    sleep(Duration::from_millis(100)).await;
+    controls.set_call_delay(Duration::from_secs(3_600));
+
+    handle.disconnect().await.expect("disconnect");
+    controls.set_call_delay(Duration::ZERO);
+    handle.connect().await.expect("reconnect");
+    let unknown = RestoreOutcome::PartlyRestored {
+        failure: prismforge_core::session::RestoreFailure::PreviousStateUnknown,
+    };
+
+    for device in [GPU, MEMORY] {
+        let outcome = handle
+            .identify(DeviceRef::new(device), None, BLINK)
+            .await
+            .expect("identify");
+        assert_eq!(outcome.restore, unknown, "{device}");
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn no_command_writes_to_a_device_declared_external() {
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    let (handle, session) = Session::new(backend, config());
+    let session = tokio::spawn(session.run());
+    handle.connect().await.expect("connect");
+    handle
+        .apply_effect(whole(GPU), rainbow())
+        .await
+        .expect("apply");
+    sleep(Duration::from_millis(100)).await;
+    handle
+        .declare_external(gpu(), PLUGIN.into())
+        .await
+        .expect("declare");
+    let declared = controls.outputs().len();
+    let conflict = SessionError::OutputConflict {
+        device: gpu(),
+        owner: OutputOwner::External {
+            label: PLUGIN.into(),
+        },
+    };
+    let gpu_zone = OutputTarget {
+        device: gpu(),
+        zone: Some(0),
+    };
+
+    assert_eq!(
+        handle.identify(gpu(), None, BLINK).await,
+        Err(conflict.clone())
+    );
+    assert_eq!(
+        handle.identify(gpu(), Some(0), BLINK).await,
+        Err(conflict.clone())
+    );
+    assert_eq!(
+        handle.apply_effect(whole(GPU), rainbow()).await,
+        Err(OutputError::Session(conflict.clone()))
+    );
+    assert_eq!(
+        handle.apply_effect(gpu_zone.clone(), rainbow()).await,
+        Err(OutputError::Session(conflict.clone()))
+    );
+    assert_eq!(
+        handle.select_mode(gpu(), 1).await,
+        Err(OutputError::Session(conflict))
+    );
+    assert_eq!(
+        handle.stop_effect(whole(GPU)).await,
+        Err(OutputError::NoEffect { target: whole(GPU) })
+    );
+    assert_eq!(
+        handle.stop_effect(gpu_zone.clone()).await,
+        Err(OutputError::NoEffect { target: gpu_zone })
+    );
+    controls.lose_connection(prismforge_core::LossCause::Timeout);
+    wait_until(&handle, is_retrying).await;
+    wait_until(&handle, is_connected).await;
+    sleep(Duration::from_secs(5)).await;
+    handle.refresh().await.expect("refresh");
+    handle.disconnect().await.expect("disconnect");
+    handle.connect().await.expect("connect again");
+    sleep(Duration::from_secs(1)).await;
+    drop(handle);
+    session.await.expect("session ends");
+
+    assert_eq!(controls.outputs()[declared..], []);
 }
