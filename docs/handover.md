@@ -33,13 +33,14 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 on 2026-11-18, at the last code commit of Task 1.
+Run on macOS (Apple Silicon) with Rust 1.99.0 on 2026-11-18, at the last code commit of Task 2a (backend half of Task 2).
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 11 tests in `prismforge-core`, 36 tests in `prismforge-openrgb` |
+| `cargo test --workspace` | Pass: 31 tests in `prismforge-core` (20 session tests), 49 tests in `prismforge-openrgb` (2 in the probe example), 9 tests in `prismforge-testkit` |
+| `cargo check --workspace --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only) |
 
 Not run:
 
@@ -58,13 +59,14 @@ Not run:
 
 - **No real-server evidence.** The fake server and the client come from the same reading of the OpenRGB document and source. A review checked the wire format against the OpenRGB 1.1 source, but a real server can still differ.
 - **A request completes on its acknowledge packet.** If a real server does not send it, each request stops after the timeout (2 seconds by default) and the client closes the connection.
-- **One slow controller fails the whole refresh.** A data request that gets no answer in time closes the connection.
-- **A stopped backend call costs the connection.** The next call closes the connection and the caller must connect again.
+- **One slow controller fails the whole refresh.** A data request that gets no answer in time closes the connection. The session then reconnects.
+- **A stopped backend call costs the connection.** The next call closes the connection and the caller must connect again. The session runs every call to its end, so this happens only to code that calls the backend directly.
 - **Device strings must be valid UTF-8.** A device with a different text encoding is reported as an issue and cannot be used.
-- **The probe changes the device mode before it checks `--zone`.** A zone number that is out of range switches the device to Direct Mode and then refuses the write.
+- **Mode re-apply is not confirmed by the server.** OpenRGB answers UpdateMode with status OK also when it rejects the mode settings. Identify reports "restored" when every restore request was accepted. Only a later inventory refresh shows the active mode.
+- **Identify restore is best effort.** It uses the mode and colours that the last inventory reported. If another program changed the device after that refresh, identify restores the older state. PrismForge cannot see other writers, such as the Effects plugin.
+- **Reconnect does not stop by itself.** The session retries with a delay that grows to a fixed cap (30 seconds by default) until the user disconnects. An unsupported server version is not retried.
 - **The list of known devices is in memory only.** After an application restart, a device with a serial number that moved to a new location gets a new reference.
-- **The connection state does not keep the cause of a loss.** A timeout and a server close look the same.
-- **Test gaps:** segments, zone modes and a disconnect during a request have no tests.
+- **Test gaps:** segments and zone modes have no tests. The identify outcomes "partly restored" and "lighting failed" have no tests.
 
 ## Missing information from the owner
 
