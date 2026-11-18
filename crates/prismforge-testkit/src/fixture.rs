@@ -1,4 +1,4 @@
-use crate::wire::Writer;
+use crate::wire::{Reader, Writer};
 
 const FLAG_HAS_SPEED: u32 = 1 << 0;
 const FLAG_HAS_DIRECTION_LR: u32 = 1 << 1;
@@ -107,6 +107,27 @@ impl FixtureMode {
                 COLORS_MODE_SPECIFIC,
             )
         }
+    }
+
+    pub fn decode(input: &mut Reader) -> Self {
+        let mut mode = Self {
+            name: input.string(),
+            flags: input.u32(),
+            speed_min: input.u32(),
+            speed_max: input.u32(),
+            brightness_min: input.u32(),
+            brightness_max: input.u32(),
+            colors_min: input.u32(),
+            colors_max: input.u32(),
+            speed: input.u32(),
+            brightness: input.u32(),
+            direction: input.u32(),
+            color_mode: input.u32(),
+            colors: Vec::new(),
+        };
+        let count = input.u16();
+        mode.colors = (0..count).map(|_| input.color()).collect();
+        mode
     }
 
     fn encode(&self, out: &mut Writer) {

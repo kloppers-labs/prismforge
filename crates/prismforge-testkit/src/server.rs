@@ -12,7 +12,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::task::JoinHandle;
 
 use crate::fixture::{ControllerBlock, FixtureDevice};
-use crate::recording::{ColorWrite, ReceivedPacket};
+use crate::recording::{ColorWrite, ModeUpdate, ReceivedPacket};
 use crate::wire::{self, Writer, u32_at};
 
 const DUPLEX_BUFFER: usize = 64 * 1024;
@@ -206,6 +206,13 @@ impl FakeServer {
             .collect()
     }
 
+    pub fn mode_updates(&self) -> Vec<ModeUpdate> {
+        self.received()
+            .iter()
+            .filter_map(ReceivedPacket::mode_update)
+            .collect()
+    }
+
     /// Yields to the runtime until `count` colour packets have arrived; panics if they never do.
     pub async fn wait_for_color_writes(&self, count: usize) -> Vec<ColorWrite> {
         for _ in 0..WAIT_ROUNDS {
@@ -301,10 +308,29 @@ impl State {
             wire::SET_CUSTOM_MODE if self.controller(device_id).is_none() => {
                 status = wire::STATUS_INVALID_ID;
             }
+            wire::UPDATE_MODE | wire::SAVE_MODE => {
+                status = mode_request_status(self.controller(device_id), payload);
+            }
             _ => {}
         }
         let ack = (*negotiated >= 6).then(|| wire::ack(device_id, packet_id, status));
         (replies, ack)
+    }
+}
+
+fn mode_request_status(controller: Option<&Controller>, payload: &[u8]) -> u32 {
+    let Some(controller) = controller else {
+        return wire::STATUS_INVALID_ID;
+    };
+    let modes = match &controller.block {
+        ControllerBlock::Device(device) => device.modes.len(),
+        ControllerBlock::Raw(_) => 0,
+    };
+    let index = u32_at(payload, 4).map(|index| index as i32);
+    match index {
+        _ if u32_at(payload, 0) != Some(payload.len() as u32) => wire::STATUS_INVALID_DATA,
+        Some(index) if index >= 0 && (index as usize) < modes => wire::STATUS_OK,
+        _ => wire::STATUS_INVALID_DATA,
     }
 }
 

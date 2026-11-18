@@ -7,6 +7,7 @@ use tokio::time::timeout;
 
 use crate::client::{ClientConfig, ClientError, MIN_PROTOCOL_VERSION, Notification, OpenRgbClient};
 use crate::connector::Connector;
+use crate::protocol::ModeData;
 use crate::translate::describe;
 
 pub struct OpenRgbBackend<C: Connector> {
@@ -17,11 +18,18 @@ pub struct OpenRgbBackend<C: Connector> {
     known: Vec<KnownDevice>,
     inventory: Option<Inventory>,
     runtime_ids: Vec<u32>,
+    reported_modes: Vec<Vec<ModeData>>,
     stale: bool,
 }
 
+struct ScannedDevice {
+    runtime_id: u32,
+    descriptor: DeviceDescriptor,
+    modes: Vec<ModeData>,
+}
+
 struct Scan {
-    devices: Vec<(u32, DeviceDescriptor)>,
+    devices: Vec<ScannedDevice>,
     issues: Vec<DeviceIssue>,
     vanished: bool,
 }
@@ -41,6 +49,7 @@ impl<C: Connector> OpenRgbBackend<C> {
             known: Vec::new(),
             inventory: None,
             runtime_ids: Vec::new(),
+            reported_modes: Vec::new(),
             stale: true,
         }
     }
@@ -144,15 +153,17 @@ impl<C: Connector> OpenRgbBackend<C> {
         }
         let mut devices = Vec::with_capacity(scan.devices.len());
         self.runtime_ids.clear();
-        for ((runtime_id, descriptor), identity) in scan.devices.into_iter().zip(identities) {
+        self.reported_modes.clear();
+        for (scanned, identity) in scan.devices.into_iter().zip(identities) {
             let identity = identity.expect("reconciliation classifies every current device");
             if let Some(reference) = identity.reference() {
-                self.remember(reference, &descriptor);
+                self.remember(reference, &scanned.descriptor);
             }
-            self.runtime_ids.push(runtime_id);
+            self.runtime_ids.push(scanned.runtime_id);
+            self.reported_modes.push(scanned.modes);
             devices.push(InventoryDevice {
                 identity,
-                descriptor,
+                descriptor: scanned.descriptor,
             });
         }
         let generation = self
@@ -205,13 +216,8 @@ impl<C: Connector> OpenRgbBackend<C> {
         })
     }
 
-    /// Runtime ID for `device` in the current generation; refuses anything not provably that device.
-    fn resolve(
-        &mut self,
-        device: &DeviceRef,
-        target: &Target,
-        colors: Option<usize>,
-    ) -> Result<u32, BackendError> {
+    /// Inventory position of `device` in the live, current generation; refuses anything not provably that device.
+    fn locate_live(&mut self, device: &DeviceRef) -> Result<usize, BackendError> {
         self.absorb_notifications();
         if self.client.is_none() {
             return Err(BackendError::NotConnected);
@@ -219,7 +225,16 @@ impl<C: Connector> OpenRgbBackend<C> {
         if self.stale {
             return Err(BackendError::StaleInventory);
         }
-        let index = self.lookup(device)?;
+        self.lookup(device)
+    }
+
+    fn resolve(
+        &mut self,
+        device: &DeviceRef,
+        target: &Target,
+        colors: Option<usize>,
+    ) -> Result<u32, BackendError> {
+        let index = self.locate_live(device)?;
         let descriptor = &self
             .inventory
             .as_ref()
@@ -263,7 +278,11 @@ impl<C: Connector> OpenRgbBackend<C> {
         };
         for id in client.controller_ids().await? {
             match client.controller_data(id).await {
-                Ok(data) => scan.devices.push((id, describe(&data))),
+                Ok(data) => scan.devices.push(ScannedDevice {
+                    runtime_id: id,
+                    descriptor: describe(&data),
+                    modes: data.modes,
+                }),
                 Err(ClientError::ControllerData {
                     controller_id,
                     error,
@@ -352,7 +371,7 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         let fingerprints: Vec<_> = scan
             .devices
             .iter()
-            .map(|(_, device)| device.fingerprint())
+            .map(|device| device.descriptor.fingerprint())
             .collect();
         let reconciliation = reconcile(&self.known, &fingerprints);
         self.adopt(scan, reconciliation);
@@ -380,6 +399,28 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         match client.set_custom_mode(runtime_id).await {
             Ok(()) => Ok(()),
             Err(error @ ClientError::Rejected { .. }) => Err(backend_error(error)),
+            Err(error) => Err(self.fail(error)),
+        }
+    }
+
+    async fn reapply_mode(&mut self, device: &DeviceRef, mode: usize) -> Result<(), BackendError> {
+        let index = self.locate_live(device)?;
+        let modes = &self.reported_modes[index];
+        let settings = modes
+            .get(mode)
+            .ok_or(BackendError::ModeOutOfRange {
+                device: device.clone(),
+                mode,
+                mode_count: modes.len(),
+            })?
+            .clone();
+        let runtime_id = self.runtime_ids[index];
+        let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
+        match client.update_mode(runtime_id, mode, &settings).await {
+            Ok(()) => Ok(()),
+            Err(error @ (ClientError::Rejected { .. } | ClientError::UnencodableMode { .. })) => {
+                Err(backend_error(error))
+            }
             Err(error) => Err(self.fail(error)),
         }
     }

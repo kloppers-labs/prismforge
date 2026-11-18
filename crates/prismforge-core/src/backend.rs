@@ -49,6 +49,13 @@ pub trait RgbBackend {
         device: &DeviceRef,
     ) -> impl Future<Output = Result<(), BackendError>> + Send;
 
+    /// Re-applies an existing mode with the settings last reported for it; never saves to device memory.
+    fn reapply_mode(
+        &mut self,
+        device: &DeviceRef,
+        mode: usize,
+    ) -> impl Future<Output = Result<(), BackendError>> + Send;
+
     fn write_device_frame(
         &mut self,
         device: &DeviceRef,

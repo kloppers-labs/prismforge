@@ -6,5 +6,5 @@ mod server;
 pub mod wire;
 
 pub use fixture::{ControllerBlock, FixtureDevice, FixtureMode, FixtureZone};
-pub use recording::{ColorWrite, ReceivedPacket};
+pub use recording::{ColorWrite, ModeUpdate, ReceivedPacket};
 pub use server::FakeServer;

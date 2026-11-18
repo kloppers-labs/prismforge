@@ -1,5 +1,6 @@
 use prismforge_core::Rgb;
 
+use super::controller::ModeData;
 use super::header::PacketHeader;
 
 pub mod packet_id {
@@ -13,6 +14,7 @@ pub mod packet_id {
     pub const UPDATE_LEDS: u32 = 1050;
     pub const UPDATE_ZONE_LEDS: u32 = 1051;
     pub const SET_CUSTOM_MODE: u32 = 1100;
+    pub const UPDATE_MODE: u32 = 1101;
 }
 
 pub const ACK_STATUS_OK: u32 = 0;
@@ -84,6 +86,39 @@ pub fn decode_string(payload: &[u8]) -> Option<String> {
         return None;
     }
     String::from_utf8(text.to_vec()).ok()
+}
+
+/// Protocol 6 UpdateMode payload; `None` when a length does not fit its 16-bit field.
+pub fn encode_update_mode(mode_index: u16, mode: &ModeData) -> Option<Vec<u8>> {
+    let name_len = u16::try_from(mode.name.len() + 1).ok()?;
+    let color_count = u16::try_from(mode.colors.len()).ok()?;
+    let mut payload = vec![0; SIZE_FIELD_LEN];
+    payload.extend_from_slice(&i32::from(mode_index).to_le_bytes());
+    payload.extend_from_slice(&name_len.to_le_bytes());
+    payload.extend_from_slice(mode.name.as_bytes());
+    payload.push(0);
+    for field in [
+        mode.flags,
+        mode.speed_min,
+        mode.speed_max,
+        mode.brightness_min,
+        mode.brightness_max,
+        mode.colors_min,
+        mode.colors_max,
+        mode.speed,
+        mode.brightness,
+        mode.direction,
+        mode.color_mode,
+    ] {
+        payload.extend_from_slice(&field.to_le_bytes());
+    }
+    payload.extend_from_slice(&color_count.to_le_bytes());
+    for color in &mode.colors {
+        payload.extend_from_slice(&[color.r, color.g, color.b, 0]);
+    }
+    let size = payload.len() as u32;
+    payload[..SIZE_FIELD_LEN].copy_from_slice(&size.to_le_bytes());
+    Some(payload)
 }
 
 pub fn decode_u32(payload: &[u8]) -> Result<u32, PayloadError> {

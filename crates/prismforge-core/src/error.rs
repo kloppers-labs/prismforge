@@ -38,6 +38,12 @@ pub enum BackendError {
         zone: usize,
         zone_count: usize,
     },
+    #[error("mode {mode} is out of range for device {device} with {mode_count} modes")]
+    ModeOutOfRange {
+        device: DeviceRef,
+        mode: usize,
+        mode_count: usize,
+    },
     #[error("{actual} colours do not match {expected} LEDs on device {device}")]
     ColorCountMismatch {
         device: DeviceRef,

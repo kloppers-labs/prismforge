@@ -3,6 +3,7 @@ mod controller_data;
 mod details;
 mod identity;
 mod loss;
+mod modes;
 mod negotiation;
 mod output;
 mod parsing;

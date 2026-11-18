@@ -8,9 +8,10 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 use crate::protocol::{
-    ACK_STATUS_OK, ControllerData, ControllerDataError, FrameError, MAX_PACKET_SIZE,
+    ACK_STATUS_OK, ControllerData, ControllerDataError, FrameError, MAX_PACKET_SIZE, ModeData,
     decode_controller_ids, decode_u32, encode_packet, encode_string, encode_u32,
-    encode_update_leds, encode_update_zone_leds, packet_id, parse_controller_data,
+    encode_update_leds, encode_update_mode, encode_update_zone_leds, packet_id,
+    parse_controller_data,
 };
 use crate::reader::{self, Completion, Pending, PendingSlot, ReaderStatus, Reply, io_failure};
 
@@ -68,6 +69,8 @@ pub enum ClientError {
     },
     #[error("{count} colours exceed the protocol limit")]
     TooManyColors { count: usize },
+    #[error("mode {mode_index} does not fit an UpdateMode packet")]
+    UnencodableMode { mode_index: usize },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,19 +170,23 @@ where
     }
 
     pub async fn set_custom_mode(&mut self, id: u32) -> Result<(), ClientError> {
-        let packet = packet_id::SET_CUSTOM_MODE;
-        let reply = self
-            .request(id, packet, &[], Completion::Ack, "custom mode request")
-            .await?;
-        match (reply.payload, reply.status) {
-            (None, Some(ACK_STATUS_OK)) => Ok(()),
-            (None, Some(status)) => Err(ClientError::Rejected {
-                packet_id: packet,
-                device_id: id,
-                status,
-            }),
-            _ => Err(self.malformed(packet, "unexpected reply payload")),
-        }
+        self.command(id, packet_id::SET_CUSTOM_MODE, &[], "custom mode request")
+            .await
+    }
+
+    /// Sends UpdateMode (never SaveMode) with `mode` as the settings for mode `mode_index`.
+    pub async fn update_mode(
+        &mut self,
+        id: u32,
+        mode_index: usize,
+        mode: &ModeData,
+    ) -> Result<(), ClientError> {
+        let payload = u16::try_from(mode_index)
+            .ok()
+            .and_then(|index| encode_update_mode(index, mode))
+            .ok_or(ClientError::UnencodableMode { mode_index })?;
+        self.command(id, packet_id::UPDATE_MODE, &payload, "update mode request")
+            .await
     }
 
     pub async fn update_leds(&mut self, id: u32, colors: &[Rgb]) -> Result<(), ClientError> {
@@ -254,6 +261,27 @@ where
                 server_version: None,
             }),
             Err(error) => Err(error),
+        }
+    }
+
+    async fn command(
+        &mut self,
+        id: u32,
+        packet: u32,
+        payload: &[u8],
+        operation: &'static str,
+    ) -> Result<(), ClientError> {
+        let reply = self
+            .request(id, packet, payload, Completion::Ack, operation)
+            .await?;
+        match (reply.payload, reply.status) {
+            (None, Some(ACK_STATUS_OK)) => Ok(()),
+            (None, Some(status)) => Err(ClientError::Rejected {
+                packet_id: packet,
+                device_id: id,
+                status,
+            }),
+            _ => Err(self.malformed(packet, "unexpected reply payload")),
         }
     }
 
