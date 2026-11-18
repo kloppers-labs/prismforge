@@ -267,3 +267,56 @@ async fn inventory_change_during_a_refresh_triggers_another_refresh() {
     assert_eq!(snapshot.connection, ConnectionState::Connected);
     assert_eq!(snapshot.diagnostics.counters.inventory_refreshes, 3);
 }
+
+#[tokio::test(start_paused = true)]
+async fn notifications_during_follow_up_refreshes_still_converge() {
+    let server = FakeServer::new();
+    server.add_device(0, strip("alpha", 3));
+    let handle = support::connected_openrgb(&server).await;
+    server.delay_replies(wire::REQUEST_CONTROLLER_DATA, Duration::from_millis(100));
+    let notifier = server.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        notifier.notify_device_list_updated();
+        tokio::time::sleep(Duration::from_millis(140)).await;
+        notifier.notify_device_list_updated();
+    });
+
+    handle.refresh().await.expect("refresh");
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    let snapshot = handle.snapshot();
+    assert_eq!(snapshot.connection, ConnectionState::Connected);
+    assert_eq!(snapshot.diagnostics.counters.inventory_refreshes, 4);
+}
+
+#[tokio::test(start_paused = true)]
+async fn continuous_notifications_do_not_starve_commands() {
+    let server = FakeServer::new();
+    server.add_device(0, strip("alpha", 3));
+    let handle = support::connected_openrgb(&server).await;
+    let notifier = server.clone();
+    tokio::spawn(async move {
+        loop {
+            notifier.notify_device_list_updated();
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    });
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let refreshes_before = handle.snapshot().diagnostics.counters.inventory_refreshes;
+
+    tokio::time::timeout(Duration::from_secs(1), handle.disconnect())
+        .await
+        .expect("disconnect was starved")
+        .expect("disconnect");
+
+    assert_eq!(
+        handle.snapshot().connection,
+        ConnectionState::Disconnected { reason: None }
+    );
+    assert!(refreshes_before >= 2, "{refreshes_before}");
+    assert!(
+        refreshes_before <= 12,
+        "automatic refreshes are not spaced: {refreshes_before}"
+    );
+}

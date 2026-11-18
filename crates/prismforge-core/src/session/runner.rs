@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, sleep_until};
@@ -32,6 +33,7 @@ pub struct Session<B> {
     identify: Option<ActiveIdentify>,
     unrestored: Vec<DeviceRef>,
     tainted: Option<DeviceRef>,
+    last_auto_refresh: Option<Instant>,
     last_error: Option<ErrorRecord>,
     counters: Counters,
     events: EventRing,
@@ -58,6 +60,7 @@ struct ActiveIdentify {
 
 enum Wake {
     Deadline,
+    StaleInventory,
     Event(Option<BackendEvent>),
     Command(Command),
     Closed,
@@ -92,6 +95,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             identify: None,
             unrestored: Vec::new(),
             tainted: None,
+            last_auto_refresh: None,
             last_error: None,
             counters: Counters::default(),
         }
@@ -106,21 +110,28 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         loop {
             let deadline = self.deadline();
             let listening = matches!(self.link, Link::Connected);
+            let auto_refresh = self.auto_refresh_at();
             let wake = tokio::select! {
                 biased;
                 () = sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
                     Wake::Deadline
                 }
-                event = self.backend.next_event(), if listening => Wake::Event(event),
                 command = self.commands.recv() => command.map_or(Wake::Closed, Wake::Command),
+                event = self.backend.next_event(), if listening => Wake::Event(event),
+                () = sleep_until(auto_refresh.unwrap_or_else(Instant::now)), if auto_refresh.is_some() => {
+                    Wake::StaleInventory
+                }
             };
             match wake {
                 Wake::Deadline => self.on_deadline().await,
+                Wake::StaleInventory => {
+                    self.last_auto_refresh = Some(Instant::now());
+                    let _ = self.refresh_or_lose(1).await;
+                }
                 Wake::Event(event) => self.on_event(event).await,
                 Wake::Command(command) => self.on_command(command).await,
                 Wake::Closed => break,
             }
-            self.refresh_if_stale().await;
             self.publish();
         }
         self.stop().await;
@@ -145,10 +156,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
 
     async fn on_event(&mut self, event: Option<BackendEvent>) {
         match event {
-            Some(BackendEvent::InventoryChanged) => {
-                self.push(SessionEventKind::InventoryChanged);
-                let _ = self.refresh_or_lose(1).await;
-            }
+            Some(BackendEvent::InventoryChanged) => self.push(SessionEventKind::InventoryChanged),
             Some(BackendEvent::ConnectionLost { cause, .. }) => {
                 self.connection_lost(StateReason::ConnectionLost { cause }, 1);
             }
@@ -181,15 +189,16 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
     }
 
-    /// An output call can absorb a device-list notification, so its event never reaches the loop.
-    async fn refresh_if_stale(&mut self) {
+    /// Pending while the connected backend reports a stale inventory; output calls can absorb its event.
+    fn auto_refresh_at(&self) -> Option<Instant> {
         let stale = matches!(
             self.backend.connection_state(),
             ConnectionState::Degraded { reasons } if reasons.contains(&StateReason::InventoryStale)
         );
-        if stale && matches!(self.link, Link::Connected) {
-            let _ = self.refresh_or_lose(1).await;
-        }
+        (stale && matches!(self.link, Link::Connected)).then(|| {
+            self.last_auto_refresh
+                .map_or_else(Instant::now, |last| last + AUTO_REFRESH_SPACING)
+        })
     }
 
     async fn connect(&mut self) -> Result<(), BackendError> {
@@ -581,6 +590,8 @@ fn not_restored_after_loss(reason: &StateReason) -> RestoreOutcome {
         },
     }
 }
+
+const AUTO_REFRESH_SPACING: Duration = Duration::from_millis(250);
 
 const UNEXPLAINED_LOSS: StateReason = StateReason::ConnectionLost {
     cause: LossCause::ServerClosed,
