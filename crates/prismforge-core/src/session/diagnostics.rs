@@ -8,6 +8,7 @@ use crate::error::BackendError;
 use crate::session::identify::IdentifyOutcome;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Diagnostics {
     pub last_error: Option<ErrorRecord>,
     pub counters: Counters,
@@ -16,6 +17,7 @@ pub struct Diagnostics {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ErrorRecord {
     pub at_ms: u64,
     pub operation: Operation,
@@ -25,6 +27,7 @@ pub struct ErrorRecord {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Operation {
     Connect,
     Refresh,
@@ -33,6 +36,7 @@ pub enum Operation {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Counters {
     pub connect_attempts: u64,
     pub connect_failures: u64,
@@ -42,6 +46,7 @@ pub struct Counters {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SessionEvent {
     pub sequence: u64,
     pub at_ms: u64,
@@ -49,6 +54,7 @@ pub struct SessionEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum SessionEventKind {
     ConnectAttempt,
     Connected,

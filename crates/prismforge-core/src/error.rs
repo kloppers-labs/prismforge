@@ -4,6 +4,7 @@ use crate::connection::LossCause;
 use crate::device::DeviceRef;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum BackendError {
     #[error("backend is not connected")]
     NotConnected,

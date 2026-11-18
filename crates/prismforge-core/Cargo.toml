@@ -7,9 +7,13 @@ publish.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+ts = ["dep:ts-rs"]
+
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
+ts-rs = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
 
 [dev-dependencies]

@@ -18,6 +18,7 @@ pub struct InventoryDevice {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum DeviceIdentity {
     Matched(DeviceRef),
     New(DeviceRef),
@@ -35,6 +36,7 @@ impl DeviceIdentity {
 
 /// A controller the backend reported but could not accept; other devices stay usable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DeviceIssue {
     pub runtime_id: u32,
     pub reason: IssueReason,
@@ -42,6 +44,7 @@ pub struct DeviceIssue {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum IssueReason {
     MalformedData,
     InconsistentData,

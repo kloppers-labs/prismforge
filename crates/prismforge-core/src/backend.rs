@@ -16,6 +16,7 @@ pub enum BackendEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct BackendInfo {
     pub origin: BackendOrigin,
     pub address: Option<String>,
