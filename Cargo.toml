@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.dependencies]
+prismforge-core = { path = "crates/prismforge-core" }
+prismforge-openrgb = { path = "crates/prismforge-openrgb" }
+prismforge-testkit = { path = "crates/prismforge-testkit" }
+serde = { version = "=1.0.229", features = ["derive"] }
+thiserror = "=2.0.21"
+tokio = { version = "=1.54.1", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
