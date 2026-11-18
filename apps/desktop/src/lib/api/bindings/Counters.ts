@@ -12,4 +12,8 @@ output_writes_refused: number,
 /**
  * Output writes that ended the connection.
  */
-output_writes_failed: number, };
+output_writes_failed: number, 
+/**
+ * Times the session loop woke up for output: ticks, retries and resumed ticks.
+ */
+output_wakeups: number, };

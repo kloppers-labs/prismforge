@@ -385,3 +385,132 @@ async fn a_command_waits_for_at_most_one_backend_call_while_output_resumes() {
     assert!(waited <= SLOW_CALL, "a command waited {waited:?}");
     assert_eq!(direct_mode_calls(&controls.outputs(), GPU), 2);
 }
+
+fn wakeups(handle: &SessionHandle) -> u64 {
+    handle.snapshot().diagnostics.counters.output_wakeups
+}
+
+/// Moves the clock on in one-second steps and lets the session run; a spinning loop shows up as many wake-ups.
+async fn pass_time(seconds: u64) {
+    for _ in 0..seconds {
+        tokio::time::advance(Duration::from_secs(1)).await;
+        for _ in 0..200 {
+            tokio::task::yield_now().await;
+        }
+    }
+}
+
+async fn wakeups_over(handle: &SessionHandle, seconds: u64) -> u64 {
+    let before = wakeups(handle);
+    pass_time(seconds).await;
+    wakeups(handle) - before
+}
+
+fn motherboard_zone(zone: usize) -> OutputTarget {
+    OutputTarget {
+        device: DeviceRef::new(MOTHERBOARD),
+        zone: Some(zone),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_refused_device_with_nothing_left_to_write_does_not_wake_the_loop() {
+    let (handle, controls) = demo(config()).await;
+    handle
+        .apply_effect(motherboard_zone(1), solid(RED))
+        .await
+        .expect("static zone");
+    sleep(Duration::from_millis(100)).await;
+    controls.refuse_writes(&DeviceRef::new(MOTHERBOARD));
+    handle
+        .apply_effect(motherboard_zone(0), rainbow())
+        .await
+        .expect("animated zone");
+    sleep(Duration::from_millis(100)).await;
+    assert!(matches!(
+        output_of(&handle.snapshot(), MOTHERBOARD)
+            .expect("motherboard output")
+            .condition,
+        OutputCondition::Refused { .. }
+    ));
+
+    assert_eq!(handle.stop_effect(motherboard_zone(0)).await, Ok(None));
+    let wakeups = wakeups_over(&handle, 5).await;
+
+    assert_eq!(wakeups, 0);
+    assert_eq!(
+        output_of(&handle.snapshot(), MOTHERBOARD)
+            .expect("motherboard output")
+            .condition,
+        OutputCondition::Running
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn every_output_condition_wakes_the_loop_only_for_real_work() {
+    const ATTEMPTS_IN_A_MINUTE: u64 = 7; // at 0, 1, 3, 7, 15, 31 and 47 s
+    let (handle, controls) = demo(config()).await;
+    let gpu = DeviceRef::new(GPU);
+    let memory = DeviceRef::new(MEMORY);
+
+    assert_eq!(wakeups_over(&handle, 60).await, 0, "empty scene");
+
+    let before = wakeups(&handle);
+    handle
+        .apply_effect(whole(GPU), solid(RED))
+        .await
+        .expect("static");
+    pass_time(60).await;
+    assert_eq!(wakeups(&handle) - before, 1, "static, written once");
+
+    controls.refuse_writes(&memory);
+    let before = wakeups(&handle);
+    handle
+        .apply_effect(whole(MEMORY), rainbow())
+        .await
+        .expect("refused");
+    pass_time(60).await;
+    assert_eq!(
+        wakeups(&handle) - before,
+        ATTEMPTS_IN_A_MINUTE,
+        "refused and animated"
+    );
+
+    let before = wakeups(&handle);
+    handle
+        .apply_effect(whole(MEMORY), solid(BLUE))
+        .await
+        .expect("replace while refused");
+    pass_time(60).await;
+    assert_eq!(
+        wakeups(&handle) - before,
+        ATTEMPTS_IN_A_MINUTE,
+        "replaced while refused, still refused"
+    );
+
+    handle
+        .stop_effect(whole(MEMORY))
+        .await
+        .expect("stop while refused");
+    assert_eq!(wakeups_over(&handle, 60).await, 0, "stopped while refused");
+
+    let identify = tokio::spawn(handle.identify(gpu.clone(), None, Duration::from_secs(10)));
+    let during_identify = wakeups_over(&handle, 5).await;
+    let after_identify = wakeups_over(&handle, 55).await;
+    identify.await.expect("task").expect("identify");
+    assert_eq!(during_identify, 0, "paused by identify");
+    assert_eq!(after_identify, 1, "rewritten once after identify");
+
+    controls.fail_connect(true);
+    controls.lose_connection(LossCause::Timeout);
+    assert_eq!(wakeups_over(&handle, 60).await, 0, "paused, not connected");
+
+    controls.fail_connect(false);
+    let reconnected = wakeups_over(&handle, 60).await;
+    assert!(is_connected(&handle.snapshot()));
+    assert_eq!(reconnected, 1, "direct mode pending, then one frame");
+    assert_eq!(direct_mode_calls(&controls.outputs(), GPU), 3);
+
+    handle.stop_effect(whole(GPU)).await.expect("stop");
+    assert_eq!(wakeups_over(&handle, 60).await, 0, "empty scene again");
+}

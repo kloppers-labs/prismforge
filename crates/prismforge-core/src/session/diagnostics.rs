@@ -52,6 +52,8 @@ pub struct Counters {
     pub output_writes_refused: u64,
     /// Output writes that ended the connection.
     pub output_writes_failed: u64,
+    /// Times the session loop woke up for output: ticks, retries and resumed ticks.
+    pub output_wakeups: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

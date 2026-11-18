@@ -235,12 +235,29 @@ impl EffectOutput {
         let before = self.effects.len();
         self.effects
             .retain(|running| target.zone.is_some() && running.target != *target);
-        self.effects.len() < before
+        let removed = self.effects.len() < before;
+        if removed {
+            self.refusal = None;
+        }
+        removed
     }
 
-    /// True while some effect still needs a frame: it is animated or not yet written.
-    pub fn pending(&self) -> bool {
-        self.effects.iter().any(Running::needs_frame)
+    /// The backend calls this device needs now; empty exactly when it has nothing to write.
+    pub fn steps(&self, device: &DeviceRef) -> Vec<Step> {
+        let direct_mode = (!self.direct_mode).then(|| Step::DirectMode(device.clone()));
+        direct_mode
+            .into_iter()
+            .chain(
+                self.effects
+                    .iter()
+                    .filter(|running| running.needs_frame())
+                    .map(|running| Step::Frame(running.target.clone())),
+            )
+            .collect()
+    }
+
+    pub fn has_work(&self) -> bool {
+        !self.direct_mode || self.effects.iter().any(Running::needs_frame)
     }
 
     pub fn show(&mut self, start: usize, colors: &[Rgb], led_count: usize) {

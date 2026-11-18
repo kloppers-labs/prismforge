@@ -898,7 +898,8 @@ export const demoConnected: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -1825,7 +1826,8 @@ export const demoIdentifying: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -2285,7 +2287,8 @@ export const openRgbConnected: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3069,7 +3072,8 @@ export const openRgbDegraded: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3421,7 +3425,8 @@ export const openRgbLostWhileConnected: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3763,7 +3768,8 @@ export const openRgbLostRetryFailed: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3887,7 +3893,8 @@ export const openRgbAllRejected: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -3957,7 +3964,8 @@ export const openRgbRefused: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -4077,7 +4085,8 @@ export const openRgbConnecting: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": []
   }
@@ -4131,7 +4140,8 @@ export const openRgbNoVersionAnswer: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {
@@ -4214,7 +4224,8 @@ export const openRgbOldServer: SessionSnapshot = {
       "frames_written": 0,
       "ticks_skipped": 0,
       "output_writes_refused": 0,
-      "output_writes_failed": 0
+      "output_writes_failed": 0,
+      "output_wakeups": 0
     },
     "events": [
       {

@@ -21,7 +21,7 @@ enum Flow {
 }
 
 impl<B: RgbBackend + Send + 'static> Session<B> {
-    /// When the next frame or retry is due; `None` while nothing can be written, so the loop never spins.
+    /// When output is next due; a time not in the future always means at least one backend call to make.
     pub(super) fn output_due(&self) -> Option<Instant> {
         if self.output_pause().is_some() {
             return None;
@@ -65,14 +65,18 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         if self.device_pause(device, output).is_some() {
             return None;
         }
+        if !output.has_work() {
+            return None;
+        }
         match &output.refusal {
             Some(refusal) => Some(refusal.retry_at),
-            None => output.pending().then_some(self.output.next_tick),
+            None => Some(self.output.next_tick),
         }
     }
 
     /// Runs the due backend calls one at a time; a waiting command goes between two calls, and passed ticks are skipped.
     pub(super) async fn on_frame(&mut self) {
+        self.counters.output_wakeups += 1;
         self.output.frame_owed = false;
         let mut tick = match self.output.tick.take() {
             Some(tick) => tick,
@@ -110,16 +114,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             {
                 continue;
             }
-            if !output.direct_mode {
-                steps.push_back(Step::DirectMode(device.clone()));
-            }
-            steps.extend(
-                output
-                    .effects
-                    .iter()
-                    .filter(|running| running.needs_frame())
-                    .map(|running| Step::Frame(running.target.clone())),
-            );
+            steps.extend(output.steps(device));
         }
         Tick {
             fired,
