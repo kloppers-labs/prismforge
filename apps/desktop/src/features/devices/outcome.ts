@@ -1,6 +1,7 @@
 import type { IdentifyOutcome } from "../../lib/api/bindings/IdentifyOutcome";
 import type { RestoreFailure } from "../../lib/api/bindings/RestoreFailure";
 import { backendErrorText } from "../../lib/errors";
+import { capitalise } from "../connection/wording";
 
 export type OutcomeText = {
   settled: boolean;
@@ -8,7 +9,7 @@ export type OutcomeText = {
   details: string[];
 };
 
-export function describeOutcome(outcome: IdentifyOutcome): OutcomeText {
+export function describeOutcome(outcome: IdentifyOutcome, server: string): OutcomeText {
   const restore = outcome.restore;
   const lightFailure = outcome.light_failure ? backendErrorText(outcome.light_failure) : null;
   if (restore === "Unchanged") {
@@ -24,7 +25,7 @@ export function describeOutcome(outcome: IdentifyOutcome): OutcomeText {
   if (restore === "Restored") {
     return {
       settled: true,
-      headline: "Identify finished. OpenRGB accepted the requests to put back the earlier lighting.",
+      headline: `Identify finished. ${capitalise(server)} accepted the requests to put back the earlier lighting.`,
       details: [
         ...lit,
         "PrismForge cannot confirm what the device shows now. If other software changed the lighting since the last device scan, that older state came back.",
@@ -47,17 +48,17 @@ export function describeOutcome(outcome: IdentifyOutcome): OutcomeText {
     return {
       settled: false,
       headline: "Only part of the earlier lighting was put back.",
-      details: [...lit, failureText(failure), "Set the lighting again in OpenRGB if the device looks wrong."],
+      details: [...lit, failureText(failure, server), "Set the lighting again in OpenRGB if the device looks wrong."],
     };
   }
   return {
     settled: false,
     headline: "The earlier lighting was not put back. The device may stay white.",
-    details: [...lit, failureText(restore.NotRestored.failure), "Set the lighting again in OpenRGB, or run identify again."],
+    details: [...lit, failureText(restore.NotRestored.failure, server), "Set the lighting again in OpenRGB, or run identify again."],
   };
 }
 
-function failureText(failure: RestoreFailure): string {
+function failureText(failure: RestoreFailure, server: string): string {
   if (failure === "PreviousStateUnknown") {
     return "PrismForge did not know the earlier lighting of this device.";
   }
@@ -65,7 +66,7 @@ function failureText(failure: RestoreFailure): string {
     return "The device changed during a rescan, so PrismForge wrote nothing back to it.";
   }
   if ("ConnectionLost" in failure) {
-    return "The connection to OpenRGB was lost before PrismForge could put the lighting back.";
+    return `The connection to ${server} was lost before PrismForge could put the lighting back.`;
   }
-  return `OpenRGB refused the request to put the lighting back. ${backendErrorText(failure.Refused.error)}`;
+  return `${capitalise(server)} refused the request to put the lighting back. ${backendErrorText(failure.Refused.error)}`;
 }

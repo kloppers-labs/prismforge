@@ -15,6 +15,10 @@ export function isSimulated(session: SessionSnapshot): boolean {
   return session.backend.origin === "Simulated";
 }
 
+export function serverName(session: SessionSnapshot): string {
+  return isSimulated(session) ? "the demo backend" : "OpenRGB";
+}
+
 export function place(session: SessionSnapshot): string {
   if (isSimulated(session)) {
     return "the demo backend";
@@ -100,6 +104,6 @@ function lossText(cause: LossCause): string {
   }
 }
 
-function capitalise(text: string): string {
+export function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

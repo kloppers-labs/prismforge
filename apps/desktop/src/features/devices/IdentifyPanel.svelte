@@ -3,6 +3,7 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import { failureText } from "../../lib/errors";
   import type { AppState } from "../../lib/state/app.svelte";
+  import { serverName } from "../connection/wording";
   import { describeOutcome } from "./outcome";
   import { identifyBlocked, reference } from "./present";
 
@@ -12,6 +13,7 @@
   let blocked = $derived(identifyBlocked(session, device, app.identify?.kind === "running"));
   let result = $derived(app.identify && app.identify.target.device === target ? app.identify : null);
   let zones = $derived(device.descriptor.zones);
+  let server = $derived(serverName(session));
 
   function zoneName(zone: number | null): string {
     return zone === null ? "the whole device" : (zones[zone]?.name ?? `zone ${zone + 1}`);
@@ -25,7 +27,7 @@
 </script>
 
 {#snippet explanation()}
-  <p>Identify lights the device or one zone white for 3 seconds. Then PrismForge asks OpenRGB to put back the mode and colours from the last device scan.</p>
+  <p>Identify lights the device or one zone white for 3 seconds. Then PrismForge asks {server} to put back the mode and colours from the last device scan.</p>
   <p>If other software, such as the OpenRGB Effects plugin, changed the lighting after that scan, the older state comes back. Other software can also change the lighting at any time, and PrismForge cannot see that. PrismForge never saves to device memory.</p>
 {/snippet}
 
@@ -69,7 +71,7 @@
     {#if result?.kind === "running"}
       <p>Lighting {zoneName(result.target.zone)} white for 3 seconds.</p>
     {:else if result?.kind === "finished"}
-      {@const text = describeOutcome(result.outcome)}
+      {@const text = describeOutcome(result.outcome, server)}
       <div class="outcome" class:unsettled={!text.settled}>
         <p class="headline">{text.headline}</p>
         {#each text.details as detail (detail)}

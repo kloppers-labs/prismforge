@@ -4,7 +4,7 @@ import App from "../../App.svelte";
 import type { IdentifyOutcome } from "../../lib/api/bindings/IdentifyOutcome";
 import { fakeShell, refuse } from "../../test/backend";
 import * as outcomes from "../../test/fixtures/outcomes";
-import { demoConnected, demoIdentifying, openRgbDegraded } from "../../test/fixtures/sessions";
+import { demoConnected, demoIdentifying, openRgbConnected, openRgbDegraded } from "../../test/fixtures/sessions";
 
 async function select(name: string, index = 0) {
   const list = await screen.findByRole("navigation", { name: /Devices/ });
@@ -94,9 +94,9 @@ const expectations: [string, IdentifyOutcome, RegExp[]][] = [
 ];
 
 test.each(expectations)("renders_the_%s_outcome_truthfully", async (name, outcome, texts) => {
-  fakeShell(demoConnected, { identify: () => outcome });
+  fakeShell(openRgbConnected, { identify: () => outcome });
   render(App);
-  await select("Demo Motherboard");
+  await select("Fixture Strip");
 
   await fireEvent.click(screen.getByRole("button", { name: "Identify device" }));
 
@@ -107,6 +107,18 @@ test.each(expectations)("renders_the_%s_outcome_truthfully", async (name, outcom
   if (name !== "restored") {
     expect(status.textContent).not.toMatch(/accepted/);
   }
+});
+
+test("names_the_demo_backend_in_demo_outcomes", async () => {
+  fakeShell(demoConnected, { identify: () => outcomes.restored });
+  render(App);
+  await select("Demo Motherboard");
+
+  await fireEvent.click(screen.getByRole("button", { name: "Identify device" }));
+
+  const status = await screen.findByRole("status", { name: "" });
+  expect(await within(status).findByText(/^Identify finished\. The demo backend accepted the requests/)).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/OpenRGB accepted|asks OpenRGB|As OpenRGB reported/);
 });
 
 test("shows_busy_without_retrying", async () => {

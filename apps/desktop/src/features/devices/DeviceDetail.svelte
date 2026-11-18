@@ -2,6 +2,7 @@
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { AppState } from "../../lib/state/app.svelte";
+  import { serverName } from "../connection/wording";
   import IdentifyPanel from "./IdentifyPanel.svelte";
   import LedStrip from "./LedStrip.svelte";
   import { hasDirectMode, isAmbiguous, isLive, kindLabel, ledCount, zoneShape, zoneSize } from "./present";
@@ -47,7 +48,7 @@
 
   <section aria-labelledby="colours-title">
     <h3 id="colours-title">Last reported colours</h3>
-    <p class="hint">As OpenRGB reported them in the last device scan. Other software may have changed them since.</p>
+    <p class="hint">As {serverName(session)} reported them in the last device scan. Other software may have changed them since.</p>
     <LedStrip colors={descriptor.colors} />
   </section>
 
