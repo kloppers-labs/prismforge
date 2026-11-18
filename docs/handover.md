@@ -4,7 +4,7 @@ Last update: 2026-11-18.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and two hand checks are missing. Task 4a, the effect engine without an interface, is built on the branch `task-4a-effects-engine`.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and two hand checks are missing. Task 4a, the effect engine without an interface, is built.
 
 The repository has a Rust workspace with four crates and a desktop app. `prismforge-effects` holds six original built-in effects as pure functions, their typed control definitions and the validation of stored effect instances. `prismforge-core` holds the device types, the identity matching, the backend contract, the scene and ownership types, and the session. The session owns the backend, reconnects, keeps a readable snapshot, runs the identify action, and runs effects through an output scheduler with explicit output ownership. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
 
@@ -57,10 +57,10 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18,
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 162 tests. 29 in `prismforge-effects`, 61 in `prismforge-core` (20 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 168 tests. 29 in `prismforge-effects`, 67 in `prismforge-core` (26 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 24 interface tests |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 25 interface tests |
 
 `pnpm tauri:build --bundles app` last passed at the end of Task 2b (`PrismForge.app`, 10.7 MiB, not signed). Task 4a did not rebuild the app.
 
@@ -117,9 +117,9 @@ Not done:
 - **No real-machine evidence for effects.** All scheduler numbers come from simulated time. Real frame timing and CPU use are not measured.
 - **Colour frames are not confirmed.** The client does not read the acknowledgement of a colour write. "Frames written" counts frames sent without an error, not frames OpenRGB applied.
 - **Direct mode may be enabled more often than needed.** After each inventory refresh, PrismForge enables direct mode again on each effect device that does not report Direct Mode. If OpenRGB does not report it after "set custom mode", this repeats after every refresh. The fake server never reports it.
-- **A backend call in progress still delays a command.** At 30 FPS a command waits at most for one write. A hung call waits for the client timeout (2 seconds by default).
-- **Shutdown restore stops after 5 seconds.** Devices not restored by then keep the last effect frame.
-- **External control is only the user's statement.** PrismForge cannot see the Effects plugin or any other writer. Identify still works on a device declared external.
+- **A backend call in progress still delays a command.** A command waits at most for the one call in progress, also between the devices of one tick. A hung call waits for the client timeout (2 seconds by default).
+- **Shutdown restore stops after 5 seconds.** Devices not restored by then keep the last effect frame. The session keeps their remembered state for the next take-over, and identify reports "previous state unknown" for them until then.
+- **External control is only the user's statement.** PrismForge cannot see the Effects plugin or any other writer. While the user declares a device external, PrismForge sends it nothing: effects, identify and hardware-mode selection are refused.
 - **Ownership and the scene are in memory only.** They end with the session. Profiles come later.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 

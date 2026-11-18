@@ -42,28 +42,28 @@ An `EffectInstance` is the effect id and a map from control id to value. In JSON
 1. **The session task owns output.** Frames go out from the same task that owns the backend. No other task calls the backend.
 2. **The frame rate is configurable and clamped.** The default is 30 frames per second. The session clamps any setting to 1 to 60, at start and on each change.
 3. **One batched write per target per tick.** A whole-device effect sends one device frame. A zone effect sends one zone frame. PrismForge never sends a command per LED.
-4. **Frames are coalesced, never queued.** Each tick renders the frame for that moment. If a write takes longer than a tick, the ticks that pass are skipped and counted. The next tick stays on the original grid. The 1 ms timer resolution does not slow the rate down.
-5. **Commands come first.** The loop handles identify deadlines, commands, backend events and stale inventories before frames. A command waits at most for the backend call in progress.
+4. **Frames are coalesced, never queued.** Each write renders the frame for the moment it starts. If a tick is not finished when the next tick is due, the ticks that pass are skipped and counted. The next tick stays on the original grid. The 1 ms timer resolution does not slow the rate down.
+5. **Commands and output take turns.** A command waits at most for the one backend call in progress. Between the devices of one tick, the loop handles a waiting command, then writes the rest of that tick. After a command that ran while output was due, output goes next. A stream of commands therefore cannot stop output, and output cannot block commands for longer than one call.
 6. **The loop never spins.** It wakes for output only when a frame or a retry is due. Paused, unavailable and fully written devices give no wake-up.
 7. **Static effects are written once.** They are written again only after a scene change, a reconnect, an inventory refresh or the end of an identify.
 8. **A refused write affects only its device.** The device waits 1 second, then 2, 4, 8 and 16 seconds, and then 16 seconds between tries. Other devices keep their cadence. A stale inventory pauses all output until the next refresh. It does not count as a refusal with a wait.
 9. **A lost connection pauses output.** After reconnect and refresh, each device gets direct mode again before its first frame. A device that is ambiguous, missing, without direct mode or with a changed zone gets no output. Its condition shows the reason.
-10. **The counters are real.** `frames_written` counts frames the backend accepted. `ticks_skipped` counts ticks dropped because a write was still busy. `output_writes_refused` counts refusals while the connection stayed open. `output_writes_failed` counts writes that ended the connection. The client does not read acknowledgements for colour frames, so "accepted" means sent without an error.
+10. **The counters are real.** `frames_written` counts frames the backend accepted. `ticks_skipped` counts ticks dropped because the tick before them was not finished, including commands handled between its devices. `output_writes_refused` counts refusals while the connection stayed open. `output_writes_failed` counts writes that ended the connection. The client does not read acknowledgements for colour frames, so "accepted" means sent without an error.
 
 ## Ownership rules
 
 1. **One owner per device.** The owner is a PrismForge effect, a hardware mode selected through PrismForge, or another program that the user declared. A device that is not listed has no owner.
 2. **PrismForge cannot see other writers.** An external owner is only the user's statement. PrismForge never claims that the other program stopped. It never stops another program.
-3. **Applying an effect is an explicit command.** It is refused with a structured conflict while the user has declared the device external. The user must hand it over first with a separate command.
-4. **Declaring a device external stops PrismForge output on it.** PrismForge does not restore the device, because the restore would fight the other writer.
-5. **Taking a device remembers its state.** PrismForge stores the active mode and colours that the inventory reported, then enables direct mode.
+3. **Nothing is sent to a device the user declared external.** Apply, replace, identify and hardware-mode selection are refused with the structured conflict `SessionError::OutputConflict`. Output does not resume after a reconnect, and stop and shutdown have nothing to restore there. The user must hand the device back first with a separate command.
+4. **Declaring a device external stops PrismForge output on it.** PrismForge does not restore the device, because the restore would fight the other writer. It keeps the remembered state and marks the device as not restored.
+5. **Taking a device remembers its state.** PrismForge stores the active mode and colours that the inventory reported, then enables direct mode. If PrismForge changed the device earlier and never restored it, the take-over reuses that earlier remembered state instead.
 6. **Stopping the last effect on a device restores that state.** The restore uses the mode re-apply of identify and the same outcome words: restored, partly restored, not restored, unchanged. Before the restore, PrismForge checks that the device still has the remembered modes and LED count.
 7. **Ownership is per device.** A mode change affects every zone. Zone effects on one device share one take-over and one restore.
 8. **Selecting a hardware mode stops the effect on that device.** It re-applies an existing mode with its reported settings. It edits no settings and saves nothing to device memory.
-9. **Identify pauses an effect.** Identify lights the target. Then the effect resumes. Identify does not restore the hardware mode of a device that PrismForge runs an effect on.
-10. **A device PrismForge keeps in direct mode on purpose is not "previous state unknown".** That label comes only from a restore that did not finish.
-11. **Disconnect and shutdown restore first.** The session restores every device it runs effects on before it disconnects. It stops waiting after 5 seconds.
-12. **Output commands use their own error type.** `OutputError` holds session errors, the conflict, invalid effect values and "no effect on this target". Identify still uses `SessionError`.
+9. **Identify pauses an effect.** Identify lights the target. Then PrismForge writes back, as one device frame, what every LED showed before identify: its last effect colours, or for LEDs no effect has written, the colours reported at take-over. Then the effect resumes. Identify reports "restored" only when that frame was accepted. It does not restore the hardware mode of a device that PrismForge runs an effect on.
+10. **A device PrismForge keeps in direct mode on purpose is not "previous state unknown".** That label comes only from a restore that did not finish: a failed or cut-short restore, or an effect dropped by an external declaration.
+11. **Disconnect and shutdown restore first.** The session restores every device it runs effects on before it disconnects. It stops waiting after 5 seconds. Devices it did not restore keep their remembered state for the next take-over and report "previous state unknown" until then.
+12. **Output commands use their own error type.** `OutputError` holds session errors (including the conflict), invalid effect values and "no effect on this target". Identify uses `SessionError`.
 
 ## Not verified
 
