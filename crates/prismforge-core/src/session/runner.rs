@@ -10,13 +10,17 @@ use crate::connection::{ConnectionState, LossCause, StateReason};
 use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::inventory::{Inventory, InventoryDevice};
+use crate::scene::Scene;
 use crate::session::diagnostics::{
     Counters, Diagnostics, ErrorRecord, EventRing, Operation, SessionEventKind,
 };
 use crate::session::identify::{IdentifyOutcome, IdentifyPlan, RestoreFailure, RestoreOutcome};
-use crate::session::snapshot::SessionSnapshot;
+use crate::session::output::Output;
+use crate::session::snapshot::{OutputStatus, SessionSnapshot};
 use crate::session::{Command, Reply, SessionConfig, SessionError};
 
+mod claims;
+mod frames;
 mod identifying;
 mod publishing;
 mod restoring;
@@ -39,6 +43,7 @@ pub struct Session<B> {
     last_error: Option<ErrorRecord>,
     counters: Counters,
     events: EventRing,
+    output: Output,
 }
 
 enum Link {
@@ -65,6 +70,7 @@ enum Wake {
     StaleInventory,
     Event(Option<BackendEvent>),
     Command(Command),
+    Frame,
     Closed,
 }
 
@@ -75,12 +81,18 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         commands: mpsc::Receiver<Command>,
         refused_busy: Arc<AtomicU64>,
     ) -> Self {
+        let output = Output::new(config.frame_rate);
         let snapshot = SessionSnapshot {
             connection: ConnectionState::Disconnected { reason: None },
             backend: backend.info(),
             devices: Vec::new(),
             issues: Vec::new(),
             identify: None,
+            output: OutputStatus {
+                frame_rate: output.frame_rate,
+                scene: Scene::default(),
+                devices: Vec::new(),
+            },
             diagnostics: Diagnostics::default(),
         };
         Self {
@@ -100,6 +112,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             last_auto_refresh: None,
             last_error: None,
             counters: Counters::default(),
+            output,
         }
     }
 
@@ -113,6 +126,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             let deadline = self.deadline();
             let listening = matches!(self.link, Link::Connected);
             let auto_refresh = self.auto_refresh_at();
+            let frame = self.output_due();
             let wake = tokio::select! {
                 biased;
                 () = sleep_until(deadline.unwrap_or_else(Instant::now)), if deadline.is_some() => {
@@ -123,6 +137,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 () = sleep_until(auto_refresh.unwrap_or_else(Instant::now)), if auto_refresh.is_some() => {
                     Wake::StaleInventory
                 }
+                () = sleep_until(frame.unwrap_or_else(Instant::now)), if frame.is_some() => Wake::Frame,
             };
             match wake {
                 Wake::Deadline => self.on_deadline().await,
@@ -132,6 +147,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 }
                 Wake::Event(event) => self.on_event(event).await,
                 Wake::Command(command) => self.on_command(command).await,
+                Wake::Frame => self.on_frame().await,
                 Wake::Closed => break,
             }
             self.publish();
@@ -188,19 +204,40 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 let _ = reply.send(result.map_err(SessionError::from));
             }
             Command::Identify { request, reply } => self.start_identify(request, reply).await,
+            Command::Output(command) => self.on_output(command).await,
         }
     }
 
     /// Pending while the connected backend reports a stale inventory; output calls can absorb its event.
     fn auto_refresh_at(&self) -> Option<Instant> {
-        let stale = matches!(
-            self.backend.connection_state(),
-            ConnectionState::Degraded { reasons } if reasons.contains(&StateReason::InventoryStale)
-        );
-        (stale && matches!(self.link, Link::Connected)).then(|| {
+        (self.backend_stale() && matches!(self.link, Link::Connected)).then(|| {
             self.last_auto_refresh
                 .map_or_else(Instant::now, |last| last + AUTO_REFRESH_SPACING)
         })
+    }
+
+    fn live_inventory(&self) -> Result<&Inventory, BackendError> {
+        match (&self.link, self.backend.inventory()) {
+            (Link::Connected, Some(inventory)) => Ok(inventory),
+            _ => Err(BackendError::NotConnected),
+        }
+    }
+
+    fn link_down(&self) -> Option<StateReason> {
+        match &self.link {
+            Link::Connected => None,
+            Link::Retrying { reason, .. } => Some(reason.clone()),
+            Link::Idle { .. } | Link::Connecting => {
+                Some(self.lost_reason().unwrap_or(UNEXPLAINED_LOSS))
+            }
+        }
+    }
+
+    fn backend_stale(&self) -> bool {
+        matches!(
+            self.backend.connection_state(),
+            ConnectionState::Degraded { reasons } if reasons.contains(&StateReason::InventoryStale)
+        )
     }
 
     async fn connect(&mut self) -> Result<(), BackendError> {
@@ -239,6 +276,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             return Err(error);
         }
         self.link = Link::Connected;
+        self.output.after_reconnect();
         self.push(SessionEventKind::Connected);
         self.refresh_or_lose(failures + 1).await
     }
@@ -290,6 +328,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         if self.identify.is_none() {
             self.tainted = None;
         }
+        self.output.after_inventory(&inventory);
         self.inventory = Some(inventory);
     }
 
@@ -321,6 +360,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         if let Some(active) = self.identify.take() {
             self.finish_identify(active).await;
         }
+        self.release_all().await;
         self.backend.disconnect();
         self.link = Link::Idle { reason: None };
     }

@@ -5,6 +5,8 @@ mod device;
 mod error;
 mod identity;
 mod inventory;
+mod ownership;
+mod scene;
 pub mod session;
 
 pub use backend::{BackendEvent, BackendInfo, RgbBackend};
@@ -22,4 +24,6 @@ pub use identity::{
     reconcile,
 };
 pub use inventory::{DeviceIdentity, DeviceIssue, Inventory, InventoryDevice, IssueReason};
+pub use ownership::OutputOwner;
 pub use prismforge_effects::Rgb;
+pub use scene::{Assignment, OutputTarget, Scene};

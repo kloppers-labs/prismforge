@@ -4,6 +4,7 @@ use crate::backend::RgbBackend;
 use crate::error::BackendError;
 use crate::session::diagnostics::{Operation, SessionEventKind};
 use crate::session::identify::{IdentifyOutcome, IdentifyPlan, RestoreOutcome};
+use crate::session::previous::PreviousState;
 use crate::session::runner::{ActiveIdentify, Link, Session, not_restored_after_loss};
 use crate::session::{IdentifyRequest, Reply, SessionError};
 
@@ -59,17 +60,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 max_ms: max.as_millis() as u64,
             });
         }
-        let inventory = match (&self.link, self.backend.inventory()) {
-            (Link::Connected, Some(inventory)) => inventory,
-            _ => return Err(BackendError::NotConnected.into()),
-        };
+        let inventory = self.live_inventory()?;
         let device = &request.device;
-        let suspect = self.tainted.as_ref() == Some(device)
-            || (self.unrestored.contains(device)
-                && inventory
-                    .device(device)
-                    .is_some_and(|entry| entry.descriptor.capabilities.in_direct_mode()));
-        Ok(IdentifyPlan::new(inventory, device, request.zone, suspect)?)
+        let suspect = self.state_suspect(device, inventory);
+        let mut plan = IdentifyPlan::new(inventory, device, request.zone, suspect)?;
+        if self.output.effect(device).is_some() {
+            plan.previous = PreviousState::kept(device);
+        }
+        Ok(plan)
     }
 
     pub(super) async fn finish_identify(&mut self, active: ActiveIdentify) {
@@ -78,7 +76,6 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             .await;
     }
 
-    /// Re-reads the inventory after any change, so the snapshot and the next identify never keep our own output.
     async fn end_identify(
         &mut self,
         plan: IdentifyPlan,
@@ -89,11 +86,8 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         let changed = restore != RestoreOutcome::Unchanged;
         let device = plan.device.clone();
         self.reply_identify(plan, reply, light_failure, restore);
-        self.lose_if_disconnected();
-        if changed && matches!(self.link, Link::Connected) {
-            self.tainted = Some(device);
-            let _ = self.refresh_or_lose(1).await;
-        }
+        self.output.touch(&device);
+        self.settle(&device, changed).await;
     }
 
     pub(super) fn reply_identify(
@@ -103,12 +97,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         light_failure: Option<BackendError>,
         restore: RestoreOutcome,
     ) {
-        match restore {
-            RestoreOutcome::Restored => self.unrestored.retain(|device| device != &plan.device),
-            RestoreOutcome::Unchanged => {}
-            _ if self.unrestored.contains(&plan.device) => {}
-            _ => self.unrestored.push(plan.device.clone()),
-        }
+        self.note_restore(&plan.device, &restore);
         let outcome = IdentifyOutcome {
             device: plan.device,
             zone: plan.zone,

@@ -49,6 +49,16 @@ impl PreviousState {
         }
     }
 
+    /// Nothing to restore: the device stays with PrismForge's own effect, which resumes by itself.
+    pub fn kept(device: &DeviceRef) -> Self {
+        Self {
+            device: device.clone(),
+            known: true,
+            steps: Vec::new(),
+            colors: Vec::new(),
+        }
+    }
+
     /// Runs the restore steps after the first `skip`; the count in an error includes the skipped ones.
     pub async fn restore<B: RgbBackend>(
         &self,

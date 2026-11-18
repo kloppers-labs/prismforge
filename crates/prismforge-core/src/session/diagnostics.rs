@@ -33,6 +33,8 @@ pub enum Operation {
     Refresh,
     Identify,
     Restore,
+    Output,
+    SelectMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -43,6 +45,13 @@ pub struct Counters {
     pub inventory_refreshes: u64,
     pub refresh_failures: u64,
     pub commands_refused_busy: u64,
+    pub frames_written: u64,
+    /// Output ticks dropped because the frame before them was still being written.
+    pub ticks_skipped: u64,
+    /// Output writes the backend refused while the connection stayed open.
+    pub output_writes_refused: u64,
+    /// Output writes that ended the connection.
+    pub output_writes_failed: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

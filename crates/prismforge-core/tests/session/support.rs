@@ -1,11 +1,14 @@
 use std::time::Duration;
 
 use prismforge_core::session::{
-    ReconnectPolicy, Session, SessionConfig, SessionHandle, SessionSnapshot,
+    DeviceOutput, ReconnectPolicy, Session, SessionConfig, SessionHandle, SessionSnapshot,
 };
-use prismforge_core::{ConnectionState, DeviceRef, RgbBackend};
+use prismforge_core::{ConnectionState, DeviceRef, OutputTarget, Rgb, RgbBackend};
+use prismforge_effects::{ControlValue, EffectInstance};
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
-use prismforge_testkit::{FakeServer, FixtureDevice, ReceivedPacket, wire};
+use prismforge_testkit::{
+    DemoBackend, DemoControls, DemoOutput, FakeServer, FixtureDevice, ReceivedPacket, wire,
+};
 use tokio::io::DuplexStream;
 
 pub const REQUEST_TIMEOUT: Duration = Duration::from_millis(500);
@@ -22,6 +25,7 @@ pub fn config() -> SessionConfig {
             max_delay: MAX_RETRY,
         },
         max_identify_duration: Duration::from_secs(30),
+        frame_rate: 30,
     }
 }
 
@@ -109,4 +113,74 @@ pub fn output_packets(server: &FakeServer) -> Vec<ReceivedPacket> {
             .contains(&packet.packet_id)
         })
         .collect()
+}
+
+pub const GPU: &str = "demo-graphics-card";
+pub const GPU_LEDS: usize = 12;
+pub const MEMORY: &str = "demo-memory-1";
+pub const MOTHERBOARD: &str = "demo-motherboard";
+pub const LIGHT_BAR: &str = "demo-light-bar";
+
+pub fn effect(id: &str, values: &[(&str, ControlValue)]) -> EffectInstance {
+    EffectInstance {
+        effect: id.into(),
+        values: values
+            .iter()
+            .map(|(control, value)| ((*control).to_owned(), value.clone()))
+            .collect(),
+    }
+}
+
+pub fn rainbow() -> EffectInstance {
+    effect("rainbow-wave", &[])
+}
+
+pub fn solid(color: Rgb) -> EffectInstance {
+    effect("solid", &[("color", ControlValue::Color(color))])
+}
+
+pub fn whole(device: &str) -> OutputTarget {
+    OutputTarget {
+        device: DeviceRef::new(device),
+        zone: None,
+    }
+}
+
+pub async fn demo(config: SessionConfig) -> (SessionHandle, DemoControls) {
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    let handle = start(backend, config);
+    handle.connect().await.expect("demo connects");
+    (handle, controls)
+}
+
+pub fn device_frames(outputs: &[DemoOutput], device: &str) -> Vec<Vec<Rgb>> {
+    outputs
+        .iter()
+        .filter_map(|output| match output {
+            DemoOutput::DeviceFrame {
+                device: target,
+                colors,
+            } if target.as_str() == device => Some(colors.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+pub fn direct_mode_calls(outputs: &[DemoOutput], device: &str) -> usize {
+    outputs
+        .iter()
+        .filter(|output| {
+            matches!(output, DemoOutput::DirectMode { device: target } if target.as_str() == device)
+        })
+        .count()
+}
+
+pub fn output_of(snapshot: &SessionSnapshot, device: &str) -> Option<DeviceOutput> {
+    snapshot
+        .output
+        .devices
+        .iter()
+        .find(|output| output.device.as_str() == device)
+        .cloned()
 }
