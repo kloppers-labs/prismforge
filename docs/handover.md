@@ -4,13 +4,13 @@ Last update: 2026-11-18.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and two hand checks are missing. Task 4a, the effect engine without an interface, is built.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built.
 
 The repository has a Rust workspace with four crates and a desktop app. `prismforge-effects` holds six original built-in effects as pure functions, their typed control definitions and the validation of stored effect instances. `prismforge-core` holds the device types, the identity matching, the backend contract, the scene and ownership types, and the session. The session owns the backend, reconnects, keeps a readable snapshot, runs the identify action, and runs effects through an output scheduler with explicit output ownership. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
 
-The session has commands for effects: list the effect definitions, apply or replace an effect on a device or zone, stop it, set the frame rate, declare or clear external control, and select a hardware mode. The snapshot shows the frame rate, the scene, and the owner and output condition of each device. The desktop app has no effects screen and no Tauri command for effects yet. Task 4b adds them.
+The session has commands for effects: list the effect definitions, apply or replace an effect on a device or zone, stop it, set the frame rate, declare or clear external control, and select a hardware mode. Applying the same effect to the same target again keeps its start time. The snapshot shows the frame rate, the scene, and the owner and output condition of each device.
 
-`apps/desktop` is a Tauri 2 app with a Svelte 5 and TypeScript interface. It has a connection screen, a device list with device details, an identify action, a diagnostics drawer and a labelled demo mode. The shell in `apps/desktop/src-tauri` owns at most one session. The interface types and the test fixtures are generated from the Rust code.
+`apps/desktop` is a Tauri 2 app with a Svelte 5 and TypeScript interface. It has a connection screen, a Devices screen with device details and identify, an Effects screen, a diagnostics drawer and a labelled demo mode. The Effects screen lists every device and zone with its owner and output condition. It renders parameter controls from the effect definitions, shows a preview rendered in Rust, applies and stops effects, selects hardware modes, records that another program controls a device, and sets the frame rate. The shell in `apps/desktop/src-tauri` owns at most one session. The interface types and the test fixtures are generated from the Rust code.
 
 All tests pass on macOS and in Windows CI. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
@@ -32,7 +32,10 @@ All tests pass on macOS and in Windows CI. Windows CI also builds the unsigned i
 | The desktop shell owns at most one session. A new session starts only after the previous one has stopped and its identify is restored. Disconnect ends the session. | `apps/desktop/README.md` |
 | The window gets the latest snapshot at most once per 50 ms. Each view has a rising revision, and the interface ignores older views. | `apps/desktop/README.md` |
 | The TypeScript types come from the Rust serde types through `ts-rs` (feature `ts` of `prismforge-core`). The interface test fixtures come from real sessions. Tests fail when either folder is out of date. | `apps/desktop/README.md` |
-| The window has one capability with event listen and the six app commands. No Tauri plugins. | `apps/desktop/README.md` |
+| The window has one capability with event listen and the fourteen app commands. No Tauri plugins. | `apps/desktop/README.md` |
+| Applying the same effect id to the same target keeps its start time, so a changed setting does not restart the animation. | `docs/decisions/0003-effects-engine.md` |
+| The preview is rendered in Rust in bounded batches by the engine's own strip renderer. The interface only plays frames and stops when hidden or closed. | same |
+| The effects screen renders controls only from the effect definitions. Rust validation is the authority. The screen states only what the user declared and what PrismForge did. | same |
 
 ## Task order
 
@@ -40,7 +43,7 @@ The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 
 1. Task 1: OpenRGB boundary. **Complete.**
 2. Task 2: desktop connection and inventory slice. **Built.** Built and tested in Windows CI. A run on Windows, the missing screenshots and two hand checks are still open.
-3. Task 4: effect engine, output scheduler and output ownership. **4a built** (engine, scheduler, ownership, session commands; no interface). 4b adds the effects screen, the parameter controls and the Tauri commands. Previews, the Effects plugin provider and the measurements come after 4b.
+3. Task 4: effect engine, output scheduler and output ownership. **4a built** (engine, scheduler, ownership, session commands). **4b built** (Tauri commands, effects screen, generated parameter controls, preview, ownership hand-over). The Effects plugin provider and the measurements come next.
 4. Task 3: profiles.
 5. Task 5: component setup and layout.
 6. Task 6: lifecycle, packaging and validation on the target machine.
@@ -50,25 +53,37 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18, at the last code commit of Task 4a.
+Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18, at the last code commit of Task 4b.
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 175 tests. 29 in `prismforge-effects`, 74 in `prismforge-core` (33 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 14 in `prismforge-desktop` (6 shell, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 193 tests. 36 in `prismforge-effects` (5 for the preview), 76 in `prismforge-core` (35 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 25 interface tests |
-
-`pnpm tauri:build --bundles app` last passed at the end of Task 2b (`PrismForge.app`, 10.7 MiB, not signed). Task 4a did not rebuild the app.
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 54 interface tests (22 for the effects screen, 6 for the preview) |
+| `pnpm tauri:build` in `apps/desktop` | Pass: `PrismForge.app` (11.42 MiB) and `PrismForge_0.1.0_aarch64.dmg` (3.33 MiB), not signed |
 
 The scheduler and ownership tests use simulated time and the demo backend or the fake server. They check recorded writes and snapshot counters: late ticks are skipped and counted and every frame is the frame for its own moment; a refused device makes 7 tries in a minute while another device gets about 1,800 frames; a static scene gets one frame and one more only after a scene change, a reconnect or an inventory change; a declared device gets nothing until the hand-over; after an OpenRGB restart with reused IDs every frame still reaches the same fixture device.
 
 Windows CI run 44320629268 on commit `548677b` (`windows-latest`) passed every step: format, both lint runs, `cargo test --workspace`, the binding drift check, `pnpm install --frozen-lockfile`, typecheck, interface tests and `pnpm tauri:build`. The artifact `prismforge-windows-unsigned` (about 5.2 MB) holds the MSI and NSIS installers. This is build and test evidence only. Nobody has installed or run the app on Windows. Commits after `548677b` have no CI result yet.
 
-Checked by hand in the native macOS app:
+Checked by hand in the native macOS app built at commit `e19e8dc`, in demo mode. Two later commits changed only wording that interface tests cover: the unnamed program label and the hardware-mode result, and the visible reason next to Stop. The app was started in the background with `open -g` and driven through the macOS accessibility tree only. No screenshot was taken and the window was never brought to the front. The checks read element text and states, not pixels:
+
+- Devices and Effects navigation. The effect catalog loads from Rust, so the capability allows the new commands.
+- Moving highlight applied to the demo graphics card: the owner changed to "PrismForge effect, running" and the result named the effect and the target. Diagnostics showed 385 frames written and 0 ticks skipped about 13 seconds later, with the window behind other windows.
+- A brightness change through the slider re-applied the running effect: the scene in Diagnostics showed brightness 99.
+- Stop: "Effect stopped. The demo backend accepted the requests to put back the lighting from before the effect." The owner went back to none.
+- "Another program controls this device" with no name: Apply effect and the hardware modes turned off with the reason. "Hand back to PrismForge" turned them on again.
+- Light bar (no Direct Mode): Apply effect off with the reason. "Use Breathing" set the owner to "hardware mode Breathing".
+- Tab order: screen buttons, targets, one stop for the effect radio group, the generated controls, preview toggle, Apply effect, hardware modes, program name, frame rate. Disabled buttons are skipped. Some focus readouts repeated, so this is not a full keyboard audit.
+- Closing the window with its close button ended the process, once with no effect and once with a rainbow wave running on the whole demo motherboard.
+
+Not checked by hand: the look of the screen and of the preview animation, because nothing was captured; reduced motion; a validation error and a conflict in the native app (interface tests cover both).
+
+Checked by hand in the native macOS app at the end of Task 2:
 
 - Connection screen at start. Nothing connected before a choice.
 - Connect to `127.0.0.1:6742` with no server: the retry state with its count and the cause "Nothing answered at the OpenRGB server at 127.0.0.1:6742". No device list and no demo banner. (The retry text has changed since; see Not done.)
@@ -79,7 +94,8 @@ Checked by hand in the native macOS app:
 Not done:
 
 - Native screenshots of demo mode, a device with an identify outcome, diagnostics and a failed connection. Only `docs/screenshots/connection.png` exists.
-- Closing the window by hand. The tests in `apps/desktop/src-tauri/tests/exit.rs` cover the stop-then-exit logic without a window. The Tauri event handler that calls it has no test: Tauri's mock runtime cannot exit (`request_exit` is unimplemented in tauri 2.12.6).
+- Closing the window during an identify. The window close button was pressed through the accessibility tree in Task 4b, with and without an effect running, and the process ended. The Tauri event handler that calls the stop-then-exit logic still has no automated test: Tauri's mock runtime cannot exit (`request_exit` is unimplemented in tauri 2.12.6).
+- Any screenshot of the effects screen. Window capture needs the owner's consent.
 - A hand check of the current build. The hand check above ran on the build before the commits that name the demo backend in demo identify text and that changed the retry text. Interface tests cover both texts.
 - Any run of the app on Windows.
 - Any test against a real OpenRGB server.
@@ -88,8 +104,8 @@ Not done:
 
 ## Next steps
 
-1. Task 4b: an effects screen with parameter controls that render from the effect definitions, and Tauri commands for the session's effect and ownership commands.
-2. With the owner's consent and screen-capture permission, take the four missing screenshots and check the current build by hand, including closing the window during an identify.
+1. With the owner's consent and screen-capture permission, take the four missing screenshots and one of the effects screen, look at the preview animation, and check the current build by hand, including closing the window during an identify.
+2. Task 4: the Effects plugin provider (list, start and stop of plugin effects) with explicit ownership, and the static and animated performance measurements.
 3. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
 4. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
 5. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
@@ -113,7 +129,10 @@ Not done:
 - **Disconnect ends the session.** Its diagnostics and its list of known devices are gone after a disconnect. Host and port reset to the defaults when the app restarts.
 - **Identify always lasts 3 seconds.** The shell sets it; there is no setting.
 - **Closing during an identify waits for the restore.** The app holds the exit until the session has stopped, so the window can close a moment before the process ends.
-- **No effects screen yet.** The engine, the scheduler and ownership exist only as session commands. Task 4b adds the interface.
+- **One target at a time.** The effects screen applies an effect to one device or zone. Several targets need several applies. A device with one zone lists only "Whole device".
+- **The preview is a line of LEDs.** It shows the pattern on up to 60 LEDs in a line, not the real device or its layout.
+- **Nothing is saved.** Effects, ownership statements and the frame rate end with the session. Profiles come later.
+- **A program name is free text.** The label for "another program" is the user's own words, trimmed and cut to 60 characters. Without a name it is "another program".
 - **No real-machine evidence for effects.** All scheduler numbers come from simulated time. Real frame timing and CPU use are not measured.
 - **Colour frames are not confirmed.** The client does not read the acknowledgement of a colour write. "Frames written" counts frames sent without an error, not frames OpenRGB applied.
 - **Direct mode may be enabled more often than needed.** After each inventory refresh, PrismForge enables direct mode again on each effect device that does not report Direct Mode. If OpenRGB does not report it after "set custom mode", this repeats after every refresh. The fake server never reports it. On such a server, a fresh capture of a device in a per-LED mode would also remember PrismForge's own last frame as the colours to restore, and a later stop would report "restored" for that frame.
