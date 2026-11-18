@@ -15,7 +15,7 @@ use crate::shell::Shell;
 use crate::view::CommandError;
 
 const MAX_LABEL_CHARS: usize = 60;
-const UNNAMED_PROGRAM: &str = "Another program";
+const UNNAMED_PROGRAM: &str = "another program";
 
 /// The effects and the limits the interface offers; every number comes from the Rust side.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

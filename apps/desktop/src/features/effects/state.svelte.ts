@@ -4,6 +4,7 @@ import type { EffectCatalog } from "../../lib/api/bindings/EffectCatalog";
 import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
 import type { RestoreOutcome } from "../../lib/api/bindings/RestoreOutcome";
 import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+import { capitalise, serverName } from "../connection/wording";
 import { deviceOf, runningOn, targetName } from "./present";
 import { check, initialFields, problemText, type Field, type Fields } from "./values";
 
@@ -134,7 +135,7 @@ export class EffectsState {
     this.cancelReapply();
     const answer = await api.selectMode(device, mode);
     this.modeFeedback = answer.ok
-      ? { kind: "done", text: `Hardware mode ${name} selected. The request was accepted. PrismForge cannot confirm what the device shows.` }
+      ? { kind: "done", text: `Hardware mode ${name} selected. ${capitalise(this.server())} accepted the request. PrismForge cannot confirm what the device shows.` }
       : { kind: "failed", error: answer.error };
   }
 
@@ -163,6 +164,11 @@ export class EffectsState {
           ? `PrismForge uses ${used} frames per second.`
           : `PrismForge uses ${used} frames per second, the nearest allowed rate.`,
     };
+  }
+
+  private server(): string {
+    const session = this.session();
+    return session ? serverName(session) : "OpenRGB";
   }
 
   private runningAssignment() {

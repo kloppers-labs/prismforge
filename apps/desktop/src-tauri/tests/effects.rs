@@ -194,7 +194,7 @@ async fn the_program_name_is_trimmed_bounded_and_never_empty() {
     assert_eq!(
         owner(&shell, GPU).await,
         Some(OutputOwner::External {
-            label: "Another program".into()
+            label: "another program".into()
         })
     );
     assert_eq!(

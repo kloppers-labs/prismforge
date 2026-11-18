@@ -150,7 +150,7 @@ export function ownerText(device: SessionDevice, output: DeviceOutput | null): s
   if ("HardwareMode" in owner) {
     return `Hardware mode ${modeName(device, owner.HardwareMode.mode)}, selected in PrismForge. It runs on the device itself. PrismForge writes nothing to this device.`;
   }
-  return `${owner.External.label}, as you said. PrismForge cannot see that program. It sends nothing to this device.`;
+  return `${capitalise(owner.External.label)}, as you said. PrismForge cannot see that program. It sends nothing to this device.`;
 }
 
 export function conditionText(session: SessionSnapshot, output: DeviceOutput | null): string | null {

@@ -47,7 +47,7 @@
     </p>
     <form class="declare" onsubmit={declare}>
       <label for="program-name">Program name (optional)</label>
-      <input id="program-name" type="text" maxlength="60" autocomplete="off" bind:value={program} placeholder="Another program" />
+      <input id="program-name" type="text" maxlength="60" autocomplete="off" bind:value={program} placeholder="another program" />
       <button type="submit" disabled={ref === null || identifying} aria-describedby={identifying ? "external-blocked" : undefined}>
         Another program controls this device
       </button>

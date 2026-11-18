@@ -315,6 +315,7 @@ test("selects_a_hardware_mode_and_records_declarations", async () => {
   await chooseTarget("Demo Graphics Card");
 
   await fireEvent.click(button("Use Breathing"));
+  expect(await screen.findByText(/^Hardware mode Breathing selected\. The demo backend accepted the request\./)).toBeTruthy();
   await type(screen.getByRole("textbox", { name: /Program name/ }), "OpenRGB Effects plugin");
   await fireEvent.click(button("Another program controls this device"));
   await chooseTarget("Demo Memory Module", "Whole device", 1);
