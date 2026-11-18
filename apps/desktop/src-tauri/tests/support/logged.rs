@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use prismforge_core::{
     BackendError, BackendEvent, BackendInfo, ConnectionState, DeviceCapabilities, DeviceRef,
-    Inventory, Rgb, RgbBackend,
+    Inventory, KnownDevice, Rgb, RgbBackend,
 };
 
 #[derive(Clone, Default)]
@@ -54,6 +54,14 @@ impl<B: RgbBackend + Send> RgbBackend for LoggedBackend<B> {
 
     fn inventory(&self) -> Option<&Inventory> {
         self.inner.inventory()
+    }
+
+    fn known_devices(&self) -> &[KnownDevice] {
+        self.inner.known_devices()
+    }
+
+    fn seed_known_devices(&mut self, known: Vec<KnownDevice>) {
+        self.inner.seed_known_devices(known);
     }
 
     fn capabilities(&self, device: &DeviceRef) -> Result<&DeviceCapabilities, BackendError> {

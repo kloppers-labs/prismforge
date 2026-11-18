@@ -19,6 +19,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 use crate::backend::RgbBackend;
 use crate::device::DeviceRef;
 use crate::error::BackendError;
+use crate::identity::KnownDevice;
 use crate::ownership::OutputOwner;
 use crate::scene::{Assignment, OutputTarget};
 
@@ -147,6 +148,7 @@ pub(crate) enum OutputCommand {
 pub struct SessionHandle {
     commands: mpsc::Sender<Command>,
     snapshot: Arc<watch::Sender<SessionSnapshot>>,
+    known: Arc<watch::Sender<Vec<KnownDevice>>>,
     refused_busy: Arc<AtomicU64>,
 }
 
@@ -157,6 +159,11 @@ impl SessionHandle {
 
     pub fn subscribe(&self) -> watch::Receiver<SessionSnapshot> {
         self.snapshot.subscribe()
+    }
+
+    /// The backend's known-device registry; it changes only after an inventory refresh.
+    pub fn known_devices(&self) -> watch::Receiver<Vec<KnownDevice>> {
+        self.known.subscribe()
     }
 
     pub fn connect(&self) -> impl Future<Output = Result<(), SessionError>> + Send + use<> {
@@ -290,6 +297,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         let handle = SessionHandle {
             commands,
             snapshot: session.publisher(),
+            known: session.registry(),
             refused_busy,
         };
         (handle, session)

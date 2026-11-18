@@ -9,6 +9,7 @@ use crate::backend::{BackendEvent, RgbBackend};
 use crate::connection::{ConnectionState, LossCause, StateReason};
 use crate::device::DeviceRef;
 use crate::error::BackendError;
+use crate::identity::KnownDevice;
 use crate::inventory::{Inventory, InventoryDevice};
 use crate::scene::Scene;
 use crate::session::diagnostics::{
@@ -31,6 +32,7 @@ pub struct Session<B> {
     config: SessionConfig,
     commands: mpsc::Receiver<Command>,
     snapshot: Arc<watch::Sender<SessionSnapshot>>,
+    known: Arc<watch::Sender<Vec<KnownDevice>>>,
     refused_busy: Arc<AtomicU64>,
     started: Instant,
     link: Link,
@@ -97,6 +99,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         };
         Self {
             events: EventRing::new(config.event_capacity),
+            known: Arc::new(watch::channel(backend.known_devices().to_vec()).0),
             backend,
             config,
             commands,
@@ -118,6 +121,10 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
 
     pub(crate) fn publisher(&self) -> Arc<watch::Sender<SessionSnapshot>> {
         self.snapshot.clone()
+    }
+
+    pub(crate) fn registry(&self) -> Arc<watch::Sender<Vec<KnownDevice>>> {
+        self.known.clone()
     }
 
     /// Runs until every [`SessionHandle`](crate::session::SessionHandle) is dropped.
@@ -337,6 +344,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
         self.output.after_inventory(&inventory);
         self.inventory = Some(inventory);
+        let known = self.backend.known_devices();
+        self.known.send_if_modified(|published| {
+            let changed = published.as_slice() != known;
+            if changed {
+                *published = known.to_vec();
+            }
+            changed
+        });
     }
 
     fn connection_lost(&mut self, reason: StateReason, retry_attempt: u32) {

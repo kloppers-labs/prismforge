@@ -7,6 +7,7 @@ use crate::capabilities::DeviceCapabilities;
 use crate::connection::{ConnectionState, LossCause};
 use crate::device::{BackendOrigin, DeviceRef};
 use crate::error::BackendError;
+use crate::identity::KnownDevice;
 use crate::inventory::Inventory;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +43,14 @@ pub trait RgbBackend {
     ) -> impl Future<Output = Result<&Inventory, BackendError>> + Send;
 
     fn inventory(&self) -> Option<&Inventory>;
+
+    /// Every device this backend gave a reference, with the fields that re-link it; empty when it keeps none.
+    fn known_devices(&self) -> &[KnownDevice] {
+        &[]
+    }
+
+    /// Adds stored devices before the first refresh; a reference the backend already knows keeps its fields.
+    fn seed_known_devices(&mut self, _known: Vec<KnownDevice>) {}
 
     fn capabilities(&self, device: &DeviceRef) -> Result<&DeviceCapabilities, BackendError>;
 
