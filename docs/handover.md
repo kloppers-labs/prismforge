@@ -12,7 +12,7 @@ The session has commands for effects: list the effect definitions, apply or repl
 
 `apps/desktop` is a Tauri 2 app with a Svelte 5 and TypeScript interface. It has a connection screen, a Devices screen with device details and identify, an Effects screen, a diagnostics drawer and a labelled demo mode. The Effects screen lists every device and zone with its owner and output condition. It renders parameter controls from the effect definitions, shows a preview rendered in Rust, applies and stops effects, selects hardware modes, records that another program controls a device, and sets the frame rate. The shell in `apps/desktop/src-tauri` owns at most one session. The interface types and the test fixtures are generated from the Rust code.
 
-All tests pass on macOS and in Windows CI. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+All tests pass on macOS. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -63,14 +63,22 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18,
 | `cargo test --workspace` | Pass: 193 tests. 36 in `prismforge-effects` (5 for the preview), 76 in `prismforge-core` (35 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 54 interface tests (22 for the effects screen, 6 for the preview) |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 70 interface tests (22 for the effects screen, 10 for automatic re-apply, 6 for result texts, 6 for the preview) |
 | `pnpm tauri:build` in `apps/desktop` | Pass: `PrismForge.app` (11.42 MiB) and `PrismForge_0.1.0_aarch64.dmg` (3.33 MiB), not signed |
 
 The scheduler and ownership tests use simulated time and the demo backend or the fake server. They check recorded writes and snapshot counters: late ticks are skipped and counted and every frame is the frame for its own moment; a refused device makes 7 tries in a minute while another device gets about 1,800 frames; a static scene gets one frame and one more only after a scene change, a reconnect or an inventory change; a declared device gets nothing until the hand-over; after an OpenRGB restart with reused IDs every frame still reaches the same fixture device.
 
-Windows CI run 44320629268 on commit `548677b` (`windows-latest`) passed every step: format, both lint runs, `cargo test --workspace`, the binding drift check, `pnpm install --frozen-lockfile`, typecheck, interface tests and `pnpm tauri:build`. The artifact `prismforge-windows-unsigned` (about 5.2 MB) holds the MSI and NSIS installers. This is build and test evidence only. Nobody has installed or run the app on Windows. Commits after `548677b` have no CI result yet.
+Windows CI (`windows-latest`) runs format, both lint runs, `cargo test --workspace`, the binding drift check, `pnpm install --frozen-lockfile`, typecheck, interface tests and `pnpm tauri:build`. The artifact `prismforge-windows-unsigned` (about 5.2 MB) holds the MSI and NSIS installers. Known results, all passed:
 
-Checked by hand in the native macOS app built at commit `e19e8dc`, in demo mode. Two later commits changed only wording that interface tests cover: the unnamed program label and the hardware-mode result, and the visible reason next to Stop. The app was started in the background with `open -g` and driven through the macOS accessibility tree only. No screenshot was taken and the window was never brought to the front. The checks read element text and states, not pixels:
+| Commit | Run | What it is |
+|---|---|---|
+| `548677b` | 44320629268 | Task 2b, first Windows CI |
+| `2fd05a1` | 44389727399 | Last commit of Task 4a |
+| `b436973` | 44396160088 | Last commit of Task 4b before review fix round 1 |
+
+The review fix round 1 commits after `b436973` have no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
+
+Checked by hand in the native macOS app built at commit `e19e8dc`, in demo mode. Later commits changed wording, the visible reason next to Stop, and the rules for automatic re-apply and result texts (review fix round 1). Interface tests cover those changes; they were not checked by hand. The app was started in the background with `open -g` and driven through the macOS accessibility tree only. No screenshot was taken and the window was never brought to the front. The checks read element text and states, not pixels:
 
 - Devices and Effects navigation. The effect catalog loads from Rust, so the capability allows the new commands.
 - Moving highlight applied to the demo graphics card: the owner changed to "PrismForge effect, running" and the result named the effect and the target. Diagnostics showed 385 frames written and 0 ticks skipped about 13 seconds later, with the window behind other windows.
