@@ -110,29 +110,34 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 ### User intent records
 
-1. **The session records each successful user command for output.** One record per slot: an effect target (device and zone), the hardware mode of a device, the external owner of a device, and the frame rate. A new command on a slot replaces the older record, so the store never grows past the slots in use. Each command gets the next sequence number.
-2. **What each command records:**
+1. **The session records each successful user command for output.** One record per slot: an effect target (device and zone), the hardware mode of a device, the external owner of a device, and the frame rate. A new record on a slot replaces the older one, so the store never grows past the slots in use. Each command gets the next sequence number.
+2. **Every side effect of a user command is recorded.** The session compares its ownership state (running effects, hardware modes, external owners, frame rate) before and after the command. Each other slot the command ended or changed gets its own record under the same sequence number, before the command's own record. Examples: a zone effect that displaces a whole-device effect, an effect that ends a hardware mode, a mode selection or a declaration that ends effects. A new ownership rule in the session is covered without a new list.
 
-| User command | Records |
+| User command | Its own record |
 |---|---|
-| Apply an effect | the target: the complete validated instance; the device's mode: ended, if a hardware mode owned the device |
+| Apply an effect | the target: the complete validated instance |
 | Stop an effect | the target: stopped |
-| Select a hardware mode | the whole device: effects stopped; the mode: index and name |
-| Declare another program | the whole device: effects stopped; the mode: ended; the external owner: the label |
+| Select a hardware mode | the mode: index and name |
+| Declare another program | the external owner: the label |
 | Hand back | the external owner: handed back (only if the device was declared) |
 | Set the frame rate | the frame rate in use |
+
+An ended effect is recorded as stopped, an ended mode as ended, an ended declaration as handed back.
 
 3. **Nothing else creates a record.** Disconnect, reconnect, a device that becomes unavailable, a refused or paused write, identify and its restore, the release at disconnect or shutdown, and the scheduler change no record. A command that fails creates no record.
 4. **A profile apply is not a user edit.** Its commands carry the profile origin and create no record. When the apply ends, the session loop returns its current sequence number in command order. That number is the profile's baseline.
 5. **Replies come after the snapshot.** The session publishes the snapshot that shows a command's result before it sends the reply, for every command. A caller that sees a reply also sees its result.
+6. **Read-only queries wake nobody.** The session sends a snapshot only when it differs from the last one. Reading the intent records, the baseline, a preview, the summary or the details changes nothing and wakes no subscriber.
+7. **Commands during an apply.** A user command sent while a profile apply runs gets a sequence number before the apply's baseline, so the next update does not see it. The interface must not send output commands while an apply runs.
 
 ### Update
 
-1. **The active profile.** The profile last applied, created or updated in a session is that session's active profile. `StoreSummary::active` names it. `StoreSummary::unsaved_changes` counts the user commands after its baseline. A new session has none.
+1. **The active profile.** The profile last applied, created or updated in a session is that session's active profile. `StoreSummary::active` names it. `StoreSummary::unsaved_changes` is the number of settings an update would change now (frame rate included), so it is 0 exactly when an update would report no change. A new session has none.
 2. **Update needs the active profile.** `update_from_session` refuses any other profile with `StoreError::NotActive`, which names the active one. Saving the session under a new name is `create_from_session`.
 3. **An update is the stored profile plus the user's records after the baseline, applied in order.** An applied effect replaces the stored effect on that target, or is added, with the complete instance. A stop removes the effect on that target; a stop of the whole device removes every effect on the device, as in the session. A selected mode replaces the device's effects and external owner. A declaration replaces the device's effects and mode. A hand-back removes the declaration. A frame-rate record sets the frame rate.
 4. **Nothing else changes.** Every other setting, every unresolved or absent device, every skipped setting, and all unknown fields stay as loaded. The device and zone entries of a replaced setting stay as stored. A setting replaced on the same target keeps its own unknown fields; its effect keeps its unknown fields only when the effect id is the same.
-5. **The baseline moves only after a successful write.** A second update with no new user command changes nothing.
+5. **The baseline moves only after a successful save.** An update whose report is empty writes no file and keeps the backup as it was. A second update with no new user command changes nothing.
+8. **Invariant.** After an update, the stored profile equals the stored profile before it, with the session's own state for every device the user changed since the last save. A seeded random test checks this over many command sequences (apply to a zone or a whole device, stop, hardware mode, declaration, hand-back, frame rate) with updates at random points, together with the rule for `unsaved_changes`.
 6. **The report comes from the same computation.** `Saved { id, changes, frame_rate }` lists each setting the update adds, replaces (with what it was) or removes. Everything not listed is unchanged. `preview_update` runs the same computation without writing, so the interface can show it before the save.
 7. **Records are linked to stored devices with the matching rules.** A record for a device that resolves to a stored device changes that device's settings. A record for a device the profile does not have adds a device entry from the current inventory.
 
@@ -149,6 +154,8 @@ Every write:
 1. writes the new content to `<file>.tmp` and syncs it to disk;
 2. if the current file is valid, copies it to `<file>.bak` the same way (temporary file, sync, rename);
 3. renames `<file>.tmp` over `<file>`. On Unix the folder is synced after the rename. Windows cannot open a folder this way, so that step is skipped there.
+
+**The store writes nothing when nothing changes.** Renaming to the same name, marking the profile that is already marked, saving the same content or the same registry writes no file, so the backup still holds the previous version.
 
 **The store never writes a file its loader would refuse.** It checks the encoded size against the 4 MiB limit before it writes anything and returns `StoreError::TooLarge`; the old file stays. The same check covers profiles, the registry, settings and an export. An import that fits the 1 MiB import limit but would grow past 4 MiB in the stored form is refused the same way, before anything is stored. The registry is checked before it is written.
 

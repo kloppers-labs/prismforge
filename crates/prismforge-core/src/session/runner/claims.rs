@@ -25,29 +25,20 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 origin,
                 reply,
             } => {
+                let before = self.held_for(origin);
                 let target = assignment.target.clone();
-                let mode_before = matches!(
-                    self.output.claims.get(&target.device),
-                    Some(Claim::HardwareMode { .. })
-                );
                 let result = self.apply(assignment).await;
-                if let (Ok(instance), Origin::User) = (&result, origin) {
-                    let mut entries = vec![(
-                        Slot::Effect(target.clone()),
-                        Intent::Applied(instance.clone()),
-                    )];
-                    if mode_before {
-                        entries.push((Slot::Mode(target.device), Intent::ModeEnded));
-                    }
-                    self.intents.record(entries);
+                if let Ok(instance) = &result {
+                    let own = (Slot::Effect(target), Intent::Applied(instance.clone()));
+                    self.record_user(before, own);
                 }
                 self.answer(reply, result.map(|_| ()));
             }
             OutputCommand::Stop { target, reply } => {
+                let before = self.held_for(Origin::User);
                 let result = self.stop_effect(target.clone()).await;
                 if result.is_ok() {
-                    self.intents
-                        .record(vec![(Slot::Effect(target), Intent::Stopped)]);
+                    self.record_user(before, (Slot::Effect(target), Intent::Stopped));
                 }
                 self.answer(reply, result);
             }
@@ -57,22 +48,15 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 origin,
                 reply,
             } => {
-                let name = self
-                    .live_inventory()
-                    .ok()
-                    .and_then(|inventory| inventory.device(&device))
-                    .and_then(|entry| entry.descriptor.capabilities.modes.get(mode))
-                    .map(|descriptor| descriptor.name.clone())
-                    .unwrap_or_default();
+                let before = self.held_for(origin);
                 let result = self.select_mode(device.clone(), mode).await;
-                if result.is_ok() && origin == Origin::User {
-                    self.intents.record(vec![
-                        (whole_device(&device), Intent::Stopped),
-                        (
-                            Slot::Mode(device),
-                            Intent::ModeSelected { index: mode, name },
-                        ),
-                    ]);
+                if result.is_ok() {
+                    let name = self.mode_name(&device, mode);
+                    let own = (
+                        Slot::Mode(device),
+                        Intent::ModeSelected { index: mode, name },
+                    );
+                    self.record_user(before, own);
                 }
                 self.answer(reply, result);
             }
@@ -82,13 +66,10 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 origin,
                 reply,
             } => {
+                let before = self.held_for(origin);
                 let result = self.declare_external(device.clone(), label.clone());
-                if result.is_ok() && origin == Origin::User {
-                    self.intents.record(vec![
-                        (whole_device(&device), Intent::Stopped),
-                        (Slot::Mode(device.clone()), Intent::ModeEnded),
-                        (Slot::External(device), Intent::Declared { label }),
-                    ]);
+                if result.is_ok() {
+                    self.record_user(before, (Slot::External(device), Intent::Declared { label }));
                 }
                 self.answer(reply, result);
             }
@@ -97,9 +78,9 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                     self.output.claims.get(&device),
                     Some(Claim::External { .. })
                 ) {
+                    let before = self.held_for(Origin::User);
                     self.output.claims.remove(&device);
-                    self.intents
-                        .record(vec![(Slot::External(device), Intent::HandedBack)]);
+                    self.record_user(before, (Slot::External(device), Intent::HandedBack));
                 }
                 self.answer(reply, Ok(()));
             }
@@ -108,11 +89,9 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 origin,
                 reply,
             } => {
+                let before = self.held_for(origin);
                 let in_use = self.output.set_frame_rate(frame_rate);
-                if origin == Origin::User {
-                    self.intents
-                        .record(vec![(Slot::FrameRate, Intent::FrameRate(in_use))]);
-                }
+                self.record_user(before, (Slot::FrameRate, Intent::FrameRate(in_use)));
                 self.answer(reply, Ok(in_use));
             }
         }
@@ -325,11 +304,4 @@ fn running(target: OutputTarget, effect: prismforge_effects::Effect) -> Running 
         started: Instant::now(),
         written: false,
     }
-}
-
-fn whole_device(device: &DeviceRef) -> Slot {
-    Slot::Effect(OutputTarget {
-        device: device.clone(),
-        zone: None,
-    })
 }

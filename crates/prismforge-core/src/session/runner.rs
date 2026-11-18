@@ -24,6 +24,7 @@ use crate::session::{Command, Reply, SessionConfig, SessionError};
 mod claims;
 mod frames;
 mod identifying;
+mod intents;
 mod publishing;
 mod restoring;
 

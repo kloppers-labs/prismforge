@@ -61,16 +61,19 @@ impl Profiles {
         })
     }
 
-    /// With `handle`, also counts against its devices and reports its active profile and unsaved user changes.
+    /// With `handle`, also matches its devices and counts the settings an update of the active profile would change.
     pub async fn summary(&self, handle: Option<&SessionHandle>) -> StoreSummary {
         let devices = handle.map(|handle| handle.snapshot().devices);
         let active = handle.and_then(|handle| self.active_in(handle));
         let unsaved = match (handle, &active) {
-            (Some(handle), Some(active)) => handle
-                .intents_after(active.baseline)
-                .await
-                .ok()
-                .map(|log| commands_in(&log)),
+            (Some(handle), Some(active)) => {
+                self.pending(handle, &active.profile)
+                    .await
+                    .ok()
+                    .map(|(_, updated)| {
+                        updated.changes.len() + usize::from(updated.frame_rate.is_some())
+                    })
+            }
             _ => None,
         };
         let mut summary = self
@@ -148,9 +151,11 @@ impl Profiles {
         id: &ProfileId,
     ) -> Result<Saved, StoreError> {
         let (log, updated) = self.pending(handle, id).await?;
-        let key = id.clone();
-        let profile = updated.profile.clone();
-        self.with(move |store| store.update(&key, profile)).await?;
+        if !updated.changes.is_empty() || updated.frame_rate.is_some() {
+            let key = id.clone();
+            let profile = updated.profile.clone();
+            self.with(move |store| store.update(&key, profile)).await?;
+        }
         Ok(self.activate(handle, id.clone(), log.sequence, updated))
     }
 
@@ -420,13 +425,6 @@ async fn intents(handle: &SessionHandle, after: u64) -> Result<IntentLog, StoreE
         .intents_after(after)
         .await
         .map_err(|error| StoreError::SessionUnavailable { error })
-}
-
-/// The number of user commands behind `log`; one command can leave several records.
-fn commands_in(log: &IntentLog) -> usize {
-    let mut sequences: Vec<u64> = log.records.iter().map(|record| record.sequence).collect();
-    sequences.dedup();
-    sequences.len()
 }
 
 fn devices_of(handle: Option<&SessionHandle>) -> Vec<SessionDevice> {

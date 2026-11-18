@@ -20,14 +20,20 @@ fn roundtrips_profile_v1() {
     let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
     let loaded = store.profile(&id(GOLDEN_ID)).expect("loaded").clone();
     assert_eq!(loaded, full_profile());
-    store.update(&id(GOLDEN_ID), loaded).expect("save");
+    store
+        .rename(&id(GOLDEN_ID), "Evening, renamed")
+        .expect("save");
+    store.rename(&id(GOLDEN_ID), "Evening").expect("save back");
     let first = dir.read(GOLDEN_FILE);
 
     let mut reopened = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
     let again = reopened.profile(&id(GOLDEN_ID)).expect("reloaded").clone();
     reopened
-        .update(&id(GOLDEN_ID), again.clone())
+        .rename(&id(GOLDEN_ID), "Evening, renamed")
         .expect("save again");
+    reopened
+        .rename(&id(GOLDEN_ID), "Evening")
+        .expect("save back again");
     let second = dir.read(GOLDEN_FILE);
 
     assert_eq!(

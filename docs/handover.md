@@ -32,7 +32,7 @@ All tests pass on macOS. Windows CI passed on the last commit of Task 4a and on 
 | Effects are pure functions of values, time, LED position and seed. The six built-in effects are original code. | `docs/decisions/0003-effects-engine.md` |
 | The session task also owns output: one batched write per device or zone per tick, 30 FPS by default, clamped to 1 to 60. Late ticks are skipped and counted, never queued. Static effects are written once. | same |
 | One owner per device: a PrismForge effect, a hardware mode selected through PrismForge, or another program the user declared. A declared device refuses effects until the user hands it over. Stopping the last effect restores the remembered state. | same |
-| One session task owns the backend. The desktop shell reads snapshots and sends commands through a queue with a fixed size. The session publishes the snapshot that shows a command's result before it replies. | this file |
+| One session task owns the backend. The desktop shell reads snapshots and sends commands through a queue with a fixed size. The session publishes the snapshot that shows a command's result before it replies, and sends a snapshot only when it changed. | this file |
 | Demo mode uses a simulated backend. Each simulated device carries the origin "simulated". A failed real connection never shows demo devices. | this file |
 | The desktop shell owns at most one session. A new session starts only after the previous one has stopped and its identify is restored. Disconnect ends the session. | `apps/desktop/README.md` |
 | The window gets the latest snapshot at most once per 50 ms. Each view has a rising revision, and the interface ignores older views. | `apps/desktop/README.md` |
@@ -65,7 +65,7 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18,
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 237 tests at the end of Task 3a fix round 2. 36 in `prismforge-effects` (5 for the preview), 120 in `prismforge-core` (35 of them for output and ownership, 42 for profiles and the store, 1 for the registry seed, 1 for reply-after-publish), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 242 tests at the end of Task 3a fix round 3. 36 in `prismforge-effects` (5 for the preview), 125 in `prismforge-core` (35 of them for output and ownership, 47 for profiles and the store, 1 for the registry seed, 1 for reply-after-publish), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 70 interface tests (22 for the effects screen, 10 for automatic re-apply, 6 for result texts, 6 for the preview) |
@@ -81,7 +81,7 @@ Windows CI (`windows-latest`) runs format, both lint runs, `cargo test --workspa
 | `2fd05a1` | 44389727399 | Last commit of Task 4a |
 | `b436973` | 44396160088 | Last commit of Task 4b before review fix round 1 |
 
-The review fix round 1 commits after `b436973` have no CI result. The controller reported that Windows CI passed on `ce6b1a8` (Task 3a fix round 1). The Task 3a fix round 2 commit has no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
+The review fix round 1 commits after `b436973` have no CI result. The controller reported that Windows CI passed on `ce6b1a8` (Task 3a fix round 1). The Task 3a fix round 2 and 3 commits have no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
 
 Checked by hand in the native macOS app built at commit `e19e8dc`, in demo mode. Later commits changed wording, the visible reason next to Stop, and the rules for automatic re-apply and result texts (review fix round 1). Interface tests cover those changes; they were not checked by hand. The app was started in the background with `open -g` and driven through the macOS accessibility tree only. No screenshot was taken and the window was never brought to the front. The checks read element text and states, not pixels:
 
@@ -122,7 +122,7 @@ Not done:
 3. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
 4. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
 5. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
-6. Task 3b: Tauri commands and a profile screen on top of `Profiles`. Order for each session: seed the backend with `Profiles::known_devices`, create the session, start `keep_registry` with `handle.known_devices()` (before or after connect; it writes the current registry at once), then connect. Run a `ConnectTrigger` watcher beside the session. The keeper holds only a receiver and ends with the session; the watcher holds a handle, so abort it before the session ends. Show `preview_update` before the save and the `changes` after it. Use `StoreSummary::active` to offer update only for the active profile, and `unsaved_changes` to show that there is something to save. Pass the per-user configuration folder.
+6. Task 3b: Tauri commands and a profile screen on top of `Profiles`. Order for each session: seed the backend with `Profiles::known_devices`, create the session, start `keep_registry` with `handle.known_devices()` (before or after connect; it writes the current registry at once), then connect. Run a `ConnectTrigger` watcher beside the session. The keeper holds only a receiver and ends with the session; the watcher holds a handle, so abort it before the session ends. Do not accept output commands while a profile apply runs: a user command sent during the apply is not counted as a pending change. Show `preview_update` before the save and the `changes` after it. Use `StoreSummary::active` to offer update only for the active profile, and `unsaved_changes` to show that there is something to save. Pass the per-user configuration folder.
 
 ## Known issues
 

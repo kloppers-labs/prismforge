@@ -222,6 +222,9 @@ impl ProfileStore {
         if let Some(id) = &id {
             self.profile(id)?;
         }
+        if self.settings.apply_on_connect == id {
+            return Ok(());
+        }
         let mut settings = self.settings.clone();
         settings.apply_on_connect = id;
         let file = self.settings_file();
@@ -469,7 +472,11 @@ impl ProfileStore {
         }
     }
 
+    /// Writes nothing when the content is what is stored, so the backup keeps the previous version.
     fn write_profile(&mut self, id: &ProfileId, profile: Profile) -> Result<(), StoreError> {
+        if self.profiles.get(id) == Some(&profile) {
+            return Ok(());
+        }
         profile
             .validate()
             .map_err(|problem| StoreError::InvalidProfile { problem })?;
@@ -483,6 +490,9 @@ impl ProfileStore {
     }
 
     fn write_registry(&mut self, registry: Registry) -> Result<(), StoreError> {
+        if registry == self.registry {
+            return Ok(());
+        }
         let file = self.registry_file();
         self.unlocked(&file, self.registry_lock.as_ref())?;
         registry
