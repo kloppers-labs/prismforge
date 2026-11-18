@@ -126,5 +126,5 @@ async fn abandoned_request_closes_the_connection_instead_of_answering_the_next()
     drop(abandoned);
 
     let next = client.controller_ids().await;
-    assert!(matches!(next, Err(ClientError::Closed { .. })), "{next:?}");
+    assert_eq!(next, Err(ClientError::Abandoned));
 }

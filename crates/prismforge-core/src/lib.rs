@@ -13,7 +13,7 @@ pub use capabilities::{
     ZoneResizeBounds,
 };
 pub use color::Rgb;
-pub use connection::{ConnectionState, StateReason};
+pub use connection::{ConnectionState, LossCause, StateReason};
 pub use device::{DeviceDescriptor, DeviceKind, DeviceRef, MatrixSize, ZoneDescriptor, ZoneKind};
 pub use error::BackendError;
 pub use identity::{

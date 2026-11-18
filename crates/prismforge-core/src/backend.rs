@@ -2,7 +2,7 @@ use std::future::Future;
 
 use crate::capabilities::DeviceCapabilities;
 use crate::color::Rgb;
-use crate::connection::ConnectionState;
+use crate::connection::{ConnectionState, LossCause};
 use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::inventory::Inventory;
@@ -10,9 +10,10 @@ use crate::inventory::Inventory;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BackendEvent {
     InventoryChanged,
-    ConnectionLost { detail: String },
+    ConnectionLost { cause: LossCause, detail: String },
 }
 
+/// Futures other than `next_event` are not cancel-safe: dropping one mid-call closes the connection.
 pub trait RgbBackend {
     fn connection_state(&self) -> &ConnectionState;
 
@@ -20,7 +21,7 @@ pub trait RgbBackend {
 
     fn disconnect(&mut self);
 
-    /// Resolves when the server reports a change; `None` once no connection is open.
+    /// Resolves when the server reports a change; `None` once no connection is open. Cancel-safe.
     fn next_event(&mut self) -> impl Future<Output = Option<BackendEvent>> + Send;
 
     fn refresh_inventory(

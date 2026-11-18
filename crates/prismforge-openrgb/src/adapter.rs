@@ -1,7 +1,7 @@
 use prismforge_core::{
     BackendError, BackendEvent, ConnectionState, DeviceCapabilities, DeviceDescriptor,
     DeviceIdentity, DeviceIssue, DeviceRef, Inventory, InventoryDevice, IssueReason, KnownDevice,
-    Reconciliation, Rgb, RgbBackend, StateReason, reconcile,
+    LossCause, Reconciliation, Rgb, RgbBackend, StateReason, reconcile,
 };
 use tokio::time::timeout;
 
@@ -67,19 +67,21 @@ impl<C: Connector> OpenRgbBackend<C> {
                 BackendEvent::InventoryChanged
             }
             Notification::Closed(error) => {
-                self.lose_connection();
+                let cause = loss_cause(&error);
+                self.lose_connection(cause);
                 BackendEvent::ConnectionLost {
+                    cause,
                     detail: error.to_string(),
                 }
             }
         }
     }
 
-    fn lose_connection(&mut self) {
+    fn lose_connection(&mut self, cause: LossCause) {
         self.client = None;
         self.stale = true;
         self.state = ConnectionState::Disconnected {
-            reason: Some(StateReason::ConnectionLost),
+            reason: Some(StateReason::ConnectionLost { cause }),
         };
     }
 
@@ -91,7 +93,7 @@ impl<C: Connector> OpenRgbBackend<C> {
     }
 
     fn fail(&mut self, error: ClientError) -> BackendError {
-        self.lose_connection();
+        self.lose_connection(loss_cause(&error));
         backend_error(error)
     }
 
@@ -308,7 +310,9 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
                             server_version: *server_version,
                         }
                     }
-                    _ => StateReason::ConnectionLost,
+                    other => StateReason::ConnectionLost {
+                        cause: loss_cause(other),
+                    },
                 };
                 self.state = ConnectionState::Disconnected {
                     reason: Some(reason),
@@ -397,6 +401,16 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
     }
 }
 
+fn loss_cause(error: &ClientError) -> LossCause {
+    match error {
+        ClientError::Timeout { .. } => LossCause::Timeout,
+        ClientError::Closed { .. } => LossCause::ServerClosed,
+        ClientError::Io { .. } => LossCause::Transport,
+        ClientError::Abandoned => LossCause::CallAbandoned,
+        _ => LossCause::ProtocolViolation,
+    }
+}
+
 fn backend_error(error: ClientError) -> BackendError {
     match error {
         ClientError::UnsupportedProtocol { server_version } => BackendError::UnsupportedProtocol {
@@ -407,8 +421,11 @@ fn backend_error(error: ClientError) -> BackendError {
             operation: operation.into(),
             timeout_ms: after.as_millis() as u64,
         },
-        ClientError::Io { detail } | ClientError::Closed { detail } => {
-            BackendError::ConnectionLost { detail }
+        ClientError::Io { .. } | ClientError::Closed { .. } | ClientError::Abandoned => {
+            BackendError::ConnectionLost {
+                cause: loss_cause(&error),
+                detail: error.to_string(),
+            }
         }
         ClientError::Rejected {
             packet_id, status, ..

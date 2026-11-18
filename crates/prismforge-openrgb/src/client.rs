@@ -40,6 +40,8 @@ pub enum ClientError {
     Io { detail: String },
     #[error("connection closed: {detail}")]
     Closed { detail: String },
+    #[error("an earlier request was abandoned mid-exchange")]
+    Abandoned,
     #[error("{operation} timed out after {after:?}")]
     Timeout {
         operation: &'static str,
@@ -323,9 +325,7 @@ where
     fn begin_exchange(&mut self) -> Result<(), ClientError> {
         self.ensure_open()?;
         if self.exchange_open {
-            return Err(self.fail(ClientError::Closed {
-                detail: "an earlier request was abandoned mid-exchange".into(),
-            }));
+            return Err(self.fail(ClientError::Abandoned));
         }
         self.exchange_open = true;
         Ok(())
