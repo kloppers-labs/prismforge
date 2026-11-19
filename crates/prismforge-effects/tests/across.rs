@@ -9,19 +9,17 @@ use support::{BLACK, BLUE, GREEN, RED, SEED, WHITE, color, effect, every_effect,
 const WIDE: Plane = Plane {
     width: 1.0,
     height: 0.5,
-    pitch: 0.0,
 };
 const SQUARE: Plane = Plane {
     width: 1.0,
     height: 1.0,
-    pitch: 0.0,
 };
 const RIGHT: Flow = Flow::Along { angle: 0 };
 const DOWN: Flow = Flow::Along { angle: 90 };
 const LEFT: Flow = Flow::Along { angle: 180 };
 
 fn at(x: f64, y: f64) -> Option<ScenePoint> {
-    Some(ScenePoint { x, y })
+    Some(ScenePoint { x, y, spacing: 0.0 })
 }
 
 fn across(
@@ -30,7 +28,7 @@ fn across(
     plane: Plane,
     points: &[Option<ScenePoint>],
 ) -> Vec<Rgb> {
-    effect.render_across(Duration::ZERO, flow, plane, points, SEED)
+    effect.render_across(Duration::ZERO, flow, plane, points)
 }
 
 #[test]
@@ -101,7 +99,7 @@ fn a_flow_samples_the_same_colours_as_a_line_of_leds() {
             let time = Duration::from_millis(millis);
 
             assert_eq!(
-                effect.render_across(time, RIGHT, WIDE, &points, SEED),
+                effect.render_across(time, RIGHT, WIDE, &points),
                 effect.render(time, &along, SEED),
                 "{} at {millis} ms",
                 effect.instance().effect
@@ -111,7 +109,7 @@ fn a_flow_samples_the_same_colours_as_a_line_of_leds() {
 }
 
 #[test]
-fn a_moving_highlight_travels_along_the_flow_and_is_at_least_one_pitch_wide() {
+fn a_moving_highlight_travels_along_the_flow_and_is_at_least_one_spacing_wide() {
     let highlight = effect(
         "moving-highlight",
         &[
@@ -121,22 +119,24 @@ fn a_moving_highlight_travels_along_the_flow_and_is_at_least_one_pitch_wide() {
             ("width", number(5)),
         ],
     );
-    let plane = Plane {
-        pitch: 0.25,
-        ..WIDE
+    let spaced = |x| {
+        Some(ScenePoint {
+            x,
+            y: 0.0,
+            spacing: 0.25,
+        })
     };
-    let points = [at(0.0, 0.0), at(0.125, 0.0), at(0.25, 0.0), at(-0.5, 0.0)];
+    let points = [spaced(0.0), spaced(0.125), spaced(0.25), spaced(-0.5)];
 
-    let half_round =
-        highlight.render_across(Duration::from_millis(500), RIGHT, plane, &points, SEED);
-    let start = highlight.render_across(Duration::ZERO, RIGHT, plane, &points, SEED);
+    let half_round = highlight.render_across(Duration::from_millis(500), RIGHT, WIDE, &points);
+    let start = highlight.render_across(Duration::ZERO, RIGHT, WIDE, &points);
 
     assert_eq!(
         half_round,
         vec![WHITE, Rgb::new(128, 128, 128), BLACK, BLACK]
     );
-    assert_eq!(start[3], WHITE);
-    assert_eq!(start[0], BLACK);
+    assert_ne!(start[3], BLACK, "the band enters at the first end");
+    assert_eq!(&start[..3], &[BLACK; 3]);
 }
 
 #[test]
@@ -147,7 +147,6 @@ fn the_picture_does_not_depend_on_the_scale_of_the_plane() {
     let double = Plane {
         width: 2.0,
         height: 1.0,
-        pitch: 0.0,
     };
     let flow = Flow::Along { angle: 30 };
 
@@ -175,4 +174,22 @@ fn a_flow_keeps_its_stored_form() {
 
     assert_eq!(along, r#"{"Along":{"angle":45}}"#);
     assert_eq!(centre, r#"{"FromCentre":{"x":50,"y":20}}"#);
+}
+
+#[test]
+fn the_two_ends_of_the_plane_never_light_together() {
+    let highlight = effect(
+        "moving-highlight",
+        &[("speed", number(60)), ("width", number(10))],
+    );
+    let ends = [at(-0.5, 0.0), at(0.5, 0.0)];
+
+    for millis in 0..1_000 {
+        let colors = highlight.render_across(Duration::from_millis(millis), RIGHT, WIDE, &ends);
+
+        assert!(
+            colors[0] == BLACK || colors[1] == BLACK,
+            "both ends lit at {millis} ms: {colors:?}"
+        );
+    }
 }

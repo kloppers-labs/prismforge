@@ -69,17 +69,18 @@ impl Effect {
         flow: Flow,
         plane: Plane,
         points: &[Option<ScenePoint>],
-        _seed: u64,
     ) -> Vec<Rgb> {
         let seconds = time.as_secs_f64();
         let projection = Projection::new(flow, plane);
-        let pitch = projection.share(plane.pitch);
         points
             .iter()
             .map(|point| match point {
                 Some(point) => dimmed(
-                    self.program
-                        .color_along(seconds, projection.position(*point), pitch),
+                    self.program.color_along(
+                        seconds,
+                        projection.position(*point),
+                        projection.share(point.spacing),
+                    ),
                     self.brightness,
                 ),
                 None => BLACK,

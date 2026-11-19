@@ -1,4 +1,4 @@
-use std::f64::consts::TAU;
+use std::f64::consts::{PI, TAU};
 
 use serde::{Deserialize, Serialize};
 
@@ -169,6 +169,18 @@ impl Geometry {
         }
     }
 
+    /// The gap between neighbouring LEDs in the component's own space, from the shape and not from the wiring order; 0 for one LED.
+    pub fn spacing(&self) -> f64 {
+        match self {
+            Self::Strip(strip) => 1.0 / f64::from(strip.leds.max(1)),
+            Self::Ring(ring) if ring.leds > 1 => (PI / f64::from(ring.leds)).sin(),
+            Self::Matrix(matrix) => 1.0 / f64::from(matrix.columns.max(matrix.rows).max(1)),
+            Self::Perimeter(perimeter) => perimeter.spacing(),
+            Self::Line(line) => line.length() / f64::from(line.leds.max(1)),
+            Self::Ring(_) | Self::Point(_) => 0.0,
+        }
+    }
+
     pub(crate) fn is_valid(&self) -> bool {
         let count = self.led_count();
         let shape = match self {
@@ -253,6 +265,20 @@ impl Perimeter {
         [self.top, self.right, self.bottom, self.left]
     }
 
+    fn spacing(&self) -> f64 {
+        let longer = f64::from(self.width.max(self.height).max(1));
+        let (width, height) = (
+            f64::from(self.width) / longer,
+            f64::from(self.height) / longer,
+        );
+        self.sides()
+            .into_iter()
+            .zip([width, height, width, height])
+            .filter(|(count, _)| *count > 0)
+            .map(|(count, length)| length / f64::from(count))
+            .fold(0.0, f64::max)
+    }
+
     fn leds(&self) -> Vec<Location> {
         let longer = f64::from(self.width.max(self.height));
         let (half_width, half_height) = (
@@ -320,6 +346,13 @@ impl Line {
                 path[0]
             })
             .collect()
+    }
+
+    fn length(&self) -> f64 {
+        self.normalised()
+            .windows(2)
+            .map(|pair| pair[0].distance(pair[1]))
+            .sum()
     }
 
     fn normalised(&self) -> Vec<Location> {

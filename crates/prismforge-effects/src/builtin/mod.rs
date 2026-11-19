@@ -90,10 +90,10 @@ impl Program {
         )
     }
 
-    /// The colour at `position` across a plane; `pitch` is the widest gap between LEDs on the same scale.
-    pub fn color_along(&self, seconds: f64, position: f64, pitch: f64) -> Rgb {
+    /// The colour at `position` across a plane; `spacing` is the gap between the LED's neighbours on the same scale.
+    pub fn color_along(&self, seconds: f64, position: f64, spacing: f64) -> Rgb {
         match self {
-            Self::MovingHighlight(effect) => effect.color_along(seconds, position, pitch),
+            Self::MovingHighlight(effect) => effect.color_along(seconds, position, spacing),
             other => other.color_at(seconds, position, 0),
         }
     }

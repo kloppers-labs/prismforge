@@ -238,7 +238,7 @@ impl Layout {
                 let points: Vec<Option<ScenePoint>> = (0..leds)
                     .map(|index| across.points.get(index).copied().flatten())
                     .collect();
-                effect.render_across(time, across.flow, across.plane, &points, 0)
+                effect.render_across(time, across.flow, across.plane, &points)
             }
         }
     }

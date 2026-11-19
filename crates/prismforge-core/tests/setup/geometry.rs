@@ -240,3 +240,18 @@ fn a_rotation_turns_the_component_clockwise_after_the_flip() {
         &[(100.0, 65.0), (100.0, 55.0), (100.0, 45.0), (100.0, 35.0)],
     );
 }
+
+#[test]
+fn the_spacing_of_leds_comes_from_the_shape_not_the_wire_order() {
+    let close = |left: f64, right: f64| (left - right).abs() < 1e-9;
+
+    assert!(close(strip(4).spacing(), 0.25));
+    assert!(close(ring(0, Turn::Clockwise).spacing(), 0.5_f64.sqrt()));
+    assert!(close(
+        matrix(Corner::TopLeft, Runs::AlongRows, false).spacing(),
+        THIRD
+    ));
+    assert!(close(perimeter(Turn::Clockwise).spacing(), 0.5));
+    assert!(close(point().spacing(), 0.0));
+    assert!(close(line(FirstLed::AtStart).spacing(), 0.5));
+}

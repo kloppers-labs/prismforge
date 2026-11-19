@@ -64,7 +64,7 @@ pub fn plan_across(
     devices: &[SessionDevice],
 ) -> Option<AcrossPlan> {
     let view = setup.view(view)?;
-    let placed: Vec<Vec<Option<Vec<Location>>>> = setup
+    let placed: Vec<Vec<Option<Located>>> = setup
         .outputs
         .iter()
         .map(|output| located(setup, view, output))
@@ -104,15 +104,15 @@ pub fn plan_across(
         let mut points: Vec<Option<ScenePoint>> = vec![None; length];
         for &index in &members {
             let parts = setup.parts(&setup.outputs[index]);
-            for (part, leds) in parts.iter().zip(&placed[index]) {
-                let Some(leds) = leds else {
+            for (part, located) in parts.iter().zip(&placed[index]) {
+                let Some(located) = located else {
                     continue;
                 };
-                for (offset, location) in leds.iter().enumerate() {
+                for (offset, location) in located.leds.iter().enumerate() {
                     if let Some(slot) = points.get_mut(part.leds.start + offset)
                         && slot.is_none()
                     {
-                        *slot = Some(domain.point(*location));
+                        *slot = Some(domain.point(*location, located.spacing));
                     }
                 }
             }
@@ -127,22 +127,28 @@ pub fn plan_across(
     Some(plan)
 }
 
-/// The view location of each LED of each part of `output`, in part order; `None` for a part not placed in the view.
-fn located(setup: &Setup, view: &View, output: &SetupOutput) -> Vec<Option<Vec<Location>>> {
+/// One placed component: each LED's view location, and the gap between neighbouring LEDs in view units.
+struct Located {
+    leds: Vec<Location>,
+    spacing: f64,
+}
+
+/// Each part of `output` in part order as placed in the view; `None` for a part not placed in it.
+fn located(setup: &Setup, view: &View, output: &SetupOutput) -> Vec<Option<Located>> {
     setup
         .parts(output)
         .iter()
         .map(|part| {
             let placement = view.placement(&part.component)?;
-            let component = setup.component(&part.component)?;
-            Some(
-                component
-                    .geometry
+            let geometry = &setup.component(&part.component)?.geometry;
+            Some(Located {
+                leds: geometry
                     .leds()
                     .into_iter()
                     .map(|led| placement.locate(led))
                     .collect(),
-            )
+                spacing: geometry.spacing() * f64::from(placement.size),
+            })
         })
         .collect()
 }
@@ -160,24 +166,17 @@ struct Domain {
     longer: f64,
     width: f64,
     height: f64,
-    pitch: f64,
 }
 
 impl Domain {
-    fn new<'a>(components: impl Iterator<Item = &'a Vec<Location>>) -> Self {
+    fn new<'a>(components: impl Iterator<Item = &'a Located>) -> Self {
         let (mut low, mut high) = (
             Location::new(f64::INFINITY, f64::INFINITY),
             Location::new(f64::NEG_INFINITY, f64::NEG_INFINITY),
         );
-        let mut pitch: f64 = 0.0;
-        for leds in components {
-            for led in leds {
-                low = Location::new(low.x.min(led.x), low.y.min(led.y));
-                high = Location::new(high.x.max(led.x), high.y.max(led.y));
-            }
-            for pair in leds.windows(2) {
-                pitch = pitch.max(pair[0].distance(pair[1]));
-            }
+        for led in components.flat_map(|located| &located.leds) {
+            low = Location::new(low.x.min(led.x), low.y.min(led.y));
+            high = Location::new(high.x.max(led.x), high.y.max(led.y));
         }
         if low.x > high.x {
             return Self {
@@ -185,7 +184,6 @@ impl Domain {
                 longer: 0.0,
                 width: 0.0,
                 height: 0.0,
-                pitch: 0.0,
             };
         }
         let (width, height) = (high.x - low.x, high.y - low.y);
@@ -194,33 +192,29 @@ impl Domain {
             longer: width.max(height),
             width,
             height,
-            pitch,
+        }
+    }
+
+    fn scale(&self, length: f64) -> f64 {
+        if self.longer > 0.0 {
+            length / self.longer
+        } else {
+            0.0
         }
     }
 
     fn plane(&self) -> Plane {
-        let scale = |length: f64| {
-            if self.longer > 0.0 {
-                length / self.longer
-            } else {
-                0.0
-            }
-        };
         Plane {
-            width: scale(self.width),
-            height: scale(self.height),
-            pitch: scale(self.pitch),
+            width: self.scale(self.width),
+            height: self.scale(self.height),
         }
     }
 
-    fn point(&self, location: Location) -> ScenePoint {
-        if self.longer > 0.0 {
-            ScenePoint {
-                x: (location.x - self.centre.x) / self.longer,
-                y: (location.y - self.centre.y) / self.longer,
-            }
-        } else {
-            ScenePoint { x: 0.0, y: 0.0 }
+    fn point(&self, location: Location, spacing: f64) -> ScenePoint {
+        ScenePoint {
+            x: self.scale(location.x - self.centre.x),
+            y: self.scale(location.y - self.centre.y),
+            spacing: self.scale(spacing),
         }
     }
 }

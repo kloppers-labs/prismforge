@@ -2,7 +2,8 @@ use std::time::{Duration, Instant};
 
 use prismforge_core::session::SessionDevice;
 use prismforge_core::setup::{
-    AcrossPlan, OutputStatus, PlacedTarget, Setup, SetupProblem, plan_across,
+    AcrossPlan, Corner, Geometry, Matrix, OutputStatus, PlacedTarget, Runs, Setup, SetupProblem,
+    plan_across,
 };
 use prismforge_core::store::MemberState;
 use prismforge_core::{DeviceIdentity, DeviceRef, OutputTarget, Rgb};
@@ -28,7 +29,7 @@ fn gradient() -> prismforge_effects::Effect {
 }
 
 fn render(plan: &AcrossPlan, target: &PlacedTarget) -> Vec<Rgb> {
-    gradient().render_across(Duration::ZERO, plan.flow, plan.plane, &target.points, 0)
+    gradient().render_across(Duration::ZERO, plan.flow, plan.plane, &target.points)
 }
 
 fn target(plan: &AcrossPlan, zone: usize) -> &PlacedTarget {
@@ -326,7 +327,7 @@ fn sampling_one_frame_of_a_large_setup_fits_the_frame_budget() {
     for frame in 0..FRAMES {
         let time = Duration::from_millis(u64::from(frame) * 16);
         for placed in &plan.targets {
-            let colors = highlight.render_across(time, plan.flow, plan.plane, &placed.points, 0);
+            let colors = highlight.render_across(time, plan.flow, plan.plane, &placed.points);
             assert_eq!(colors.len(), placed.points.len());
         }
     }
@@ -357,5 +358,102 @@ fn every_output_reports_its_state_and_any_problem_with_its_parts() {
             needed: 36,
             available: 30,
         })
+    );
+}
+
+fn highlight() -> prismforge_effects::Effect {
+    prepare(&EffectInstance {
+        effect: "moving-highlight".into(),
+        values: [
+            ("speed".to_owned(), ControlValue::Number(60)),
+            ("width".to_owned(), ControlValue::Number(5)),
+            ("background".to_owned(), ControlValue::Color(BLACK)),
+        ]
+        .into(),
+    })
+    .expect("valid")
+}
+
+/// The most and the fewest LEDs of `placed` the highlight lights in any frame over one round.
+fn lit_range(plan: &AcrossPlan, placed: &PlacedTarget) -> (usize, usize) {
+    let effect = highlight();
+    let counts: Vec<usize> = (0..100)
+        .map(|step| {
+            let time = Duration::from_millis(step * 10);
+            effect
+                .render_across(time, plan.flow, plan.plane, &placed.points)
+                .iter()
+                .zip(placed.points.iter())
+                .filter(|(color, point)| point.is_some() && **color != BLACK)
+                .count()
+        })
+        .collect();
+    (
+        counts.iter().copied().max().unwrap_or(0),
+        counts.iter().copied().min().unwrap_or(0),
+    )
+}
+
+#[test]
+fn a_progressive_matrix_keeps_the_highlight_a_band() {
+    let setup = Setup {
+        components: vec![component(
+            "c-panel",
+            Geometry::Matrix(Matrix {
+                columns: 6,
+                rows: 4,
+                first: Corner::TopLeft,
+                runs: Runs::AlongRows,
+                serpentine: false,
+                extra: Map::new(),
+            }),
+        )],
+        outputs: vec![output("o-panel", HEADER_1, 0, &[&["c-panel"]])],
+        views: vec![view("v-pc", vec![placed("c-panel", 0, 0, 120)])],
+        extra: Map::new(),
+    };
+    let plan = plan_across(&setup, &view_id("v-pc"), RIGHT, &[board()]).expect("view");
+
+    let (most, _) = lit_range(&plan, target(&plan, HEADER_1));
+
+    assert!(
+        most <= 12,
+        "the band lights at most two columns, not {most} of 24 LEDs"
+    );
+    assert!(most >= 4, "the band lights at least one column");
+}
+
+#[test]
+fn a_sparse_component_does_not_widen_the_band_of_a_dense_one() {
+    let setup = Setup {
+        components: vec![
+            component("c-dense", strip(36)),
+            component("c-sparse", strip(2)),
+        ],
+        outputs: vec![
+            output("o-dense", HEADER_1, 0, &[&["c-dense"]]),
+            output("o-sparse", STRIP, 0, &[&["c-sparse"]]),
+        ],
+        views: vec![view(
+            "v-pc",
+            vec![
+                placed("c-dense", 50, 0, 100),
+                placed("c-sparse", 160, 0, 100),
+            ],
+        )],
+        extra: Map::new(),
+    };
+    let plan = plan_across(&setup, &view_id("v-pc"), RIGHT, &[board()]).expect("view");
+
+    let (dense, _) = lit_range(&plan, target(&plan, HEADER_1));
+    let (sparse, _) = lit_range(&plan, target(&plan, STRIP));
+
+    assert!(
+        dense <= 6,
+        "the dense strip shows a narrow band, not {dense} of 36 LEDs"
+    );
+    assert!(
+        sparse >= 1,
+        "the sparse strip still lights as the band passes"
     );
 }
