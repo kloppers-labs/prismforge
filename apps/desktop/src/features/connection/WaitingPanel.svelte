@@ -37,7 +37,7 @@
   {:else if live}
     <p>
       {capitalise(serverName(session))} answered but reports no devices. Check the device list in {serverName(session)}, then
-      select Refresh devices.
+      choose Rescan devices in the connection panel at the top of the window.
     </p>
   {:else if !summary.retrying}
     <p class="loading" aria-busy="true">Reading the device list when the server answers.</p>

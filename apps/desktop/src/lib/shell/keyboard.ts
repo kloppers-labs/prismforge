@@ -32,7 +32,6 @@ export function isQuit(event: KeyboardEvent): boolean {
   return !event.repeat && !isMac() && withModifier(event) && event.key.toLowerCase() === "q";
 }
 
-/** Moves focus to the next region that holds something to focus, wrapping around. */
 export function cycleRegion(regions: (HTMLElement | null | undefined)[], backwards: boolean) {
   const present = regions.filter((region): region is HTMLElement => !!region);
   if (present.length === 0) {
