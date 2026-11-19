@@ -89,7 +89,7 @@ The window has three parts. `src/lib/shell` holds them. `docs/decisions/0005-she
 - **The status strip** at the top of the page shows the connection, demo mode and the active profile. The connection chip opens a panel with the reason in words and the actions for that state: Rescan devices, or Connect to OpenRGB and Start demo mode; Disconnect or Stop retrying sit apart below a line. A panel whose only action ends the session opens with focus on the panel, not on that action. The profile chip shows unsaved changes, a profile that is being applied, and the profile set to apply on connect; its panel has Save changes and Open Profiles. In demo mode a striped "Demo mode" marker and a striped edge stay on every screen.
 - **The notice slot** under the strip holds command problems, a failed close or quit, connection problems, repaired files, the tray stop report and the apply-on-connect result. Problems come first, then cautions, then the rest; within a tone the newest is first. With more than one notice only the first shows, with "Show all N notices", and a notice that arrives behind the count is announced. A connection notice stays until the connection changes.
 
-Without a connection, Devices shows the connection form, and Effects shows how to connect. From 1182 px wide, Diagnostics opens beside the page: 320 px wide with the compact rail below 1400 px, 400 px wide from 1400 px. Below 1182 px it covers the page, which cannot take focus until Diagnostics closes; choosing an area, any action in the status strip and any dialog close it first. The notices stay visible above it. Diagnostics has Copy as text for a bug report; the copy leaves out the folder path.
+Without a connection, Devices shows the connection form, and Effects shows how to connect. From 1182 px wide, Diagnostics opens beside the page: 320 px wide with the compact rail below 1400 px, 400 px wide from 1400 px. Below 1182 px it covers the page, which cannot take focus until Diagnostics closes; choosing an area, any action in the status strip and any dialog close it first. The notices stay visible above it. Diagnostics has Copy as text for a bug report, and Copy section in each section; the copy leaves out the folder path.
 
 ## The screens
 
@@ -98,6 +98,8 @@ Without a connection, Devices shows the connection form, and Effects shows how t
 - **Effects.** A command bar at the top holds the target, Apply effect, Stop effect, the edit mode (Live when edits go to the device, Draft when they wait for Apply, Off with the reason) and the output line. Results and How effects run sit in the page below it. The whole effect card selects the effect. A device left to another program shows a notice with Hand back to PrismForge. Hardware modes and the other-program form sit behind Details.
 - **Profiles.** The selected profile comes first. Save current lighting… in the list header opens a dialog. Results show under the profile's actions.
 - **Settings.** Grouped: closing the window, starting with the system, effect output (the frame rate), files and quit. Each switch says its consequence in one line; more sits behind Details.
+
+Rows, effect cards, the two chips and the Diagnostics sections have a context menu with the actions of their buttons; see decisions 19 and 20 in `docs/decisions/0005-shell-and-design-tokens.md`. A release build shows no WebView menu (Reload, Inspect) outside text fields; a development build still shows it where PrismForge has no menu.
 
 Long explanations sit behind a Details disclosure under one short line. Selected rows everywhere use the rail's cue. See decisions 14 to 18 in `docs/decisions/0005-shell-and-design-tokens.md`.
 
@@ -108,6 +110,7 @@ Long explanations sit behind a Details disclosure under one short line. Selected
 | F6, Shift+F6 | Move between the rail, the status strip, the notices, the page and Diagnostics. |
 | Tab, as the first key | Reaches "Skip to content". |
 | Arrow keys, Home, End, Escape in a chip panel | Move between its actions; Escape closes it and returns to the chip. A click outside also closes it. |
+| Shift+F10, the Menu key, or a right-click | Opens the context menu of the focused row, card, chip or Diagnostics section, at that item. Arrow keys wrap, Home and End jump, a letter moves to the next item that starts with it, Enter or Space runs it, Escape or Tab closes the menu and returns focus. Every item is also a button on the same screen. In text fields the system's Cut, Copy and Paste menu stays. |
 | Ctrl+Q (Windows and Linux) | Quits PrismForge. |
 
 The design tokens are in `src/lib/tokens.css`: colour roles, type, spacing, radii, shadows, motion, layers and sizes. Use a token instead of a literal value.
