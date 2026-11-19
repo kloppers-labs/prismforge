@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
 import { button, chooseTarget, effectHandlers } from "../../test/effects";
+import { go } from "../../test/shell";
 import { demoConnected, demoEffectsRunning } from "../../test/fixtures/sessions";
 
 function tabStops(): HTMLElement[] {
@@ -178,4 +179,37 @@ test("a_live_edit_never_scrolls_the_page_but_an_apply_press_shows_its_result", a
   await fireEvent.click(button("Apply effect"));
   await waitFor(() => expect(scrolled).toHaveBeenCalled());
   scrolled.mockRestore();
+});
+
+test("switching_targets_or_returning_to_effects_never_scrolls_only_an_apply_press_does", async () => {
+  Element.prototype.scrollIntoView ??= () => {};
+  const scrolled = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
+  fakeShell(demoConnected, effectHandlers({ apply_effect: () => null }));
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+  await fireEvent.click(button("Apply effect"));
+  await waitFor(() => expect(scrolled).toHaveBeenCalledTimes(1));
+  scrolled.mockClear();
+
+  await chooseTarget("Demo Light Bar");
+  await chooseTarget("Demo Graphics Card");
+  await go("Devices");
+  await chooseTarget("Demo Graphics Card");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(scrolled).not.toHaveBeenCalled();
+
+  await fireEvent.click(screen.getByRole("radio", { name: "Breathing" }));
+  await fireEvent.click(button("Apply effect"));
+  await waitFor(() => expect(scrolled).toHaveBeenCalledTimes(1));
+  scrolled.mockRestore();
+});
+
+test("the_owner_line_names_the_demo_backend_in_demo_mode", async () => {
+  fakeShell(demoEffectsRunning, effectHandlers());
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+
+  expect(screen.getByText("A PrismForge effect, computed by PrismForge and sent to the demo backend. Nothing reaches hardware.")).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/sent to the device/);
 });

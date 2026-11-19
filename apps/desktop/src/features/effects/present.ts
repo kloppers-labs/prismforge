@@ -149,13 +149,15 @@ function shortCondition(condition: OutputCondition): string {
   return "Paused" in condition ? "paused" : "refused";
 }
 
-export function ownerText(device: SessionDevice, output: DeviceOutput | null): string {
+export function ownerText(session: SessionSnapshot, device: SessionDevice, output: DeviceOutput | null): string {
   if (!output) {
     return "None. PrismForge sends nothing to this device.";
   }
   const owner = output.owner;
   if (owner === "Effect") {
-    return "A PrismForge effect, computed by PrismForge and sent to the device.";
+    return session.backend.origin === "Simulated"
+      ? "A PrismForge effect, computed by PrismForge and sent to the demo backend. Nothing reaches hardware."
+      : "A PrismForge effect, computed by PrismForge and sent to the device through OpenRGB.";
   }
   if ("HardwareMode" in owner) {
     return `Hardware mode ${modeName(device, owner.HardwareMode.mode)}, selected in PrismForge. It runs on the device itself. PrismForge writes nothing to this device.`;

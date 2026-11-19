@@ -3,7 +3,7 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import { serverName } from "../connection/wording";
   import FailureNotice from "./FailureNotice.svelte";
-  import { stopBlocked, stopText } from "./present";
+  import { sameTarget, stopBlocked, stopText } from "./present";
   import type { EffectsState } from "./state.svelte";
 
   let { effects, session, blocked, held }: { effects: EffectsState; session: SessionSnapshot; blocked: string | null; held: string | null } = $props();
@@ -13,8 +13,16 @@
   let stopReason = $derived(held ?? (effects.target ? stopBlocked(session, effects.target) : null));
   let box: HTMLDivElement | undefined = $state();
 
+  let seen = untrack(() => effects.pressed?.count ?? 0);
+
   $effect(() => {
-    if (effects.pressed > 0) {
+    const press = effects.pressed;
+    if (press === null || press.count === seen) {
+      return;
+    }
+    seen = press.count;
+    const target = untrack(() => effects.target);
+    if (target && sameTarget(press.target, target)) {
       untrack(() => box)?.scrollIntoView?.({ block: "nearest" });
     }
   });

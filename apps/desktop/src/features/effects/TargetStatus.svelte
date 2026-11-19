@@ -13,7 +13,7 @@
 <dl class="status">
   <dt>Controlled by</dt>
   <dd>
-    {ownerText(device, output)}
+    {ownerText(session, device, output)}
     {#if zone !== null}<span class="note">This belongs to the whole device: a hardware mode or another program affects every zone.</span>{/if}
   </dd>
 </dl>

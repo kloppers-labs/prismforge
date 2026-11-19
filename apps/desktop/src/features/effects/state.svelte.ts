@@ -34,8 +34,8 @@ export class EffectsState {
   fields = $state<Fields>({});
   rustProblems = $state<Record<string, string>>({});
   working = $state<"apply" | "stop" | null>(null);
-  /** Rises when a result follows an Apply or Stop press, never after a live edit. */
-  pressed = $state(0);
+  /** The result of the last Apply or Stop press and its target; live edits never set it. */
+  pressed = $state<{ count: number; target: OutputTarget } | null>(null);
   private lastColor = START_COLOR;
   externalProblem = $state<Failure | null>(null);
   private effectResult = $state<EffectFeedback | null>(null);
@@ -159,7 +159,7 @@ export class EffectsState {
       this.held = this.held.filter((key) => key !== deviceHold(target.device) && key !== targetHold(target));
     }
     await this.send();
-    this.pressed += 1;
+    this.press(target);
   }
 
   async stop() {
@@ -178,7 +178,7 @@ export class EffectsState {
     } else {
       this.effectResult = { kind: "failed", error: answer.error };
     }
-    this.pressed += 1;
+    this.press(target);
   }
 
   async selectMode(device: DeviceRef, mode: number, name: string) {
@@ -320,6 +320,12 @@ export class EffectsState {
     this.effectResult = null;
     this.modeResult = null;
     this.externalProblem = null;
+  }
+
+  private press(target: OutputTarget | null) {
+    if (target) {
+      this.pressed = { count: (this.pressed?.count ?? 0) + 1, target };
+    }
   }
 
   private scheduleReapply() {
