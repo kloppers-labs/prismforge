@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use prismforge_core::DeviceRef;
 use prismforge_core::session::{ReconnectPolicy, RestoreOutcome, SessionConfig};
-use prismforge_desktop::{ExitGuard, Shell, ShellConfig, ShellView, stop_then_exit};
+use prismforge_desktop::{ExitGuard, Shell, ShellConfig, ShellView, stop_then_exit, stop_within};
 use prismforge_testkit::{DemoBackend, DemoOutput};
 use tokio::time::Instant;
 
@@ -118,4 +118,62 @@ async fn exit_does_not_wait_when_the_session_is_already_gone() {
     .expect("exit without any session did not hang");
 
     assert_eq!(exits, 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_stop_at_process_end_releases_effects_and_never_waits_past_its_limit() {
+    let (shell, recorder, _dir) = shell();
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    shell.start(backend).await.expect("start");
+    recorder.wait_for(is_connected).await;
+    shell
+        .apply_effect(
+            prismforge_core::OutputTarget {
+                device: DeviceRef::new("demo-graphics-card"),
+                zone: None,
+            },
+            prismforge_effects::EffectInstance {
+                effect: "rainbow-wave".into(),
+                values: Default::default(),
+            },
+        )
+        .await
+        .expect("effect");
+
+    let finished = stop_within(&shell, Duration::from_secs(6)).await;
+
+    assert!(finished);
+    assert!(matches!(
+        controls.outputs().last(),
+        Some(DemoOutput::ModeReapplied { .. })
+    ));
+    assert_eq!(shell.view().session, None);
+
+    let (stuck, stuck_recorder, _stuck_dir) = self::shell();
+    let slow = DemoBackend::new();
+    let slow_controls = slow.controls();
+    stuck.start(slow).await.expect("start");
+    stuck_recorder.wait_for(is_connected).await;
+    stuck
+        .apply_effect(
+            prismforge_core::OutputTarget {
+                device: DeviceRef::new("demo-graphics-card"),
+                zone: None,
+            },
+            prismforge_effects::EffectInstance {
+                effect: "rainbow-wave".into(),
+                values: Default::default(),
+            },
+        )
+        .await
+        .expect("effect");
+    slow_controls.set_call_delay(Duration::from_secs(3600));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let started = Instant::now();
+
+    let ended = stop_within(&stuck, Duration::from_secs(6)).await;
+
+    assert!(!ended);
+    assert!(started.elapsed() <= Duration::from_secs(6));
 }

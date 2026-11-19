@@ -4,13 +4,13 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 
-use crate::lifecycle::TrayModel;
+use crate::lifecycle::{TrayModel, WindowControl};
 use crate::native::{AppExit, MainWindow};
 use crate::{DesktopLifecycle, DesktopShell};
 
 const TOGGLE: &str = "toggle";
 const STOP_ALL: &str = "stop-all";
-const QUIT: &str = "quit";
+const QUIT: &str = "tray-quit";
 const SPACING: Duration = Duration::from_millis(250);
 
 pub struct Tray {
@@ -20,6 +20,7 @@ pub struct Tray {
     effects: MenuItem<Wry>,
     profile: MenuItem<Wry>,
     stop_all: MenuItem<Wry>,
+    quit: MenuItem<Wry>,
 }
 
 /// Fails where the system has no tray; the caller then makes closing the window quit.
@@ -36,6 +37,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<Tray> {
         None::<&str>,
     )?;
     let quit = MenuItem::with_id(app, QUIT, "Quit PrismForge", true, None::<&str>)?;
+    let quit_item = quit.clone();
     let menu = Menu::with_items(
         app,
         &[
@@ -88,6 +90,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<Tray> {
         effects,
         profile,
         stop_all,
+        quit: quit_item,
     })
 }
 
@@ -97,22 +100,34 @@ pub enum Action {
     Toggle,
     StopAll,
     Quit,
+    SecondInstance,
+    CloseRequested,
 }
 
-/// Runs a tray or system action through the same lifecycle and shell methods as the commands.
+/// Runs a tray, menu, window or second-start action through the same lifecycle and shell methods as the commands.
 pub fn act(app: &AppHandle, action: Action) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let shell = app.state::<DesktopShell>();
-        let lifecycle = app.state::<DesktopLifecycle>();
         let window = MainWindow::of(&app);
+        let (Some(shell), Some(lifecycle)) = (
+            app.try_state::<DesktopShell>(),
+            app.try_state::<DesktopLifecycle>(),
+        ) else {
+            window.show();
+            return;
+        };
+        let exit = AppExit(app.clone());
         match action {
             Action::Show => lifecycle.show(&shell, &window).await,
             Action::Toggle => lifecycle.toggle(&shell, &window).await,
             Action::StopAll => {
                 lifecycle.stop_all(&shell).await;
             }
-            Action::Quit => lifecycle.quit(&window, &AppExit(app.clone())),
+            Action::Quit => {
+                lifecycle.quit(&shell, &window, &exit).await;
+            }
+            Action::SecondInstance => lifecycle.second_instance(&shell, &window).await,
+            Action::CloseRequested => lifecycle.close_requested(&shell, &window, &exit).await,
         }
     });
 }
@@ -144,5 +159,7 @@ fn show(tray: &Tray, model: &TrayModel) {
     let _ = tray.effects.set_text(&model.effects);
     let _ = tray.profile.set_text(&model.profile);
     let _ = tray.stop_all.set_enabled(model.stop_enabled);
+    let _ = tray.quit.set_text(&model.quit);
+    let _ = tray.quit.set_enabled(model.quit_enabled);
     let _ = tray.icon.set_tooltip(Some(&model.tooltip));
 }

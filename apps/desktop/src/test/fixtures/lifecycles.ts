@@ -19,7 +19,9 @@ export const lifecycleStartPath: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "Registered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": {
@@ -45,7 +47,9 @@ export const lifecycleFresh: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -67,7 +71,9 @@ export const lifecycleAsking: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": true,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -92,7 +98,9 @@ export const lifecycleChosen: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "Registered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -117,7 +125,9 @@ export const lifecycleHidden: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "Registered",
+  "machine_start_entry": false,
   "window_visible": false,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -139,7 +149,9 @@ export const lifecycleQuitChosen: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -165,7 +177,9 @@ export const lifecycleNoTray: LifecycleView = {
     }
   },
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -191,7 +205,57 @@ export const lifecycleEntryUnknown: LifecycleView = {
       "detail": "No home folder was found."
     }
   },
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
+  "close_prompt": false,
+  "tray_stop": null,
+  "start_profile": "NotMarked",
+  "folder": "store-folder"
+};
+
+export const lifecycleMachineEntry: LifecycleView = {
+  "revision": 2,
+  "settings": {
+    "Ready": {
+      "settings": {
+        "on_close": null,
+        "start_hidden": false,
+        "connect_at_start": false,
+        "address": null
+      },
+      "notices": []
+    }
+  },
+  "tray": "Available",
+  "start_with_system": "NotRegistered",
+  "machine_start_entry": true,
+  "window_visible": true,
+  "quitting": false,
+  "close_prompt": false,
+  "tray_stop": null,
+  "start_profile": "NotMarked",
+  "folder": "store-folder"
+};
+
+export const lifecycleQuitting: LifecycleView = {
+  "revision": 3,
+  "settings": {
+    "Ready": {
+      "settings": {
+        "on_close": null,
+        "start_hidden": false,
+        "connect_at_start": false,
+        "address": null
+      },
+      "notices": []
+    }
+  },
+  "tray": "Available",
+  "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
+  "window_visible": false,
+  "quitting": true,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -207,7 +271,9 @@ export const lifecycleInUse: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": {
@@ -248,7 +314,9 @@ export const lifecycleRecovered: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": null,
   "start_profile": "NotMarked",
@@ -270,7 +338,9 @@ export const lifecycleTrayStopped: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": false,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": {
     "sequence": 1,
@@ -314,7 +384,9 @@ export const lifecycleTrayStopBusy: LifecycleView = {
   },
   "tray": "Available",
   "start_with_system": "NotRegistered",
+  "machine_start_entry": false,
   "window_visible": true,
+  "quitting": false,
   "close_prompt": false,
   "tray_stop": {
     "sequence": 1,

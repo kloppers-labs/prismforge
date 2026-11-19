@@ -8,7 +8,15 @@ import type { TrayState } from "./TrayState";
 /**
  * Everything the Settings screen and the first-close question show.
  */
-export type LifecycleView = { revision: number, settings: SettingsState, tray: TrayState, start_with_system: StartEntryState, window_visible: boolean, 
+export type LifecycleView = { revision: number, settings: SettingsState, tray: TrayState, start_with_system: StartEntryState, 
+/**
+ * An entry for every user of this computer, left by an earlier run as Administrator.
+ */
+machine_start_entry: boolean, window_visible: boolean, 
+/**
+ * Quit has started; further quit requests from the user are ignored until the process ends.
+ */
+quitting: boolean, 
 /**
  * The window asked to close and waits for the user's first choice.
  */

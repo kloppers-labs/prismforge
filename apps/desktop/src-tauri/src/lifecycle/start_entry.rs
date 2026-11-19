@@ -7,6 +7,11 @@ pub trait StartEntry: Send + Sync + 'static {
     fn is_registered(&self) -> Result<bool, String>;
     fn register(&self) -> Result<(), String>;
     fn unregister(&self) -> Result<(), String>;
+
+    /// An entry for every user, which PrismForge never writes and cannot remove without administrator rights.
+    fn machine_wide(&self) -> bool {
+        false
+    }
 }
 
 /// What the system reports about the start entry, read back after every change.

@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+mod app_menu;
 mod apply_lock;
 mod commands;
 mod effects;
@@ -13,13 +15,16 @@ mod publisher;
 mod settings;
 mod shell;
 mod stores;
+mod system_entry;
 mod tray;
 mod view;
+
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 
 pub use effects::{EffectCatalog, preview_effect};
-pub use exit::{ExitGuard, stop_then_exit};
+pub use exit::{ExitGuard, stop_then_exit, stop_within};
 pub use forward::forward;
 pub use lifecycle::{
     AUTOSTART_ARG, AppSettingChange, ClosePrompt, CloseStep, DeviceStop, ExitControl, Lifecycle,
@@ -31,6 +36,7 @@ pub use publisher::{Publisher, ViewSink};
 pub use settings::SettingsStore;
 pub use shell::{Shell, ShellConfig};
 pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};
+pub use system_entry::{SystemStartEntry, run_command, startup_disabled};
 pub use view::{
     ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, MarkProblem, Marked,
     OnConnect, SettingProblem, ShellView,
@@ -49,16 +55,19 @@ impl ViewSink for WindowSink {
     }
 }
 
+/// The release limit of the session plus a margin; the last stop at process end never waits longer.
+const LAST_STOP_LIMIT: Duration = Duration::from_secs(6);
+
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(app_menu::build)
+        .on_menu_event(app_menu::on_event);
+    builder
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            tray::act(app, tray::Action::Show);
+            tray::act(app, tray::Action::SecondInstance);
         }))
-        .plugin(
-            tauri_plugin_autostart::Builder::new()
-                .arg(AUTOSTART_ARG)
-                .build(),
-        )
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -71,7 +80,7 @@ pub fn run() {
             app.manage(ExitGuard::default());
             let lifecycle = Lifecycle::new(
                 native::LifecycleWindowSink(handle.clone()),
-                native::SystemStartEntry(handle.clone()),
+                SystemStartEntry,
             );
             let tray = tray::create(&handle);
             lifecycle.set_tray(match &tray {
@@ -90,7 +99,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                close_requested(window.app_handle().clone());
+                tray::act(window.app_handle(), tray::Action::CloseRequested);
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -151,17 +160,6 @@ async fn start_up(app: AppHandle) {
         .await;
 }
 
-fn close_requested(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        let shell = app.state::<DesktopShell>();
-        let lifecycle = app.state::<DesktopLifecycle>();
-        let window = native::MainWindow::of(&app);
-        lifecycle
-            .close_requested(&shell, &window, &native::AppExit(app.clone()))
-            .await;
-    });
-}
-
 fn on_run_event(app: &AppHandle, event: RunEvent) {
     match event {
         RunEvent::ExitRequested { api, .. } => {
@@ -175,6 +173,10 @@ fn on_run_event(app: &AppHandle, event: RunEvent) {
                 let shell = app.state::<DesktopShell>();
                 stop_then_exit(&shell, || app.exit(0)).await;
             });
+        }
+        RunEvent::Exit => {
+            let shell = app.state::<DesktopShell>();
+            tauri::async_runtime::block_on(stop_within(&shell, LAST_STOP_LIMIT));
         }
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => tray::act(app, tray::Action::Show),

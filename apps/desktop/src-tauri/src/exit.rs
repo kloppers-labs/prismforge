@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use crate::publisher::ViewSink;
 use crate::shell::Shell;
@@ -18,4 +19,9 @@ impl ExitGuard {
 pub async fn stop_then_exit<S: ViewSink>(shell: &Shell<S>, exit: impl FnOnce()) {
     shell.stop().await;
     exit();
+}
+
+/// The last stop when the process ends without an exit request; true when it finished within `limit`.
+pub async fn stop_within<S: ViewSink>(shell: &Shell<S>, limit: Duration) -> bool {
+    tokio::time::timeout(limit, shell.stop()).await.is_ok()
 }

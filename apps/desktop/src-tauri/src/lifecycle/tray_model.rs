@@ -12,9 +12,16 @@ pub struct TrayModel {
     pub profile: String,
     pub tooltip: String,
     pub stop_enabled: bool,
+    pub quit: String,
+    pub quit_enabled: bool,
 }
 
-pub fn tray_model(view: &ShellView, active: Option<&str>, window_visible: bool) -> TrayModel {
+pub fn tray_model(
+    view: &ShellView,
+    active: Option<&str>,
+    window_visible: bool,
+    quitting: bool,
+) -> TrayModel {
     let connection = view
         .session
         .as_ref()
@@ -37,10 +44,18 @@ pub fn tray_model(view: &ShellView, active: Option<&str>, window_visible: bool) 
             (None, Some(name)) => format!("Active profile: {name}"),
             (None, None) => "No active profile".into(),
         },
-        stop_enabled: view
-            .session
-            .as_ref()
-            .is_some_and(|session| !session.output.scene.assignments.is_empty()),
+        stop_enabled: !quitting
+            && view
+                .session
+                .as_ref()
+                .is_some_and(|session| !session.output.scene.assignments.is_empty()),
+        quit: if quitting {
+            "Quitting PrismForge"
+        } else {
+            "Quit PrismForge"
+        }
+        .into(),
+        quit_enabled: !quitting,
     }
 }
 

@@ -44,7 +44,11 @@ pub struct LifecycleView {
     pub settings: SettingsState,
     pub tray: TrayState,
     pub start_with_system: StartEntryState,
+    /// An entry for every user of this computer, left by an earlier run as Administrator.
+    pub machine_start_entry: bool,
     pub window_visible: bool,
+    /// Quit has started; further quit requests from the user are ignored until the process ends.
+    pub quitting: bool,
     /// The window asked to close and waits for the user's first choice.
     pub close_prompt: bool,
     /// The result of the last "Stop all PrismForge effects" from the tray.
@@ -110,6 +114,7 @@ struct State {
     window_visible: bool,
     prompt: ClosePrompt,
     tray_stop: Option<StopReport>,
+    quitting: bool,
 }
 
 /// Window, tray and start-up behaviour; tray actions, window events and commands all go through it.
@@ -135,6 +140,7 @@ impl<L: LifecycleSink> Lifecycle<L> {
                 window_visible: false,
                 prompt: ClosePrompt::default(),
                 tray_stop: None,
+                quitting: false,
             }),
             publishing: tokio::sync::Mutex::new(()),
             changes: watch::channel(0).0,
@@ -174,13 +180,17 @@ impl<L: LifecycleSink> Lifecycle<L> {
             Err(reason) => SettingsState::Unavailable { reason },
         };
         let start_profile = shell.start_profile().await;
+        let start_with_system = read_entry(self.entry.as_ref());
+        let machine_start_entry = self.entry.machine_wide();
         let state = self.lock();
         LifecycleView {
             revision: state.revision,
             settings,
             tray: state.tray.clone(),
-            start_with_system: read_entry(self.entry.as_ref()),
+            start_with_system,
+            machine_start_entry,
             window_visible: state.window_visible,
+            quitting: state.quitting,
             close_prompt: state.prompt.asking(),
             tray_stop: state.tray_stop.clone(),
             start_profile,
@@ -195,6 +205,7 @@ impl<L: LifecycleSink> Lifecycle<L> {
         state.revision += 1;
         view.revision = state.revision;
         view.window_visible = state.window_visible;
+        view.quitting = state.quitting;
         view.close_prompt = state.prompt.asking();
         view.tray_stop = state.tray_stop.clone();
         self.sink.deliver(&view);
@@ -344,7 +355,9 @@ impl<L: LifecycleSink> Lifecycle<L> {
     ) {
         match step {
             CloseStep::Hide => self.hide(shell, window).await,
-            CloseStep::Quit => self.quit(window, exit),
+            CloseStep::Quit => {
+                self.quit(shell, window, exit).await;
+            }
             CloseStep::Ask => {
                 self.publish(shell).await;
             }
@@ -375,11 +388,25 @@ impl<L: LifecycleSink> Lifecycle<L> {
         self.show(shell, window).await;
     }
 
-    /// Hides the window at once; the exit handler then stops the shell and ends the process.
-    pub fn quit(&self, window: &dyn WindowControl, exit: &dyn ExitControl) {
+    /// Starts the quit once: hides the window and asks for the exit; false when a quit already runs.
+    pub async fn quit<S: ViewSink>(
+        &self,
+        shell: &Shell<S>,
+        window: &dyn WindowControl,
+        exit: &dyn ExitControl,
+    ) -> bool {
+        {
+            let mut state = self.lock();
+            if state.quitting {
+                return false;
+            }
+            state.quitting = true;
+            state.window_visible = false;
+        }
         window.hide();
-        self.lock().window_visible = false;
         exit.exit();
+        self.publish(shell).await;
+        true
     }
 
     /// Stops every PrismForge effect device by device through the same command as the window.
@@ -398,7 +425,11 @@ impl<L: LifecycleSink> Lifecycle<L> {
 
     pub async fn tray_model<S: ViewSink>(&self, shell: &Shell<S>) -> TrayModel {
         let active = shell.active_profile_name().await;
-        tray_model(&shell.view(), active.as_deref(), self.window_visible())
+        let (visible, quitting) = {
+            let state = self.lock();
+            (state.window_visible, state.quitting)
+        };
+        tray_model(&shell.view(), active.as_deref(), visible, quitting)
     }
 
     fn lock(&self) -> MutexGuard<'_, State> {

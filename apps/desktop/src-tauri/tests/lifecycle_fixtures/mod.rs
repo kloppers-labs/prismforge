@@ -196,6 +196,22 @@ async fn problems(views: &mut Module, errors: &mut Module) {
         &stable(s.lifecycle.publish(&s.shell).await),
     );
 
+    let s = setup("life-machine", true, SessionConfig::default()).await;
+    s.entry
+        .machine
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    views.add(
+        "lifecycleMachineEntry",
+        &stable(s.lifecycle.publish(&s.shell).await),
+    );
+
+    let s = setup("life-quitting", true, SessionConfig::default()).await;
+    s.lifecycle.quit(&s.shell, &s.window, &s.exit).await;
+    views.add(
+        "lifecycleQuitting",
+        &stable(s.lifecycle.publish(&s.shell).await),
+    );
+
     let s = setup("life-in-use", true, SessionConfig::default()).await;
     let second = Shell::new(
         Silent,
@@ -206,6 +222,16 @@ async fn problems(views: &mut Module, errors: &mut Module) {
     lifecycle.set_tray(TrayState::Available);
     lifecycle.show(&second, &FakeWindow::default()).await;
     views.add("lifecycleInUse", &stable(lifecycle.publish(&second).await));
+    let (window, exit) = (FakeWindow::default(), FakeExit::default());
+    lifecycle.close_requested(&second, &window, &exit).await;
+    errors.add(
+        "settingsInUse",
+        &error(
+            lifecycle
+                .answer_close(&second, Some(CloseAction::Background), &window, &exit)
+                .await,
+        ),
+    );
 
     let s = setup("life-recovered", true, SessionConfig::default()).await;
     s.lifecycle

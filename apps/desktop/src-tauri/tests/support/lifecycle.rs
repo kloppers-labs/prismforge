@@ -84,6 +84,7 @@ pub struct FakeEntry {
     pub refuse: Arc<Mutex<Option<String>>>,
     pub ignore: Arc<AtomicBool>,
     pub unreadable: Arc<Mutex<Option<String>>>,
+    pub machine: Arc<AtomicBool>,
 }
 
 impl StartEntry for FakeEntry {
@@ -100,6 +101,10 @@ impl StartEntry for FakeEntry {
 
     fn unregister(&self) -> Result<(), String> {
         self.set(false)
+    }
+
+    fn machine_wide(&self) -> bool {
+        self.machine.load(Ordering::SeqCst)
     }
 }
 

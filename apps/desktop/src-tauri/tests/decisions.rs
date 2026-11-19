@@ -3,7 +3,8 @@ mod support;
 use prismforge_core::store::{AppSettings, CloseAction, OpenRgbAddress};
 use prismforge_desktop::{
     AUTOSTART_ARG, ClosePrompt, CloseStep, SettingProblem, StartEntryState, StartupPlan,
-    decide_close, launched_by_system, read_entry, startup_plan, switch_entry,
+    decide_close, launched_by_system, read_entry, run_command, startup_disabled, startup_plan,
+    switch_entry,
 };
 
 use support::lifecycle::FakeEntry;
@@ -199,4 +200,55 @@ fn an_unreadable_entry_is_unknown_not_off() {
             detail: Some("no home folder".into())
         })
     );
+}
+
+/// Splits a command line the way Windows does for these inputs: quotes group, spaces separate.
+fn arguments(command: &str) -> Vec<String> {
+    let mut arguments = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    for character in command.chars() {
+        match character {
+            '"' => quoted = !quoted,
+            ' ' if !quoted => {
+                if !current.is_empty() {
+                    arguments.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(character),
+        }
+    }
+    if !current.is_empty() {
+        arguments.push(current);
+    }
+    arguments
+}
+
+#[test]
+fn the_windows_start_command_quotes_paths_with_spaces_and_keeps_the_start_argument() {
+    for exe in [
+        r"C:\Program Files\PrismForge\PrismForge.exe",
+        r"C:\Users\Ann Lee\AppData\Local\PrismForge\PrismForge.exe",
+        r"D:\Tools\PrismForge.exe",
+    ] {
+        let command = run_command(exe);
+
+        assert_eq!(command, format!("\"{exe}\" {AUTOSTART_ARG}"));
+        assert_eq!(
+            arguments(&command),
+            [exe.to_owned(), AUTOSTART_ARG.to_owned()]
+        );
+    }
+}
+
+#[test]
+fn an_entry_turned_off_in_task_manager_does_not_count_as_registered() {
+    let enabled = [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let disabled = [3, 0, 0, 0, 0x10, 0x2f, 0x6a, 0x7d, 0x1c, 0x5b, 0xdb, 0x01];
+
+    assert!(!startup_disabled(&enabled));
+    assert!(startup_disabled(&disabled));
+    assert!(startup_disabled(&[7, 0, 0, 0]));
+    assert!(!startup_disabled(&[6, 0, 0, 0]));
+    assert!(!startup_disabled(&[]));
 }

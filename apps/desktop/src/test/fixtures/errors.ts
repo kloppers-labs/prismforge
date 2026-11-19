@@ -128,3 +128,7 @@ export const settingStartEntryNotKept: CommandError = {
     }
   }
 };
+
+export const settingsInUse: CommandError = {
+  "StoreUnavailable": "InUse"
+};

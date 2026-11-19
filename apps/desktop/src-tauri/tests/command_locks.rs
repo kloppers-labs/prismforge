@@ -314,35 +314,61 @@ fn cases() -> Vec<Case> {
             .answer_close(&f.shell, None, &f.window, &f.exit)
             .await),
         case!("quit", "exit handler", |f| {
-            f.lifecycle.quit(&f.window, &f.exit);
+            f.lifecycle.quit(&f.shell, &f.window, &f.exit).await;
             stop_then_exit(&f.shell, || {}).await
         }),
     ]
 }
 
-/// Tray actions and window events: not commands, but they take the same shell and lifecycle paths.
+/// The glue's actions (`tray::Action`), the tray model and start-up: not commands, but the same paths.
 fn system_actions() -> Vec<Case> {
     vec![
-        case!("tray", "stop all", |f| f.lifecycle.stop_all(&f.shell).await),
-        case!("tray", "show or hide", |f| f
+        case!("Show", "tray click", |f| f
+            .lifecycle
+            .show(&f.shell, &f.window)
+            .await),
+        case!("Toggle", "tray item", |f| f
             .lifecycle
             .toggle(&f.shell, &f.window)
             .await),
-        case!("tray", "model", |f| f.lifecycle.tray_model(&f.shell).await),
-        case!("window", "close requested", |f| f
+        case!("StopAll", "tray item", |f| f
             .lifecycle
-            .close_requested(&f.shell, &f.window, &f.exit)
+            .stop_all(&f.shell)
             .await),
-        case!("start up", "connect at start", |f| f
-            .lifecycle
-            .begin(&f.shell, true, &f.window, |_| async {
-                let _ = f.shell.start(openrgb(&f.server)).await;
-            })
-            .await),
-        case!("second start", "show", |f| f
+        case!("Quit", "tray item, app menu or keyboard", |f| {
+            f.lifecycle.quit(&f.shell, &f.window, &f.exit).await;
+            stop_then_exit(&f.shell, || {}).await
+        }),
+        case!("SecondInstance", "second start", |f| f
             .lifecycle
             .second_instance(&f.shell, &f.window)
             .await),
+        case!("CloseRequested", "window close", |f| f
+            .lifecycle
+            .close_requested(&f.shell, &f.window, &f.exit)
+            .await),
+        case!("tray model", "follow", |f| f
+            .lifecycle
+            .tray_model(&f.shell)
+            .await),
+        case!("start up", "connect at start armed", |f| {
+            let _ = f
+                .lifecycle
+                .remember_address(&f.shell, "127.0.0.1", 6742)
+                .await;
+            let _ = f
+                .lifecycle
+                .change(&f.shell, AppSettingChange::ConnectAtStart(true))
+                .await;
+            let connects = std::cell::Cell::new(0);
+            f.lifecycle
+                .begin(&f.shell, false, &f.window, |_| async {
+                    connects.set(connects.get() + 1);
+                    let _ = f.shell.start(openrgb(&f.server)).await;
+                })
+                .await;
+            assert_eq!(connects.get(), 1, "connect at start did not run");
+        }),
     ]
 }
 
@@ -609,4 +635,32 @@ fn every_registered_command_is_in_the_lock_table() {
         "in the lock table but not registered: {unknown:?}"
     );
     assert_eq!(permitted(), registered);
+}
+
+fn glue_actions() -> BTreeSet<String> {
+    let tray = source("src/tray.rs");
+    let (_, body) = tray
+        .split_once("pub enum Action {")
+        .expect("the glue's action enum");
+    let (body, _) = body.split_once('}').expect("end of the action enum");
+    body.split(',')
+        .map(str::trim)
+        .filter(|variant| !variant.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn every_glue_action_is_in_the_lock_table() {
+    let table: BTreeSet<String> = system_actions()
+        .iter()
+        .map(|case| case.command.to_owned())
+        .collect();
+
+    let missing: Vec<_> = glue_actions().difference(&table).cloned().collect();
+
+    assert!(
+        missing.is_empty(),
+        "glue actions not in the lock table: {missing:?}"
+    );
 }

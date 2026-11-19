@@ -37,6 +37,12 @@ pub async fn answer_close(
 }
 
 #[tauri::command]
-pub fn quit(app: AppHandle, lifecycle: State<'_, DesktopLifecycle>) {
-    lifecycle.quit(&MainWindow::of(&app), &AppExit(app.clone()));
+pub async fn quit(
+    app: AppHandle,
+    shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
+) -> Result<(), CommandError> {
+    let window = MainWindow::of(&app);
+    lifecycle.quit(&shell, &window, &AppExit(app.clone())).await;
+    Ok(())
 }

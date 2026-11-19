@@ -540,14 +540,41 @@ async fn quitting_while_the_connection_retries_ends_at_once() {
 async fn quit_hides_the_window_and_asks_for_one_exit() {
     let (shell, _recorder, _dir) = shell("quit");
     let entry = FakeEntry::default();
-    let (lifecycle, _views) = lifecycle(&entry);
+    let (lifecycle, views) = lifecycle(&entry);
     let (window, exit) = (FakeWindow::default(), FakeExit::default());
     lifecycle.show(&shell, &window).await;
 
-    lifecycle.quit(&window, &exit);
+    let first = lifecycle.quit(&shell, &window, &exit).await;
 
+    assert!(first);
     assert!(!window.is_visible());
     assert_eq!(exit.requested(), 1);
+    assert!(views.last().quitting);
+}
+
+#[tokio::test(start_paused = true)]
+async fn further_quit_requests_while_quitting_are_ignored() {
+    let (shell, _recorder, _dir) = shell("quit-twice");
+    let entry = FakeEntry::default();
+    let (lifecycle, _views) = lifecycle(&entry);
+    lifecycle.set_tray(TrayState::Available);
+    let (window, exit) = (FakeWindow::default(), FakeExit::default());
+    lifecycle.show(&shell, &window).await;
+    lifecycle
+        .change(&shell, AppSettingChange::OnClose(CloseAction::Quit))
+        .await
+        .expect("quit on close");
+
+    lifecycle.quit(&shell, &window, &exit).await;
+    let again = lifecycle.quit(&shell, &window, &exit).await;
+    lifecycle.close_requested(&shell, &window, &exit).await;
+    let model = lifecycle.tray_model(&shell).await;
+
+    assert!(!again);
+    assert_eq!(exit.requested(), 1);
+    assert_eq!(model.quit, "Quitting PrismForge");
+    assert!(!model.quit_enabled);
+    assert!(!model.stop_enabled);
 }
 
 #[tokio::test(start_paused = true)]
@@ -789,4 +816,19 @@ async fn a_start_by_the_user_shows_the_window_and_connects_nothing_by_default() 
     assert!(views.last().window_visible);
     assert_eq!(connects, 0);
     assert_eq!(shell.view().session, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_entry_for_every_user_is_reported_beside_the_user_entry() {
+    let (shell, _recorder, _dir) = shell("machine-entry");
+    let entry = FakeEntry::default();
+    let (lifecycle, _views) = lifecycle(&entry);
+
+    let before = lifecycle.view(&shell).await;
+    entry.machine.store(true, Ordering::SeqCst);
+    let after = lifecycle.view(&shell).await;
+
+    assert!(!before.machine_start_entry);
+    assert!(after.machine_start_entry);
+    assert_eq!(after.start_with_system, StartEntryState::NotRegistered);
 }

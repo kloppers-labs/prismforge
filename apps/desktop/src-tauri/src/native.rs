@@ -1,7 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
-use tauri_plugin_autostart::ManagerExt;
 
-use crate::lifecycle::{ExitControl, LifecycleSink, LifecycleView, StartEntry, WindowControl};
+use crate::lifecycle::{ExitControl, LifecycleSink, LifecycleView, WindowControl};
 
 pub const LIFECYCLE_EVENT: &str = "lifecycle-view";
 pub const MAIN_WINDOW: &str = "main";
@@ -35,32 +34,6 @@ pub struct AppExit(pub AppHandle);
 impl ExitControl for AppExit {
     fn exit(&self) {
         self.0.exit(0);
-    }
-}
-
-/// The per-user entry of `tauri-plugin-autostart`: the HKCU Run key on Windows, a LaunchAgent on macOS.
-pub struct SystemStartEntry(pub AppHandle);
-
-impl StartEntry for SystemStartEntry {
-    fn is_registered(&self) -> Result<bool, String> {
-        self.0
-            .autolaunch()
-            .is_enabled()
-            .map_err(|error| error.to_string())
-    }
-
-    fn register(&self) -> Result<(), String> {
-        self.0
-            .autolaunch()
-            .enable()
-            .map_err(|error| error.to_string())
-    }
-
-    fn unregister(&self) -> Result<(), String> {
-        self.0
-            .autolaunch()
-            .disable()
-            .map_err(|error| error.to_string())
     }
 }
 
