@@ -7,7 +7,8 @@ use prismforge_core::session::{ReconnectPolicy, SessionConfig};
 use prismforge_core::store::StoreError;
 use prismforge_core::{DeviceRef, LossCause, OutputTarget};
 use prismforge_desktop::{
-    ConnectOutcome, MarkProblem, Marked, OnConnect, Shell, ShellConfig, ShellView, Stores,
+    CommandError, ConnectOutcome, MarkProblem, Marked, OnConnect, Shell, ShellConfig, ShellView,
+    Stores,
 };
 use prismforge_effects::EffectInstance;
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
@@ -306,7 +307,11 @@ async fn the_fired_state_carries_a_result_where_every_setting_was_skipped() {
 }
 
 fn profile_file(dir: &TempDir) -> std::path::PathBuf {
-    let folder = dir.path().join("store").join("profiles");
+    profile_file_in(dir, "store")
+}
+
+fn profile_file_in(dir: &TempDir, store: &str) -> std::path::PathBuf {
+    let folder = dir.path().join(store).join("profiles");
     std::fs::read_dir(&folder)
         .expect("profiles")
         .map(|entry| entry.expect("entry").path())
@@ -385,11 +390,8 @@ async fn a_marked_profile_that_is_gone_is_unreadable_as_missing() {
     ));
 }
 
-#[cfg(unix)]
 #[tokio::test(start_paused = true)]
 async fn a_failed_delete_of_the_marked_profile_publishes_the_cleared_mark() {
-    use std::os::unix::fs::PermissionsExt;
-
     let dir = TempDir::new("delete-fails");
     let (shell, recorder) = shell_on(&dir);
     let controls = demo_failing(&shell, &recorder).await;
@@ -413,14 +415,17 @@ async fn a_failed_delete_of_the_marked_profile_publishes_the_cleared_mark() {
         .await
         .expect("mark");
     recorder.wait_view(armed("Glow")).await;
-    let folder = dir.path().join("demo-store").join("profiles");
-    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).expect("lock");
+    let file = profile_file_in(&dir, "demo-store");
+    std::fs::remove_file(&file).expect("remove the profile file");
+    std::fs::create_dir_all(file.join("blocker")).expect("a folder in its place");
 
     let deleted = shell.delete_profile(&id).await;
-    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).expect("unlock");
     settle().await;
 
-    assert!(deleted.is_err(), "{deleted:?}");
+    assert!(
+        matches!(deleted, Err(CommandError::Store(StoreError::Remove { .. }))),
+        "{deleted:?}"
+    );
     assert_eq!(shell.view().on_connect, OnConnect::NotArmed);
     drop(controls);
 }
