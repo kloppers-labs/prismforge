@@ -24,7 +24,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 
 pub use effects::{EffectCatalog, preview_effect};
-pub use exit::{ExitGuard, stop_then_exit, stop_within};
+pub use exit::{ExitGuard, QUIT_STOP_LIMIT, stop_then_exit, stop_within};
 pub use forward::forward;
 pub use lifecycle::{
     AUTOSTART_ARG, AppSettingChange, ClosePrompt, CloseStep, DeviceStop, ExitControl, Lifecycle,

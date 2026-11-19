@@ -16,8 +16,11 @@ impl ExitGuard {
     }
 }
 
+/// A user quit waits this long for the stop, then ends the process anyway.
+pub const QUIT_STOP_LIMIT: Duration = Duration::from_secs(10);
+
 pub async fn stop_then_exit<S: ViewSink>(shell: &Shell<S>, exit: impl FnOnce()) {
-    shell.stop().await;
+    stop_within(shell, QUIT_STOP_LIMIT).await;
     exit();
 }
 

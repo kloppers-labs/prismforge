@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use prismforge_core::DeviceRef;
 use prismforge_core::session::{ReconnectPolicy, RestoreOutcome, SessionConfig};
-use prismforge_desktop::{ExitGuard, Shell, ShellConfig, ShellView, stop_then_exit, stop_within};
+use prismforge_desktop::{
+    ExitGuard, QUIT_STOP_LIMIT, Shell, ShellConfig, ShellView, stop_then_exit, stop_within,
+};
 use prismforge_testkit::{DemoBackend, DemoOutput};
 use tokio::time::Instant;
 
@@ -176,4 +178,40 @@ async fn the_stop_at_process_end_releases_effects_and_never_waits_past_its_limit
 
     assert!(!ended);
     assert!(started.elapsed() <= Duration::from_secs(4));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_user_quit_exits_after_its_limit_even_when_the_stop_hangs() {
+    let (shell, recorder, _dir) = shell();
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    shell.start(backend).await.expect("start");
+    recorder.wait_for(is_connected).await;
+    shell
+        .apply_effect(
+            prismforge_core::OutputTarget {
+                device: DeviceRef::new("demo-graphics-card"),
+                zone: None,
+            },
+            prismforge_effects::EffectInstance {
+                effect: "rainbow-wave".into(),
+                values: Default::default(),
+            },
+        )
+        .await
+        .expect("effect");
+    controls.set_call_delay(Duration::from_secs(3600));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let started = Instant::now();
+    let mut exits = 0;
+
+    tokio::time::timeout(
+        QUIT_STOP_LIMIT + Duration::from_secs(1),
+        stop_then_exit(&shell, || exits += 1),
+    )
+    .await
+    .expect("the quit waited past its limit");
+
+    assert_eq!(exits, 1);
+    assert!(started.elapsed() <= QUIT_STOP_LIMIT);
 }
