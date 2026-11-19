@@ -5,20 +5,22 @@ import { fakeShell } from "../../test/backend";
 import { effectHandlers, openEffects } from "../../test/effects";
 import { demoConnected, demoEffectsRunning, openRgbConnected } from "../../test/fixtures/sessions";
 import { storeTwo, storeUnsaved } from "../../test/fixtures/stores";
-import { itemIds, mirrored } from "../../test/menus";
 import { detailsEvening } from "../../test/fixtures/profileDetails";
+import { itemIds, mirrored } from "../../test/menus";
 import { connectionChip, findStrip, go, waitForConnection } from "../../test/shell";
 import { MIRRORS } from "./mirrors";
 
-const covered = new Set<string>();
-
-async function expectMirrored(ids: string[], reveal: () => Promise<unknown> = async () => {}) {
-  await reveal();
-  for (const id of ids) {
-    expect(id in MIRRORS, `${id} is in the mirror registry`).toBe(true);
-    expect(mirrored(id), `${id} has a visible counterpart`).toBe(true);
-    covered.add(id);
-  }
+function checker() {
+  const seen = new Set<string>();
+  const check = async (ids: string[], reveal: () => Promise<unknown> = async () => {}) => {
+    await reveal();
+    for (const id of ids) {
+      expect(id in MIRRORS, `${id} is in the mirror registry`).toBe(true);
+      expect(mirrored(id), `${id} has a visible counterpart`).toBe(true);
+      seen.add(id);
+    }
+  };
+  return { check, seen: () => [...seen].sort() };
 }
 
 const STRIP_IDS = ["connection.rescan", "connection.end", "connection.connect", "connection.demo", "profile-chip.save", "profile-chip.open"];
@@ -44,7 +46,7 @@ const DIAGNOSTICS_IDS = ["diagnostics.copy-section", "diagnostics.copy-all"];
 const EFFECT_IDS = ["target.choose", "target.stop", "target.hand-back", "target.modes", "target.leave", "effect.choose", "effect.apply"];
 
 test("every_status_strip_menu_item_has_a_visible_counterpart_in_its_panel", async () => {
-  covered.clear();
+  const { check: expectMirrored, seen } = checker();
   const shell = fakeShell(openRgbConnected, { ...effectHandlers(), profile_store: () => storeUnsaved, disconnect: () => shell.view(null) });
   render(App);
   await waitForConnection("Connected");
@@ -60,11 +62,11 @@ test("every_status_strip_menu_item_has_a_visible_counterpart_in_its_panel", asyn
   await waitForConnection("Not connected");
   await expectMirrored(await itemIds(connectionChip()), () => fireEvent.click(connectionChip()));
 
-  expect([...covered].sort()).toEqual([...STRIP_IDS].sort());
+  expect(seen()).toEqual([...STRIP_IDS].sort());
 });
 
 test("every_devices_menu_item_has_a_visible_counterpart_on_the_devices_screen", async () => {
-  covered.clear();
+  const { check: expectMirrored, seen } = checker();
   fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo });
   render(App);
   await screen.findByText("Desk card");
@@ -78,11 +80,11 @@ test("every_devices_menu_item_has_a_visible_counterpart_on_the_devices_screen", 
   const zone = (await screen.findByRole("rowheader", { name: /^Front fans/ })).closest("tr") as HTMLElement;
   await expectMirrored(await itemIds(zone));
 
-  expect([...covered].sort()).toEqual([...DEVICE_IDS].sort());
+  expect(seen()).toEqual([...DEVICE_IDS].sort());
 });
 
 test("every_effects_menu_item_has_a_visible_counterpart_on_the_effects_screen", async () => {
-  covered.clear();
+  const { check: expectMirrored, seen } = checker();
   fakeShell(demoEffectsRunning, effectHandlers());
   render(App);
   const targets = await openEffects();
@@ -96,11 +98,11 @@ test("every_effects_menu_item_has_a_visible_counterpart_on_the_effects_screen", 
   const card = screen.getByRole("radio", { name: "Gradient" }).closest("label") as HTMLElement;
   await expectMirrored(await itemIds(card));
 
-  expect([...covered].sort()).toEqual([...EFFECT_IDS].sort());
+  expect(seen()).toEqual([...EFFECT_IDS].sort());
 });
 
 test("every_profiles_menu_item_has_a_visible_counterpart_on_the_profiles_screen", async () => {
-  covered.clear();
+  const { check: expectMirrored, seen } = checker();
   fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo, profile_details: () => detailsEvening });
   render(App);
   await go("Profiles");
@@ -111,11 +113,11 @@ test("every_profiles_menu_item_has_a_visible_counterpart_on_the_profiles_screen"
   await screen.findByRole("article", { name: "Evening" });
   await expectMirrored(await itemIds(evening));
 
-  expect([...covered].sort()).toEqual([...PROFILE_IDS].sort());
+  expect(seen()).toEqual([...PROFILE_IDS].sort());
 });
 
 test("every_diagnostics_menu_item_has_a_visible_counterpart_in_the_drawer", async () => {
-  covered.clear();
+  const { check: expectMirrored, seen } = checker();
   fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo });
   render(App);
   await waitForConnection("Connected");
@@ -127,7 +129,7 @@ test("every_diagnostics_menu_item_has_a_visible_counterpart_in_the_drawer", asyn
     await expectMirrored(await itemIds(section));
   }
 
-  expect([...covered].sort()).toEqual([...DIAGNOSTICS_IDS].sort());
+  expect(seen()).toEqual([...DIAGNOSTICS_IDS].sort());
 });
 
 test("the_registry_holds_only_items_that_a_menu_offers", () => {
