@@ -67,7 +67,7 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at the last code commit of Task 3b fix round 3, including `pnpm tauri:build`.
+Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `afdc5ea`, the last code commit of Task 3b fix round 3, including `pnpm tauri:build`.
 
 | Command | Result |
 |---|---|
@@ -78,7 +78,7 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19,
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 115 interface tests (36 for the Profiles screen, 4 for names, 4 for output during an apply and the apply-on-connect notice) |
-| `pnpm tauri:build` in `apps/desktop` | Pass: `PrismForge.app` (14.32 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.14 MiB), not signed |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `afdc5ea`: `PrismForge.app` (14.38 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.16 MiB), not signed |
 
 The scheduler and ownership tests use simulated time and the demo backend or the fake server. They check recorded writes and snapshot counters: late ticks are skipped and counted and every frame is the frame for its own moment; a refused device makes 7 tries in a minute while another device gets about 1,800 frames; a static scene gets one frame and one more only after a scene change, a reconnect or an inventory change; a declared device gets nothing until the hand-over; after an OpenRGB restart with reused IDs every frame still reaches the same fixture device.
 
