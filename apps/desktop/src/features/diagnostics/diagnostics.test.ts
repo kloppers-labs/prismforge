@@ -90,3 +90,19 @@ test("diagnostics_name_devices_the_way_the_user_does_beside_their_references", a
   const output = within(drawer).getByRole("region", { name: "Output" });
   expect(within(output).getAllByText("Demo Graphics Card").length).toBeGreaterThan(0);
 });
+
+test("the_copied_diagnostics_leave_out_the_folder_path_and_say_what_they_hold", async () => {
+  const copied: string[] = [];
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: (text: string) => (copied.push(text), Promise.resolve()) } });
+  fakeShell(demoEffectsRunning);
+  render(App);
+  await screen.findByRole("navigation", { name: /Devices/ });
+  const drawer = await openDiagnostics();
+  await within(drawer).findByText(/store-folder\/demo-store/);
+
+  await fireEvent.click(within(drawer).getByRole("button", { name: "Copy as text" }));
+
+  await within(drawer).findByText("Copied. Paste it into your report.");
+  expect(copied[0]).not.toMatch(/store-folder/);
+  expect(within(drawer).getByText(/The copy leaves out the folder path\./)).toBeTruthy();
+});
