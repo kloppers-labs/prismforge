@@ -4,7 +4,7 @@ Last update: 2026-11-19.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built. Task 3a, the profile core in Rust, and Task 3b, the profiles screen and the shell wiring, are built. Task 6a, the application lifecycle (tray, close or quit, one instance, start-up, Settings), is built; the rest of Task 6 (packaging, the validation matrix, measurements) is not started. Plan 2 (`docs/plans/prismforge-plan-2-experience.md`) follows. Its Task 7, the window shell, is built.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built. Task 3a, the profile core in Rust, and Task 3b, the profiles screen and the shell wiring, are built. Task 6a, the application lifecycle (tray, close or quit, one instance, start-up, Settings), is built; the rest of Task 6 (packaging, the validation matrix, measurements) is not started. Plan 2 (`docs/plans/prismforge-plan-2-experience.md`) follows. Its Task 7, the window shell, is built. Its Task 8, the screen sweep, is built on branch `task-8-screen-sweep` and waits for review.
 
 The repository has a Rust workspace with four crates and a desktop app. `prismforge-effects` holds six original built-in effects as pure functions, their typed control definitions and the validation of stored effect instances. `prismforge-core` holds the device types, the identity matching, the backend contract, the scene and ownership types, and the session. The session owns the backend, reconnects, keeps a readable snapshot, runs the identify action, and runs effects through an output scheduler with explicit output ownership. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
 
@@ -20,7 +20,9 @@ The desktop app keeps running in the background when the user chooses it (Task 6
 
 The window has a new shell (plan 2, Task 7). A rail on the left holds Devices, Effects and Profiles, with Diagnostics and Settings at its foot, in every connection state. A status strip at the top of the page shows the connection, the active profile with its unsaved changes, a running profile apply, the profile set to apply on connect and a striped demo marker; its chips open panels with the actions of each state. One notice slot under the strip replaces the stacked strips. Effects without a connection shows how to connect. Diagnostics docks beside the page from 1400 px wide and covers it below that. Ctrl+1, Ctrl+2, Ctrl+4, Ctrl+, and F6 work from the keyboard; Ctrl+3 and Ctrl+5 are kept for Setup and Automation. The design tokens are in `apps/desktop/src/lib/tokens.css`. `pnpm preview:ui` shows the real interface in a browser with simulated data. See `docs/decisions/0005-shell-and-design-tokens.md`.
 
-All tests pass on macOS. The Task 7 commits have no Windows CI result yet. The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+The screens were swept against the audit (plan 2, Task 8). Effects has a command bar at the top with Apply effect, Stop effect and the edit mode (Live, Draft or Off); the lifecycle text, hardware modes and the other-program form sit behind Details; the frame rate moved to Settings. Devices has Set lighting, says what drives each device, tells devices with the same name apart, and has short zone buttons. The connection form starts from the last address and the waiting page offers a way back and demo mode. Profiles shows the selected profile first and saves the current lighting from a dialog. Settings is grouped with one line per switch. Diagnostics docks at the default window size with the compact rail and a 320 px drawer, and copies itself as text. Lists share one selection cue and one Tab stop each. See decisions 10 and 14 to 18 in `docs/decisions/0005-shell-and-design-tokens.md`.
+
+All tests pass on macOS. The Task 8 commits have no Windows CI result yet. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -76,6 +78,21 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
+Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `10a6bd0`, the last code commit of Task 8 fix round 3.
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all --check` | Pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
+| `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
+| `cargo test --workspace` | Pass: 331 tests (Task 8 fix round 2 added one: every change to the marked profile publishes the start profile) |
+| `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 254 interface tests in 16 files (53 new in Task 8) |
+| `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (256 modules, 3 files checked). Tauri now runs it as `beforeBuildCommand`. |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `10a6bd0`: `PrismForge.app` (15.57 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.52 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (256 modules). |
+
+Screenshots of the interface preview at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300, and of Diagnostics at 1200 × 780, 1100 × 700 and 1400 × 900, were looked at. They are design evidence from Chromium on macOS, not a native or Windows test.
+
 Task 7 run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `e52213c`, the last code commit of Task 7 fix round 1.
 
 | Command | Result |
@@ -116,6 +133,7 @@ Windows CI (`windows-latest`) runs format, both lint runs, `cargo test --workspa
 | `548677b` | 44320629268 | Task 2b, first Windows CI |
 | `2fd05a1` | 44389727399 | Last commit of Task 4a |
 | `b436973` | 44396160088 | Last commit of Task 4b before review fix round 1 |
+| `c8c661a` | 44492091594 | Last commit of Task 7 |
 
 The review fix round 1 commits after `b436973` have no CI result. The controller reported that Windows CI passed on `ce6b1a8` (Task 3a fix round 1). The Task 3a fix round 2 and 3 commits have no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
 
@@ -178,6 +196,8 @@ Not done:
 
 ## Known issues
 
+- **Task 8 leaves these audit items open.** The preview has no flash cap (A9; the frontend owns preview playback in `features/effects/preview.svelte.ts`, and the cap is bound to the live stage of Task 9); there are no zoom keys or interface scale setting (A7: the layout reflows at 200 % but text size follows the system only); there is no per-device Control block on Devices (E10: hardware modes and another program stay on Effects behind Details); no reset per control, no palette redesign, no shaped preview and no preview pause (E12, E14, E16, A10); recovery notices have no short headline (G4); profile actions have no More menu (P5); skip reasons are not reworded (P6).
+- **The Effects command bar is at the top of the page, not the bottom.** The audit drew it at the bottom. At the top it never covers the content, it never grows with results, disclosures or notices, and Apply comes right after the target list in the Tab order. Task 9 can move it when the stage arrives.
 - **No real-server evidence.** The fake server and the client come from the same reading of the OpenRGB document and source. A review checked the wire format against the OpenRGB 1.1 source, but a real server can still differ.
 - **A request completes on its acknowledge packet.** If a real server does not send it, each request stops after the timeout (2 seconds by default) and the client closes the connection.
 - **One slow controller fails the whole refresh.** A data request that gets no answer in time closes the connection. The session then reconnects.
@@ -224,6 +244,14 @@ Not done:
 - **The strip divider can stand alone.** When the strip wraps at 200 % text, the divider between the chips ends the first row.
 - **Screen copy is still long.** The audit's per-screen findings (E1 to E16, P1 to P10, C1 to C9, D2 to D10) are for Task 8. The Effects paragraph now states the stored close choice, but its full rewrite (E2) is Task 8.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
+
+## What only the owner can check (Task 8)
+
+- The screens in the native window on Windows, in WebView2, at 100 %, 150 % and 200 % display scaling.
+- A Windows contrast theme: the current area, selected rows, focus rings, the demo badge and the switches must stay visible.
+- A screen reader pass (Narrator or NVDA) over each screen, the notices and the Details disclosures.
+- Copy as text in Diagnostics: that the clipboard works in the native window.
+- Real hardware: Set lighting, the Live and Draft marks, and Hand back with a real other program.
 
 ## Missing information from the owner
 

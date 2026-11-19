@@ -5,27 +5,35 @@
     effects,
     chosen,
     running,
+    disabled,
     onchoose,
-  }: { effects: EffectDefinition[]; chosen: string | null; running: string | null; onchoose: (id: string) => void } = $props();
+  }: {
+    effects: EffectDefinition[];
+    chosen: string | null;
+    running: string | null;
+    disabled: boolean;
+    onchoose: (id: string) => void;
+  } = $props();
 </script>
 
-<fieldset class="picker">
-  <legend class="visually-hidden">Effect</legend>
+<fieldset class="picker" aria-labelledby="effect-title" {disabled}>
   {#each effects as effect (effect.id)}
-    <div class="option" class:chosen={effect.id === chosen}>
-      <input
-        id="effect-{effect.id}"
-        type="radio"
-        name="effect"
-        value={effect.id}
-        checked={effect.id === chosen}
-        aria-describedby="effect-{effect.id}-about"
-        onchange={() => onchoose(effect.id)}
-      />
-      <label class="name" for="effect-{effect.id}">{effect.label}</label>
-      {#if effect.id === running}<span class="tag">On this target</span>{/if}
-      <p id="effect-{effect.id}-about" class="about">{effect.description}</p>
-    </div>
+    <label class="pick card" class:off={disabled}>
+      <span class="head">
+        <input
+          type="radio"
+          name="effect"
+          value={effect.id}
+          checked={effect.id === chosen}
+          aria-labelledby="effect-{effect.id}-name"
+          aria-describedby="effect-{effect.id}-about"
+          onchange={() => onchoose(effect.id)}
+        />
+        <span id="effect-{effect.id}-name" class="pick-name">{effect.label}</span>
+        {#if effect.id === running}<span class="tag good">Runs now</span>{/if}
+      </span>
+      <span id="effect-{effect.id}-about" class="pick-meta">{effect.description}</span>
+    </label>
   {/each}
 </fieldset>
 
@@ -34,56 +42,37 @@
     border: 0;
     margin: 0;
     padding: 0;
+    min-width: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+    gap: var(--space-2);
   }
 
-  .option {
-    position: relative;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    column-gap: 8px;
-    align-items: baseline;
-    padding: 9px 12px 9px 14px;
-    border: 1px solid var(--line-subtle);
-    border-radius: var(--radius-s);
-  }
-
-  .option:hover {
-    background: var(--surface-2);
-  }
-
-  .option.chosen {
-    background: var(--surface-2);
-    border-color: var(--line-control-hover);
-  }
-
-  .option.chosen::before {
-    content: "";
-    position: absolute;
-    left: 4px;
-    top: 10px;
-    bottom: 10px;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--spectrum);
-    background-size: 100% 600%;
-  }
-
-  .name {
-    font-weight: var(--weight-strong);
+  .card {
+    align-content: start;
+    border-color: var(--line-subtle);
     cursor: pointer;
   }
 
-  .tag {
-    font-size: var(--font-xs);
-    color: var(--ok);
+  .card.off {
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
-  .about {
-    grid-column: 2 / -1;
-    color: var(--text-dim);
-    font-size: var(--font-s);
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  input {
+    margin: 0;
+    accent-color: var(--accent);
+  }
+
+  .card:has(input:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 </style>

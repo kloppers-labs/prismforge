@@ -84,6 +84,9 @@ export class AppState {
       return;
     }
     this.view = view;
+    if (view.session !== null) {
+      void this.effects.load();
+    }
     if (view.connect_apply === null) {
       this.connectApplyDismissed = false;
     }
@@ -99,9 +102,22 @@ export class AppState {
     }
   }
 
-  go(screen: Screen) {
+  async go(screen: Screen): Promise<void> {
+    if (screen === "profiles") {
+      return this.openProfiles();
+    }
     this.uncover();
-    return screen === "profiles" ? this.openProfiles() : (this.screen = screen);
+    this.screen = screen;
+  }
+
+  async setLighting(device: DeviceRef) {
+    await this.effects.load();
+    this.effects.select({ device, zone: null });
+    await this.go("effects");
+  }
+
+  dismissProblem() {
+    this.problem = null;
   }
 
   openProfiles() {

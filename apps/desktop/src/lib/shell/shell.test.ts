@@ -97,7 +97,7 @@ test("effects_without_a_connection_show_an_empty_state_with_the_way_to_connect",
 test("effects_while_connecting_say_why_and_lead_to_devices", async () => {
   fakeShell(openRgbRefused, effectHandlers());
   render(App);
-  await waitForConnection("Retrying, retry 3 next");
+  await waitForConnection("Retrying");
   await go("Effects");
 
   const main = screen.getByRole("main");
@@ -124,7 +124,7 @@ test("first_run_makes_connecting_obvious", async () => {
 test.each([
   ["openRgbConnected", openRgbConnected, "Connected", "OpenRGB 127.0.0.1:6742"],
   ["openRgbConnecting", openRgbConnecting, "Connecting", "OpenRGB 127.0.0.1:6742"],
-  ["openRgbRefused", openRgbRefused, "Retrying, retry 3 next", "OpenRGB 127.0.0.1:6742"],
+  ["openRgbRefused", openRgbRefused, "Retrying", "OpenRGB 127.0.0.1:6742"],
   ["openRgbDegraded", openRgbDegraded, "Connected with problems", "OpenRGB 127.0.0.1:6742"],
   ["openRgbOldServer", openRgbOldServer, "Not connected", "OpenRGB 127.0.0.1:6742"],
   ["demoConnected", demoConnected, "Connected", "Demo backend"],
@@ -143,7 +143,7 @@ test.each([
 test("the_connection_panel_gives_the_reason_in_plain_words", async () => {
   fakeShell(openRgbRefused);
   render(App);
-  await waitForConnection("Retrying, retry 3 next");
+  await waitForConnection("Retrying");
 
   const panel = await openConnection();
 
@@ -262,7 +262,7 @@ test("a_click_outside_closes_a_panel", async () => {
 test("stop_retrying_sits_behind_the_connection_chip_and_disconnects", async () => {
   const shell = fakeShell(openRgbRefused, { disconnect: () => shell.view(null) });
   render(App);
-  await waitForConnection("Retrying, retry 3 next");
+  await waitForConnection("Retrying");
 
   await connectionAction("Stop retrying");
 
@@ -628,7 +628,7 @@ test("a_pending_rescan_is_off_with_its_reason_and_keeps_focus_off_disconnect", a
 test("a_panel_whose_only_action_ends_the_session_takes_focus_itself", async () => {
   const shell = fakeShell(openRgbRefused, { disconnect: () => shell.view(null) });
   render(App);
-  await waitForConnection("Retrying, retry 3 next");
+  await waitForConnection("Retrying");
 
   await fireEvent.click(connectionChip());
 

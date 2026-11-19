@@ -7,6 +7,7 @@ mod exit;
 mod forward;
 mod lifecycle;
 mod lifecycle_commands;
+pub mod marks;
 mod native;
 mod on_connect;
 mod profile_commands;

@@ -3,12 +3,20 @@
   import type { CloseAction } from "../../lib/api/bindings/CloseAction";
   import type { StartEntryState } from "../../lib/api/bindings/StartEntryState";
   import { failureText, storeUnavailableText } from "../../lib/errors";
+  import type { AppState } from "../../lib/state/app.svelte";
+  import Details from "../../lib/Details.svelte";
   import Switch from "../../lib/Switch.svelte";
+  import { isLive } from "../devices/present";
+  import { applyingText } from "../effects/present";
+  import FrameRate from "../effects/FrameRate.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { SettingKey, LifecycleState } from "./state.svelte";
   import { MACHINE_ENTRY_REMOVAL, addressText, quitShortcut, settingsNoticeText, startPathText, trayName } from "./wording";
 
-  let { lifecycle, onprofiles }: { lifecycle: LifecycleState; onprofiles: () => void } = $props();
+  let { app, lifecycle, onprofiles }: { app: AppState; lifecycle: LifecycleState; onprofiles: () => void } = $props();
+
+  let session = $derived(app.session);
+  let catalog = $derived(app.effects.catalog);
 
   onMount(() => {
     lifecycle.load();
@@ -35,9 +43,7 @@
 
   let quitting = $derived(lifecycle.pending === "quit" || (view?.quitting ?? false));
   let backgroundEnabled = $derived(ready && tray);
-  let closeFocus = $derived<CloseAction>(
-    settings?.on_close === "Quit" || (settings?.on_close !== "Background" && !backgroundEnabled) ? "Quit" : "Background",
-  );
+  let closeFocus = $derived<CloseAction>(backgroundEnabled && settings?.on_close !== "Quit" ? "Background" : "Quit");
 
   function failed(key: SettingKey): string | null {
     const failure = lifecycle.failure;
@@ -114,19 +120,20 @@
         Quit PrismForge
       </button>
     </div>
-    <div id="close-help" class="help">
-      {#if !tray}
-        <p class="unavailable">
-          Running in the background is not available: this system has no tray{trayDetail ? ` (${trayDetail})` : ""}. Closing the window quits PrismForge, and its effects stop.
-        </p>
-      {:else}
+    {#if !tray}
+      <p id="close-help" class="help unavailable">
+        Running in the background is not available: this system has no tray{trayDetail ? ` (${trayDetail})` : ""}. Closing the window quits PrismForge, and its effects stop.
+      </p>
+    {:else}
+      <p id="close-help" class="help">In {trayName()}, PrismForge and its effects keep running without the window.</p>
+      {#if ready && settings?.on_close === null}
+        <p class="pending">Not chosen yet. PrismForge asks the first time you close the window.</p>
+      {/if}
+      <Details>
         <p>In {trayName()}, PrismForge keeps running without its window, and its effects keep running on your devices. Open the window again from its icon there.</p>
         <p>To quit completely, choose Quit PrismForge in that menu or at the bottom of this screen.</p>
-        {#if ready && settings?.on_close === null}
-          <p class="pending">Not chosen yet. PrismForge asks the first time you close the window.</p>
-        {/if}
-      {/if}
-    </div>
+      </Details>
+    {/if}
     {#if failed("OnClose")}
       <p class="failure" role="alert">{failed("OnClose")}</p>
     {/if}
@@ -147,19 +154,20 @@
           describedby="system-help"
           onchange={(on) => lifecycle.change({ StartWithSystem: on })}
         />
-        <div id="system-help" class="help">
-          <p>Adds PrismForge to the programs your system starts for your user account. It needs no administrator rights. Turn it off before you uninstall PrismForge.</p>
-          {#if typeof entry === "object"}
-            <p class="unavailable">PrismForge cannot read its start entry: {entry.Unknown.detail}</p>
-          {/if}
-          {#if view?.machine_start_entry}
-            <p class="unavailable">
-              A start entry for every user of this computer exists. An earlier PrismForge that ran as administrator added it, and PrismForge starts from it whatever this switch shows. PrismForge cannot remove it without administrator rights.
-            </p>
-            <p>To remove it, run this in a Command Prompt opened as administrator:</p>
-            <p class="command">{MACHINE_ENTRY_REMOVAL}</p>
-          {/if}
-        </div>
+        <p id="system-help" class="help">Your system starts PrismForge for your user account. Turn it off before you uninstall PrismForge.</p>
+        {#if typeof entry === "object"}
+          <p class="help unavailable">PrismForge cannot read its start entry: {entry.Unknown.detail}</p>
+        {/if}
+        {#if view?.machine_start_entry}
+          <p class="help unavailable">
+            A start entry for every user of this computer exists. An earlier PrismForge that ran as administrator added it, and PrismForge starts from it whatever this switch shows. PrismForge cannot remove it without administrator rights.
+          </p>
+          <p class="help">To remove it, run this in a Command Prompt opened as administrator:</p>
+          <p class="command">{MACHINE_ENTRY_REMOVAL}</p>
+        {/if}
+        <Details>
+          <p>Adds PrismForge to the programs your system starts for your user account. It needs no administrator rights.</p>
+        </Details>
         {#if failed("StartWithSystem")}
           <p class="failure" role="alert">{failed("StartWithSystem")}</p>
         {/if}
@@ -173,13 +181,11 @@
           describedby="hidden-help"
           onchange={(on) => lifecycle.change({ StartHidden: on })}
         />
-        <div id="hidden-help" class="help">
-          {#if tray}
-            <p>Optional. Only when your system starts PrismForge: the window stays closed and PrismForge waits in {trayName()}. When you start PrismForge yourself, the window opens.</p>
-          {:else}
-            <p class="unavailable">Not available: this system has no tray, so the window always opens.</p>
-          {/if}
-        </div>
+        {#if tray}
+          <p id="hidden-help" class="help">Optional. Only when your system starts PrismForge: the window stays closed and PrismForge waits in {trayName()}. When you start PrismForge yourself, the window opens.</p>
+        {:else}
+          <p id="hidden-help" class="help unavailable">Not available: this system has no tray, so the window always opens.</p>
+        {/if}
         {#if failed("StartHidden")}
           <p class="failure" role="alert">{failed("StartHidden")}</p>
         {/if}
@@ -193,13 +199,11 @@
           describedby="connect-help"
           onchange={(on) => lifecycle.change({ ConnectAtStart: on })}
         />
-        <div id="connect-help" class="help">
-          {#if settings?.address}
-            <p>PrismForge connects to <span class="address">{addressText(settings.address)}</span>, the address of your last Connect. If OpenRGB does not answer, it keeps retrying, as after Connect. It never starts demo mode.</p>
-          {:else}
-            <p>Connect to OpenRGB once first. PrismForge then remembers that address.</p>
-          {/if}
-        </div>
+        {#if settings?.address}
+          <p id="connect-help" class="help">PrismForge connects to <span class="address">{addressText(settings.address)}</span>, the address of your last Connect. If OpenRGB does not answer, it keeps retrying, as after Connect. It never starts demo mode.</p>
+        {:else}
+          <p id="connect-help" class="help">Connect to OpenRGB once first. PrismForge then remembers that address.</p>
+        {/if}
         {#if failed("ConnectAtStart")}
           <p class="failure" role="alert">{failed("ConnectAtStart")}</p>
         {/if}
@@ -229,28 +233,36 @@
 
     <p class="result" role="status" aria-label="Start-up result">{startPath}</p>
 
-    <aside class="automatic" aria-labelledby="automatic-title">
-      <h3 id="automatic-title">When your lighting changes without a click</h3>
+    <Details summary="When your lighting changes without a click">
       <p>
         Connecting alone writes nothing to your devices. Without a click in a session, PrismForge changes your lighting only when “Connect to OpenRGB when PrismForge starts” is on and a profile is set to “Apply this profile when PrismForge connects”. Then PrismForge applies that profile as soon as the connection is made.
       </p>
       <p>PrismForge effects run only while PrismForge runs and is connected. Nothing is stored on your devices.</p>
-    </aside>
+    </Details>
+  </section>
+
+  <section class="group" aria-labelledby="output-title">
+    <h2 id="output-title">Effect output</h2>
+    {#if session && isLive(session) && catalog}
+      <FrameRate effects={app.effects} range={catalog.frame_rate} current={session.output.frame_rate} held={applyingText(app.view)} />
+    {:else}
+      <p class="help">The frame rate of PrismForge effects can be set while PrismForge is connected.</p>
+    {/if}
   </section>
 
   <section class="group" aria-labelledby="files-title">
     <h2 id="files-title">Where PrismForge keeps its files</h2>
     <p class="help">Your profiles, your names for devices and these settings are in this folder on this computer:</p>
     <p class="folder">{view?.folder ?? ""}</p>
-    <p class="help">The frame rate of PrismForge effects is on the Effects screen while PrismForge is connected.</p>
   </section>
 
   <section class="group quit" aria-labelledby="quit-title">
     <h2 id="quit-title">Quit PrismForge</h2>
-    <div class="help">
-      <p>Stops PrismForge effects, puts back the lighting from before where it can, disconnects and ends PrismForge. The shortcut is {quitShortcut()}. Quit in the tray menu does the same. While PrismForge quits, further Quit requests wait for it.</p>
+    <p class="help">Stops PrismForge effects, puts back the lighting from before where it can, disconnects and ends PrismForge. The shortcut is {quitShortcut()}.</p>
+    <Details>
+      <p>Quit in the tray menu does the same. While PrismForge quits, further Quit requests wait for it.</p>
       <p>When the system ends PrismForge instead, for example when you log out or shut down, PrismForge tries the same for up to 4 seconds. The system may end it sooner, and then the devices keep the last effect frame. Ending PrismForge in Task Manager or Activity Monitor puts nothing back.</p>
-    </div>
+    </Details>
     <button type="button" disabled={quitting} onclick={() => lifecycle.quit()}>
       {quitting ? "Quitting PrismForge" : "Quit PrismForge"}
     </button>
@@ -261,14 +273,14 @@
   .settings {
     max-width: 780px;
     margin: 0 auto;
-    padding: 40px 32px 56px;
+    padding: var(--space-6) var(--space-6) var(--space-7);
     display: grid;
-    gap: 28px;
+    gap: var(--space-5);
   }
 
   .intro {
     display: grid;
-    gap: 6px;
+    gap: var(--space-1);
   }
 
   .intro p,
@@ -278,20 +290,24 @@
 
   .help {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
     font-size: var(--font-s);
     max-width: 68ch;
   }
 
+  p.help {
+    display: block;
+  }
+
   .group {
     display: grid;
-    gap: 14px;
-    padding-top: 22px;
+    gap: var(--space-3);
+    padding-top: var(--space-5);
     border-top: 1px solid var(--line-subtle);
   }
 
   .group h2 {
-    font-size: 16px;
+    font-size: var(--font-l);
   }
 
   .steps {
@@ -299,15 +315,15 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 14px;
+    gap: var(--space-3);
     counter-reset: step;
   }
 
   .steps > li {
     counter-increment: step;
     display: grid;
-    gap: 4px;
-    padding-left: 38px;
+    gap: var(--space-1);
+    padding-left: var(--space-7);
     position: relative;
   }
 
@@ -315,11 +331,11 @@
     content: counter(step);
     position: absolute;
     left: 0;
-    top: 4px;
-    width: 24px;
-    height: 24px;
+    top: var(--space-1);
+    width: var(--space-5);
+    height: var(--space-5);
     border-radius: 50%;
-    border: 1px solid var(--line-subtle);
+    border: 1px solid var(--line-control);
     display: grid;
     place-items: center;
     font-size: var(--font-xs);
@@ -329,14 +345,14 @@
 
   .step-title {
     font-weight: var(--weight-strong);
-    padding: 6px 0 0;
+    padding: var(--space-1) 0 0;
   }
 
   .profile {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 12px;
+    gap: var(--space-1) var(--space-3);
     font-size: var(--font-s);
   }
 
@@ -344,15 +360,10 @@
     color: var(--text);
   }
 
-  .small {
-    padding: 2px 10px;
-    font-size: var(--font-s);
-  }
-
   .result {
     font-size: var(--font-s);
     max-width: 72ch;
-    padding: 10px 12px;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-s);
     border: 1px solid var(--line-subtle);
     background: var(--surface-0);
@@ -361,21 +372,21 @@
   .choices {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   [role="radio"] {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 14px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
   }
 
   .dot {
-    width: 14px;
-    height: 14px;
+    width: var(--space-4);
+    height: var(--space-4);
     border-radius: 50%;
-    border: 2px solid var(--text-faint);
+    border: 2px solid var(--line-control-hover);
     flex: none;
   }
 
@@ -387,6 +398,31 @@
   [role="radio"][aria-checked="true"] .dot {
     border-color: var(--ok);
     background: radial-gradient(circle, var(--ok) 0 40%, transparent 45%);
+  }
+
+  @media (forced-colors: active) {
+    .dot {
+      forced-color-adjust: none;
+      border-color: CanvasText;
+      background: Canvas;
+    }
+
+    [role="radio"][aria-checked="true"] .dot {
+      border-color: Highlight;
+      background: radial-gradient(circle, Highlight 0 40%, Canvas 45%);
+    }
+
+    [role="radio"][aria-checked="true"] {
+      forced-color-adjust: none;
+      border: 2px solid Highlight;
+      background: Canvas;
+      color: CanvasText;
+    }
+
+    [role="radio"]:focus-visible {
+      outline: 3px solid CanvasText;
+      outline-offset: 3px;
+    }
   }
 
   .pending {
@@ -401,37 +437,6 @@
     color: var(--problem);
     font-size: var(--font-s);
     max-width: 68ch;
-  }
-
-  .automatic {
-    display: grid;
-    gap: 8px;
-    padding: 14px 16px 14px 18px;
-    border-radius: var(--radius-s);
-    background: var(--surface-1);
-    border: 1px solid var(--line-subtle);
-    position: relative;
-    max-width: 72ch;
-  }
-
-  .automatic::before {
-    content: "";
-    position: absolute;
-    left: -1px;
-    top: -1px;
-    bottom: -1px;
-    width: 3px;
-    border-radius: var(--radius-s) 0 0 var(--radius-s);
-    background: var(--spectrum-vertical);
-  }
-
-  .automatic h3 {
-    font-size: var(--font-m);
-  }
-
-  .automatic p {
-    color: var(--text-dim);
-    font-size: var(--font-s);
   }
 
   .address,
@@ -450,7 +455,7 @@
   .folder {
     user-select: text;
     overflow-wrap: anywhere;
-    padding: 8px 10px;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-s);
     background: var(--surface-0);
     border: 1px solid var(--line-subtle);
@@ -463,9 +468,9 @@
 
   .notice {
     display: flex;
-    gap: 10px;
+    gap: var(--space-2);
     align-items: flex-start;
-    padding: 10px 14px;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-s);
     border: 1px solid var(--line-subtle);
     background: var(--surface-1);

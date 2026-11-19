@@ -4,7 +4,15 @@
   import { capitalise, serverName, summarise } from "../../features/connection/wording";
   import { ended } from "./status";
 
-  let { app, session, title, onconnect }: { app: AppState; session: SessionSnapshot | null; title: string; onconnect: () => void } = $props();
+  let {
+    app,
+    session,
+    title,
+    plural = true,
+    onconnect,
+  }: { app: AppState; session: SessionSnapshot | null; title: string; plural?: boolean; onconnect: () => void } = $props();
+
+  let opens = $derived(plural ? "open" : "opens");
 
   let waiting = $derived(session !== null && !ended(session));
   let summary = $derived(session ? summarise(session) : null);
@@ -15,18 +23,18 @@
   <h1 id="needs-connection-title">{title}</h1>
   {#if waiting && session && summary}
     {#if found}
-      <p>{capitalise(serverName(session))} reports no devices that PrismForge can use. {title} open when it finds devices.</p>
+      <p>{capitalise(serverName(session))} reports no devices that PrismForge can use. {title} {opens} when it finds devices.</p>
     {:else}
       {#each summary.reasons as reason (reason)}
         <p>{reason}</p>
       {/each}
-      <p>{title} open when PrismForge is connected and has found devices.</p>
+      <p>{title} {opens} when PrismForge is connected and has found devices.</p>
     {/if}
     <div class="actions">
       <button type="button" onclick={() => app.go("devices")}>Open Devices</button>
     </div>
   {:else}
-    <p>{title} need a connection. Connect to OpenRGB, or start demo mode to try PrismForge with simulated devices.</p>
+    <p>{title} {plural ? "need" : "needs"} a connection. Connect to OpenRGB, or start demo mode to try PrismForge with simulated devices.</p>
     <div class="actions">
       <button type="button" class="primary" onclick={onconnect}>Connect to OpenRGB</button>
       <button type="button" disabled={app.working !== null} onclick={() => app.startDemo()}>Start demo mode</button>

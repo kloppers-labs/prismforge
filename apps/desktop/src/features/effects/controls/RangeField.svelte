@@ -61,7 +61,7 @@
 <style>
   .range {
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   label {
@@ -71,7 +71,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   input[type="range"] {
@@ -89,7 +89,7 @@
   }
 
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
   }
 

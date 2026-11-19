@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import type { Tone } from "../features/connection/wording";
+  import type { Tone } from "./tone";
   import ToneIcon from "./ToneIcon.svelte";
 
   let {

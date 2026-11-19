@@ -2,12 +2,62 @@
   import { onMount } from "svelte";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { StoreView } from "../../lib/api/bindings/StoreView";
+  import type { Names } from "../../lib/names";
   import { deviceKey, reference } from "../devices/present";
-  import { errorName, eventText, raw } from "./format";
+  import { errorName, eventText, raw, reportText, type ReportPart } from "./format";
 
-  let { session, store, onclose }: { session: SessionSnapshot | null; store: StoreView | null; onclose: () => void } = $props();
+  let { session, store, names, onclose }: { session: SessionSnapshot | null; store: StoreView | null; names: Names; onclose: () => void } = $props();
+
+  let copied = $state<"done" | "failed" | null>(null);
+
+  function nameOf(ref: string): string {
+    const device = session?.devices.find((each) => reference(each) === ref);
+    return device ? names.device(device) : ref;
+  }
+
+  function parts(): ReportPart[] {
+    const list: ReportPart[] = [];
+    if (store) {
+      list.push({ title: "Profile store", rows: [["Store", store.kind]] });
+    }
+    if (!session) {
+      return [...list, { title: "Connection", rows: [["Session", "none"]] }];
+    }
+    const last = session.diagnostics.last_error;
+    list.push(
+      {
+        title: "Backend",
+        rows: [
+          ["Origin", session.backend.origin],
+          ["Address", session.backend.address ?? "None"],
+          ["Protocol version", String(session.backend.protocol_version ?? "Not negotiated")],
+          ["Server name", session.backend.server_name ?? "Not reported"],
+          ["Connection state", raw(session.connection)],
+        ],
+      },
+      { title: "Last error", rows: last ? [["Operation", last.operation], ["At", `${last.at_ms} ms`], ["Error", raw(last.error)]] : [["Error", "none"]] },
+      { title: "Counters", rows: counters.map(([label, value]) => [String(label), String(value)]) },
+      {
+        title: "Output",
+        rows: [["Frame rate", String(session.output.frame_rate)], ...session.output.devices.map((output) => [output.device, `${raw(output.owner)} ${raw(output.condition)}`] as [string, string])],
+      },
+      { title: "Devices", rows: session.devices.map((device) => [device.descriptor.name, reference(device) ?? raw(device.identity)] as [string, string]) },
+      { title: "Recent events", rows: events.map((event) => [`#${event.sequence} at ${event.at_ms} ms`, eventText(event.kind)] as [string, string]) },
+    );
+    return list;
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(reportText(parts()));
+      copied = "done";
+    } catch {
+      copied = "failed";
+    }
+  }
 
   let heading: HTMLHeadingElement | undefined = $state();
+  let root: HTMLElement | undefined = $state();
   let counters = $derived(
     session
       ? [
@@ -29,7 +79,8 @@
   onMount(() => heading?.focus());
 
   function onkeydown(event: KeyboardEvent) {
-    if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("[aria-modal='true']")) {
+    const inside = event.target instanceof Node && root?.contains(event.target);
+    if (event.key === "Escape" && inside && !event.defaultPrevented && !document.querySelector("[aria-modal='true']")) {
       onclose();
     }
   }
@@ -37,11 +88,18 @@
 
 <svelte:window {onkeydown} />
 
-<aside id="diagnostics-drawer" class="drawer" aria-labelledby="diagnostics-title">
+<aside id="diagnostics-drawer" class="drawer" aria-labelledby="diagnostics-title" bind:this={root}>
   <header>
     <h2 id="diagnostics-title" tabindex="-1" data-region-focus bind:this={heading}>Diagnostics</h2>
-    <button type="button" onclick={onclose}>Close</button>
+    <div class="tools">
+      <button type="button" class="small" onclick={copy}>Copy as text</button>
+      <button type="button" class="small" onclick={onclose}>Close</button>
+    </div>
   </header>
+  <p class="intro">What PrismForge knows about this session, for a bug report. Copy as text puts the server address, the device names and references, the counters, the last error and the recent events on the clipboard. The copy leaves out the folder path.</p>
+  <p class="copied" role="status">
+    {#if copied === "done"}Copied. Paste it into your report.{:else if copied === "failed"}PrismForge could not reach the clipboard. Select the values below and copy them.{/if}
+  </p>
 
   {#if store}
     <section aria-labelledby="store-title">
@@ -56,7 +114,7 @@
   {/if}
 
   {#if !session}
-    <p class="empty">No connection has been started.</p>
+    <p class="empty">PrismForge has no connection now.</p>
   {:else}
     <section aria-labelledby="backend-title">
       <h3 id="backend-title">Backend</h3>
@@ -115,7 +173,7 @@
         <dt>Scene</dt>
         <dd class="code">{raw(session.output.scene.assignments)}</dd>
         {#each session.output.devices as output (output.device)}
-          <dt class="code">{output.device}</dt>
+          <dt>{nameOf(output.device)}<span class="ref code">{output.device}</span></dt>
           <dd class="code">{raw(output.owner)} {raw(output.condition)}</dd>
         {/each}
       </dl>
@@ -128,8 +186,8 @@
       {:else}
         <dl>
           {#each session.devices as device, index (deviceKey(device, index))}
-            <dt>{device.descriptor.name}</dt>
-            <dd class="code">{reference(device) ?? `ambiguous: ${raw(device.identity)}`}</dd>
+            <dt>{names.device(device)}</dt>
+            <dd><span class="code">{reference(device) ?? `ambiguous: ${raw(device.identity)}`}</span>{#if names.device(device) !== device.descriptor.name}<span class="ref">Reported as <span>{device.descriptor.name}</span></span>{/if}</dd>
           {/each}
         </dl>
       {/if}
@@ -182,8 +240,31 @@
 
   header {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
+    gap: var(--space-2);
+  }
+
+  .tools {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .intro {
+    color: var(--text-dim);
+    font-size: var(--font-s);
+  }
+
+  .copied:empty {
+    display: none;
+  }
+
+  .ref {
+    display: block;
+    color: var(--text-dim);
+    font-size: var(--font-xs);
+    font-weight: var(--weight-regular);
   }
 
   h2:focus {
@@ -192,18 +273,26 @@
 
   section {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line-subtle);
+  }
+
+  h3 {
+    font-size: var(--font-s);
+    color: var(--text-dim);
   }
 
   dl {
     display: grid;
-    grid-template-columns: minmax(0, 150px) minmax(0, 1fr);
-    gap: 4px 12px;
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+    gap: var(--space-1) var(--space-3);
     margin: 0;
   }
 
   dt {
-    color: var(--text-faint);
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
   }
 
   dd {
@@ -221,7 +310,7 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
   }
 
   .events li {
@@ -230,10 +319,10 @@
   }
 
   .events .numeric {
-    color: var(--text-faint);
+    color: var(--text-dim);
   }
 
   .empty {
-    color: var(--text-faint);
+    color: var(--text-dim);
   }
 </style>

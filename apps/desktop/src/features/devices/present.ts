@@ -124,3 +124,23 @@ export function zoneSize(zone: ZoneDescriptor): string {
 export function ledCount(count: number): string {
   return count === 1 ? "1 LED" : `${count} LEDs`;
 }
+
+export function distinction(devices: SessionDevice[], name: (device: SessionDevice) => string): (string | null)[] {
+  return devices.map((device) => {
+    const twins = devices.filter((other) => name(other) === name(device));
+    if (twins.length < 2) {
+      return null;
+    }
+    const distinct = (value: (each: SessionDevice) => string) => {
+      const values = twins.map(value);
+      return values.every((each) => each.trim().length > 0) && new Set(values).size === values.length;
+    };
+    if (distinct((each) => each.descriptor.location)) {
+      return device.descriptor.location;
+    }
+    if (distinct((each) => each.descriptor.serial)) {
+      return `Serial ending ${device.descriptor.serial.slice(-4)}`;
+    }
+    return `${twins.indexOf(device) + 1} of ${twins.length}`;
+  });
+}

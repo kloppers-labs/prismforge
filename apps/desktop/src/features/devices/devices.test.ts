@@ -1,10 +1,12 @@
-import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { IdentifyOutcome } from "../../lib/api/bindings/IdentifyOutcome";
 import { fakeShell, refuse } from "../../test/backend";
 import * as outcomes from "../../test/fixtures/outcomes";
-import { demoConnected, demoIdentifying, openRgbConnected, openRgbDegraded } from "../../test/fixtures/sessions";
+import { effectHandlers } from "../../test/effects";
+import { demoConnected, demoEffectsRunning, demoIdentifying, openRgbConnected, openRgbDegraded } from "../../test/fixtures/sessions";
+import { storeEmpty } from "../../test/fixtures/stores";
 
 async function select(name: string, index = 0) {
   const list = await screen.findByRole("navigation", { name: /Devices/ });
@@ -76,12 +78,13 @@ test("explains_identify_before_first_use", async () => {
   render(App);
 
   await select("Demo Graphics Card");
-  expect(screen.getByText(/PrismForge cannot see that\. PrismForge never saves to device memory\./)).toBeTruthy();
-  expect(screen.queryByText("How identify works")).toBeNull();
+  expect(screen.getByText("Identify lights it white for 3 seconds, then asks the demo backend to put back the earlier lighting.")).toBeTruthy();
+  const caveat = screen.getByText(/PrismForge cannot see that\. PrismForge never saves to device memory\./);
+  expect(caveat.closest("details:not([open])")).toBeNull();
 
   await fireEvent.click(screen.getByRole("button", { name: "Identify device" }));
 
-  expect(await screen.findByText("How identify works")).toBeTruthy();
+  await waitFor(() => expect((screen.getByText("How identify works").closest("details") as HTMLDetailsElement).open).toBe(false));
 });
 
 const expectations: [string, IdentifyOutcome, RegExp[]][] = [
@@ -156,4 +159,85 @@ test("sends_the_selected_zone", async () => {
     device: "demo-motherboard",
     zone: 1,
   });
+});
+
+test("set_lighting_opens_effects_with_this_device_chosen", async () => {
+  fakeShell(demoConnected, effectHandlers());
+  render(App);
+  await select("Demo Graphics Card");
+
+  await fireEvent.click(screen.getByRole("button", { name: "Set lighting" }));
+
+  const targets = await screen.findByRole("navigation", { name: "Targets" });
+  const card = within(targets).getByRole("group", { name: "Demo Graphics Card" });
+  expect(within(card).getByRole("button", { name: /^Whole device/ }).getAttribute("aria-current")).toBe("true");
+});
+
+test("identical_names_are_told_apart_in_the_device_list", async () => {
+  fakeShell(demoConnected);
+  render(App);
+  const list = await screen.findByRole("navigation", { name: /Devices/ });
+
+  const rows = within(list).getAllByRole("button", { name: /^Demo Memory Module/ });
+
+  expect(rows).toHaveLength(2);
+  expect(rows[0]!.textContent).toContain("Simulated memory slot 1");
+  expect(rows[1]!.textContent).toContain("Simulated memory slot 2");
+});
+
+test("the_device_list_is_one_tab_stop_moved_with_arrow_keys", async () => {
+  fakeShell(demoConnected);
+  render(App);
+  const list = await screen.findByRole("navigation", { name: /Devices/ });
+  const rows = within(list).getAllByRole("button");
+  expect(rows.filter((row) => row.tabIndex === 0)).toHaveLength(1);
+
+  rows[0]!.focus();
+  await fireEvent.keyDown(rows[0]!, { key: "ArrowDown" });
+
+  expect(document.activeElement).toBe(rows[1]);
+  expect(rows[1]!.getAttribute("aria-current")).toBe("true");
+  await fireEvent.keyDown(rows[1]!, { key: "End" });
+  expect(document.activeElement).toBe(rows.at(-1));
+});
+
+test("the_device_says_what_controls_its_lighting_now", async () => {
+  fakeShell(demoEffectsRunning, effectHandlers());
+  render(App);
+
+  await select("Demo Graphics Card");
+
+  expect(await screen.findByText("Runs the PrismForge effect Rainbow wave.")).toBeTruthy();
+});
+
+test("last_reported_colours_have_a_text_summary", async () => {
+  fakeShell(demoConnected);
+  render(App);
+
+  await select("Demo Graphics Card");
+
+  const colours = screen.getByRole("region", { name: "Last reported colours" });
+  expect(colours.textContent).toMatch(/12 LEDs/);
+});
+
+test("zone_rows_have_short_buttons_with_full_names", async () => {
+  fakeShell(demoConnected, { profile_store: () => storeEmpty });
+  render(App);
+  await select("Demo Motherboard");
+
+  const identify = screen.getByRole("button", { name: "Identify zone Addressable Header 1" });
+  const rename = await screen.findByRole("button", { name: "Rename zone Addressable Header 1" });
+
+  expect(identify.textContent?.trim()).toBe("Identify");
+  expect(rename.textContent?.trim()).toBe("Rename");
+});
+
+test("the_identical_device_note_promises_no_fix_the_core_does_not_keep", async () => {
+  fakeShell(openRgbDegraded);
+  render(App);
+  await select("Fixture Fan");
+
+  const note = screen.getByText(/looks identical to another device/).parentElement as HTMLElement;
+  expect(note.textContent).not.toMatch(/disconnect the other one|unplug/i);
+  expect(note.textContent).toMatch(/no way yet to tell them apart by hand/);
 });

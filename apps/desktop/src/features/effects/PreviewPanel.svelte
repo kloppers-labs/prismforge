@@ -25,7 +25,7 @@
 <style>
   .panel {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .head {
@@ -42,7 +42,7 @@
   }
 
   .quiet {
-    padding: 3px 10px;
+    padding: 3px var(--space-2);
     font-size: var(--font-s);
   }
 </style>

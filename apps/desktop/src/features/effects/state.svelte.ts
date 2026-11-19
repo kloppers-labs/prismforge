@@ -14,7 +14,7 @@ import {
   type ModeFeedback,
 } from "./feedback";
 import { applyBlocked, applyingText, deviceOf, runningOn, targetName } from "./present";
-import { check, initialFields, problemText, type Field, type Fields } from "./values";
+import { check, initialFields, parseHex, problemText, START_COLOR, toHex, type Field, type Fields } from "./values";
 
 const REAPPLY_DELAY_MS = 300;
 
@@ -34,6 +34,9 @@ export class EffectsState {
   fields = $state<Fields>({});
   rustProblems = $state<Record<string, string>>({});
   working = $state<"apply" | "stop" | null>(null);
+  /** The result of the last Apply or Stop press and its target; live edits never set it. */
+  pressed = $state<{ count: number; target: OutputTarget } | null>(null);
+  private lastColor = START_COLOR;
   externalProblem = $state<Failure | null>(null);
   private effectResult = $state<EffectFeedback | null>(null);
   private modeResult = $state<ModeFeedback | null>(null);
@@ -77,10 +80,17 @@ export class EffectsState {
     private readonly changed: () => void,
   ) {}
 
-  async load() {
+  private loading: Promise<void> | null = null;
+
+  load(): Promise<void> {
     if (this.catalog) {
-      return;
+      return Promise.resolve();
     }
+    this.loading ??= this.fetchCatalog().finally(() => (this.loading = null));
+    return this.loading;
+  }
+
+  private async fetchCatalog() {
     this.catalogProblem = null;
     const answer = await api.effectCatalog();
     if (answer.ok) {
@@ -126,11 +136,15 @@ export class EffectsState {
     this.rustProblems = {};
     const running = this.running;
     const values = running?.effect.effect === effect ? running.effect.values : {};
-    this.fields = this.definition ? initialFields(this.definition, values) : {};
+    this.fields = this.definition ? initialFields(this.definition, values, this.lastColor) : {};
   }
 
   setField(id: string, field: Field) {
     this.fields = { ...this.fields, [id]: field };
+    const color = field.kind === "color" ? parseHex(field.text) : null;
+    if (color) {
+      this.lastColor = toHex(color);
+    }
     const { [id]: _, ...others } = this.rustProblems;
     this.rustProblems = others;
     if (this.canAutoApply) {
@@ -145,6 +159,7 @@ export class EffectsState {
       this.held = this.held.filter((key) => key !== deviceHold(target.device) && key !== targetHold(target));
     }
     await this.send();
+    this.press(target);
   }
 
   async stop() {
@@ -163,6 +178,7 @@ export class EffectsState {
     } else {
       this.effectResult = { kind: "failed", error: answer.error };
     }
+    this.press(target);
   }
 
   async selectMode(device: DeviceRef, mode: number, name: string) {
@@ -304,6 +320,12 @@ export class EffectsState {
     this.effectResult = null;
     this.modeResult = null;
     this.externalProblem = null;
+  }
+
+  private press(target: OutputTarget | null) {
+    if (target) {
+      this.pressed = { count: (this.pressed?.count ?? 0) + 1, target };
+    }
   }
 
   private scheduleReapply() {

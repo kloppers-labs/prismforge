@@ -20,6 +20,7 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | Test on real hardware | **Not done** |
 | Effect engine: six original effects, output scheduler at 30 FPS, output ownership | Built in Rust. Tested with the demo backend and the fake server in simulated time only. |
 | Effects screen: targets, generated parameter controls, preview, apply and stop, hardware modes, another program's control, frame rate | Built. Run by hand in demo mode on macOS (Apple Silicon) through the accessibility tree only. |
+| Screen sweep: connection, devices, effects, profiles, settings and Diagnostics follow the audit; Diagnostics docks at the default window size | Built. Tested in interface tests and looked at in a browser preview with simulated data. Not run in the native window, with a screen reader or on Windows. |
 | Effects plugin provider, performance measurements | Not started |
 | Profiles in the Rust core: versioned files, backups and recovery, device registry on disk, capture, apply with a result per setting, export and import without private data | Built. Tested on real files in temporary folders with the demo backend and the fake server only. |
 | Profiles screen in the app: save, update with a change list, apply with a result per setting, rename, duplicate, delete, export, import, apply on connect, repaired-file notices; device and zone names | Built. Tested through the shell and the interface tests only. Native dialogs not run by hand. |

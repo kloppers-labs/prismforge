@@ -29,8 +29,8 @@
 <style>
   .failure {
     display: grid;
-    gap: 4px;
-    padding: 10px 14px;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
     border-left: 3px solid var(--warning);
     background: var(--surface-0);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;

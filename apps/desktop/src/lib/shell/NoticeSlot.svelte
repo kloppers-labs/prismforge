@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import Notice from "../Notice.svelte";
   import type { AppState } from "../state/app.svelte";
   import { summarise } from "../../features/connection/wording";
@@ -10,35 +11,34 @@
   let { app, labels, region = $bindable() }: { app: AppState; labels: Labels; region?: HTMLElement } = $props();
 
   const queue = new NoticeOrder();
-  let ordered = $derived(queue.order(activeNotices(app)));
-  let notices = $derived(ordered.sorted);
+  let notices = $state<NoticeItem[]>([]);
   let expanded = $state(false);
   let shown = $derived(expanded ? notices : notices.slice(0, 1));
-  let polite = $state("");
-  let assertive = $state("");
+  let announced = $state<{ id: number; text: string; urgent: boolean } | null>(null);
 
   $effect(() => {
-    if (notices.length <= 1) {
-      expanded = false;
-    }
-  });
-
-  $effect(() => {
-    const visible = new Set(shown.map((notice) => notice.kind));
-    const hidden = ordered.arrived.filter((notice) => !visible.has(notice.kind));
-    if (hidden.length > 0) {
-      const text = `${notices.length} notices. New: ${hidden.map((notice) => notice.title).join(" ")}`;
-      if (hidden.some((notice) => notice.tone === "problem")) {
-        assertive = text;
-      } else {
-        polite = text;
+    const items = activeNotices(app);
+    untrack(() => {
+      const { sorted, arrived } = queue.order(items);
+      notices = sorted;
+      if (sorted.length <= 1) {
+        expanded = false;
       }
-    }
+      const visible = new Set((expanded ? sorted : sorted.slice(0, 1)).map((notice) => notice.kind));
+      const hidden = arrived.filter((notice) => !visible.has(notice.kind));
+      if (hidden.length > 0) {
+        announced = {
+          id: (announced?.id ?? 0) + 1,
+          text: `${sorted.length} notices. New: ${hidden.map((notice) => notice.title).join(" ")}`,
+          urgent: hidden.some((notice) => notice.tone === "problem"),
+        };
+      }
+    });
   });
 
   function dismiss(notice: NoticeItem) {
     if (notice.kind === "problem") {
-      app.problem = null;
+      app.dismissProblem();
     } else if (notice.kind === "lifecycle") {
       app.lifecycle.failure = null;
     } else if (notice.kind === "trayStop") {
@@ -62,8 +62,14 @@
   {/if}
 {/snippet}
 
-<p class="visually-hidden" role="status" aria-label="New notices">{polite}</p>
-<p class="visually-hidden" aria-live="assertive" aria-atomic="true">{assertive}</p>
+{#snippet announcement(urgent: boolean)}
+  {#if announced && announced.urgent === urgent}
+    {#key announced.id}<span>{announced.text}</span>{/key}
+  {/if}
+{/snippet}
+
+<p class="visually-hidden" role="status" aria-label="New notices">{@render announcement(false)}</p>
+<p class="visually-hidden" aria-live="assertive" aria-atomic="true">{@render announcement(true)}</p>
 
 {#if notices.length > 0}
   <section class="slot" aria-label="Notices" tabindex="-1" bind:this={region}>

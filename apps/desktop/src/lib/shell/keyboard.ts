@@ -1,4 +1,4 @@
-import { isMac } from "../../features/settings/wording";
+import { isMac } from "../platform";
 import { ALL_AREAS, type Area } from "./areas";
 
 export function shortcutKeys(area: Area): string {
@@ -25,7 +25,7 @@ export function areaFor(event: KeyboardEvent): Area | null {
   if (event.repeat || !withModifier(event) || isTyping(event.target) || document.querySelector("[aria-modal='true']")) {
     return null;
   }
-  return ALL_AREAS.find((area) => area.code === event.code) ?? ALL_AREAS.find((area) => area.key === event.key) ?? null;
+  return ALL_AREAS.find((area) => area.code !== null && area.code === event.code) ?? ALL_AREAS.find((area) => area.key === event.key) ?? null;
 }
 
 export function isQuit(event: KeyboardEvent): boolean {

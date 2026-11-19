@@ -7,7 +7,7 @@ use tauri::State;
 
 use crate::effects::EffectCatalog;
 use crate::view::{CommandError, ShellView};
-use crate::{DesktopLifecycle, DesktopShell};
+use crate::{DesktopLifecycle, DesktopShell, marks};
 
 #[tauri::command]
 pub fn view(shell: State<'_, DesktopShell>) -> ShellView {
@@ -26,8 +26,7 @@ pub async fn connect_openrgb(
     if host.is_empty() {
         return Err(CommandError::EmptyHost);
     }
-    let _ = lifecycle.remember_address(&shell, host, port).await;
-    connect(&shell, host, port).await
+    marks::connect_openrgb(&shell, &lifecycle, host, port, openrgb(host, port)).await
 }
 
 /// The one connect path, for the Connect button and for connect at start.
@@ -36,20 +35,27 @@ pub async fn connect(
     host: &str,
     port: u16,
 ) -> Result<ShellView, CommandError> {
-    let connector = TcpConnector::new(host, port);
-    shell
-        .start(OpenRgbBackend::new(connector, ClientConfig::default()))
-        .await
+    shell.start(openrgb(host, port)).await
+}
+
+fn openrgb(host: &str, port: u16) -> OpenRgbBackend<TcpConnector> {
+    OpenRgbBackend::new(TcpConnector::new(host, port), ClientConfig::default())
 }
 
 #[tauri::command]
-pub async fn start_demo(shell: State<'_, DesktopShell>) -> Result<ShellView, CommandError> {
-    shell.start(DemoBackend::new()).await
+pub async fn start_demo(
+    shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
+) -> Result<ShellView, CommandError> {
+    marks::start(&shell, &lifecycle, DemoBackend::new()).await
 }
 
 #[tauri::command]
-pub async fn disconnect(shell: State<'_, DesktopShell>) -> Result<ShellView, CommandError> {
-    Ok(shell.stop().await)
+pub async fn disconnect(
+    shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
+) -> Result<ShellView, CommandError> {
+    Ok(marks::stop(&shell, &lifecycle).await)
 }
 
 #[tauri::command]

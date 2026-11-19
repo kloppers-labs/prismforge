@@ -17,8 +17,8 @@
 <style>
   .changes {
     margin: 0;
-    padding-left: 18px;
+    padding-left: var(--space-4);
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
   }
 </style>

@@ -141,7 +141,7 @@ test("the_text_about_automatic_lighting_changes_is_exact", async () => {
   render(App);
   await openSettings();
 
-  const note = await screen.findByRole("complementary", { name: "When your lighting changes without a click" });
+  const note = (await screen.findByText("When your lighting changes without a click")).closest("details") as HTMLElement;
   const lines = within(note).getAllByRole("paragraph").map((line) => line.textContent?.trim());
   expect(lines).toEqual([AUTOMATIC, "PrismForge effects run only while PrismForge runs and is connected. Nothing is stored on your devices."]);
 });
@@ -376,4 +376,34 @@ test("an_entry_for_every_user_is_explained_with_its_removal", async () => {
     ),
   ).toBeTruthy();
   expect(screen.getByText('reg delete "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v PrismForge /f')).toBeTruthy();
+});
+
+test("the_close_choice_can_be_reached_by_tab_when_background_is_stored_but_there_is_no_tray", async () => {
+  fakeShell(null, { lifecycle: () => ({ ...lifecycleChosen, tray: lifecycleNoTray.tray }) });
+  render(App);
+  await openSettings();
+
+  await waitFor(() => expect(radio("Quit PrismForge").getAttribute("tabindex")).toBe("0"));
+  expect(radio("Keep PrismForge running in the system tray").getAttribute("tabindex")).toBe("-1");
+});
+
+test("each_switch_states_its_consequence_in_one_line_with_more_behind_details", async () => {
+  fakeShell(null, { lifecycle: () => lifecycleStartPath });
+  render(App);
+  await openSettings();
+  await waitFor(() => expect(toggle("Start PrismForge when you sign in").getAttribute("aria-checked")).toBe("true"));
+
+  for (const item of screen.getAllByRole("switch")) {
+    const description = document.getElementById(item.getAttribute("aria-describedby") ?? "");
+    expect(description?.tagName).toBe("P");
+    expect(description?.closest("details")).toBeNull();
+  }
+  const groups = screen.getAllByRole("region").filter((region) => region.closest("main"));
+  expect(groups.map((group) => group.getAttribute("aria-label") ?? group.querySelector("h2")?.textContent)).toEqual([
+    "When you close the window",
+    "When PrismForge starts",
+    "Effect output",
+    "Where PrismForge keeps its files",
+    "Quit PrismForge",
+  ]);
 });

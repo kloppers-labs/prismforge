@@ -8,7 +8,8 @@
   let { app, onconnect, region = $bindable() }: { app: AppState; onconnect: () => void; region?: HTMLElement } = $props();
 
   let connection = $derived(connectionStatus(app.session));
-  let profile = $derived(profileStatus(app.view, app.profiles.store));
+  let start = $derived(app.lifecycle.view?.start_profile ?? null);
+  let profile = $derived(profileStatus(app.view, app.profiles.store, start !== null && typeof start === "object" && "Marked" in start ? start.Marked.name : null));
   let background = $derived(
     app.lifecycle.settings?.on_close === "Background" && app.lifecycle.trayAvailable
       ? "Closing the window keeps PrismForge running in the background."
@@ -25,8 +26,10 @@
     <DemoMarker />
   {/if}
   {#if profile}
-    <span class="divider" aria-hidden="true"></span>
-    <ProfileChip {app} status={profile} />
+    <span class="profile">
+      <span class="divider" aria-hidden="true"></span>
+      <ProfileChip {app} status={profile} />
+    </span>
   {/if}
   <p class="visually-hidden" role="status" aria-label="Status summary">{announcement}</p>
 </section>
@@ -63,6 +66,14 @@
     height: 3px;
     background: var(--demo-stripes);
     opacity: 1;
+  }
+
+  .profile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    max-width: 100%;
   }
 
   .divider {

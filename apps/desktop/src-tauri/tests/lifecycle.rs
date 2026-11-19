@@ -10,7 +10,7 @@ use prismforge_core::{BackendOrigin, ConnectionState, DeviceRef, OutputTarget};
 use prismforge_desktop::{
     AppSettingChange, CommandError, ConnectOutcome, OnConnect, SettingProblem, SettingsState,
     Shell, ShellConfig, StartEntryState, StartProfile, StopResult, StoreUnavailable, Stores,
-    TrayState, stop_then_exit,
+    TrayState, marks, stop_then_exit,
 };
 use prismforge_effects::EffectInstance;
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
@@ -831,4 +831,44 @@ async fn an_entry_for_every_user_is_reported_beside_the_user_entry() {
     assert!(!before.machine_start_entry);
     assert!(after.machine_start_entry);
     assert_eq!(after.start_with_system, StartEntryState::NotRegistered);
+}
+
+#[tokio::test(start_paused = true)]
+async fn every_change_to_the_marked_profile_publishes_the_start_profile() {
+    let (shell, recorder, _dir) = shell("start-profile-published");
+    let entry = FakeEntry::default();
+    let (lifecycle, views) = lifecycle(&entry);
+    let marked = |name: &str| StartProfile::Marked { name: name.into() };
+
+    marks::start(
+        &shell,
+        &lifecycle,
+        OpenRgbBackend::new(Local(desk_server()), ClientConfig::default()),
+    )
+    .await
+    .expect("start");
+    recorder.wait_for(is_connected).await;
+    let id = shell.create_profile("Evening").await.expect("save").id;
+    marks::set_apply_on_connect(&shell, &lifecycle, Some(id.clone()))
+        .await
+        .expect("mark");
+    assert_eq!(views.last().start_profile, marked("Evening"));
+    marks::rename_profile(&shell, &lifecycle, &id, "Night")
+        .await
+        .expect("rename");
+    assert_eq!(views.last().start_profile, marked("Night"));
+    marks::set_apply_on_connect(&shell, &lifecycle, None)
+        .await
+        .expect("unmark");
+    assert_eq!(views.last().start_profile, StartProfile::NotMarked);
+    marks::set_apply_on_connect(&shell, &lifecycle, Some(id.clone()))
+        .await
+        .expect("mark again");
+    marks::delete_profile(&shell, &lifecycle, &id)
+        .await
+        .expect("delete");
+    assert_ne!(views.last().start_profile, marked("Night"));
+    let published = views.views().len();
+    marks::stop(&shell, &lifecycle).await;
+    assert_eq!(views.views().len(), published + 1);
 }

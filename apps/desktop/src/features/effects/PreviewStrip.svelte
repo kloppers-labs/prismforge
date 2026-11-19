@@ -26,7 +26,7 @@
 </script>
 
 <div class="preview">
-  <div class="rail" aria-hidden="true">
+  <div class="rail true-color" aria-hidden="true">
     {#if player.frame}
       {#each player.frame as color, index (index)}
         <span class="led" style:--led="rgb({color.r} {color.g} {color.b})"></span>
@@ -51,13 +51,13 @@
 <style>
   .preview {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .rail {
     display: flex;
     gap: 3px;
-    padding: 12px 14px;
+    padding: var(--space-3) var(--space-3);
     border-radius: var(--radius-m);
     background: linear-gradient(180deg, var(--surface-stage), var(--surface-stage-edge));
     box-shadow: inset 0 0 0 1px var(--surface-3);
@@ -71,7 +71,7 @@
     background: var(--led);
     box-shadow:
       0 0 10px -1px var(--led),
-      inset 0 0 0 1px rgb(255 255 255 / 0.1);
+      inset 0 0 0 1px var(--line-subtle);
   }
 
   .led.off {
@@ -80,7 +80,7 @@
   }
 
   .caption {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
   }
 </style>

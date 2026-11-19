@@ -81,7 +81,7 @@ export function applyBlocked(session: SessionSnapshot, device: SessionDevice, zo
   }
   const label = declaredBy(session, ref);
   if (label !== null) {
-    return `You said ${label} controls this device. Hand it back below before you apply an effect.`;
+    return `You said ${label} controls this device. Hand it back before you apply an effect.`;
   }
   if (!hasDirectMode(device)) {
     return "This device has no Direct Mode, so PrismForge effects cannot run on it. Its hardware modes still work.";
@@ -108,7 +108,7 @@ export function modeBlocked(session: SessionSnapshot, device: SessionDevice): st
   }
   const label = declaredBy(session, ref);
   if (label !== null) {
-    return `You said ${label} controls this device. Hand it back below first.`;
+    return `You said ${label} controls this device. Hand it back first.`;
   }
   if (identifying(session, ref)) {
     return "An identify is running on this device. Wait until it finishes.";
@@ -123,20 +123,23 @@ export function stopBlocked(session: SessionSnapshot, target: OutputTarget): str
   return canStop(session, target) ? null : "No PrismForge effect runs on this target.";
 }
 
-export function shortOwner(session: SessionSnapshot, device: SessionDevice): string {
+export type TargetMark = { text: string; tone: "good" | "caution" | "plain" };
+
+export function targetMark(session: SessionSnapshot, device: SessionDevice): TargetMark | null {
   const ref = reference(device);
   const output = ref === null ? null : outputOf(session, ref);
   if (!output) {
-    return "Owner: none";
+    return null;
   }
   const owner = output.owner;
   if (owner === "Effect") {
-    return `Owner: PrismForge effect, ${shortCondition(output.condition)}`;
+    const state = shortCondition(output.condition);
+    return { text: `Effect ${state}`, tone: state === "running" ? "good" : state === "idle" ? "plain" : "caution" };
   }
   if ("HardwareMode" in owner) {
-    return `Owner: hardware mode ${modeName(device, owner.HardwareMode.mode)}`;
+    return { text: `Hardware mode ${modeName(device, owner.HardwareMode.mode)}`, tone: "plain" };
   }
-  return `Owner: ${owner.External.label}, as you said`;
+  return { text: `Left to ${owner.External.label}`, tone: "caution" };
 }
 
 function shortCondition(condition: OutputCondition): string {
@@ -146,13 +149,15 @@ function shortCondition(condition: OutputCondition): string {
   return "Paused" in condition ? "paused" : "refused";
 }
 
-export function ownerText(device: SessionDevice, output: DeviceOutput | null): string {
+export function ownerText(session: SessionSnapshot, device: SessionDevice, output: DeviceOutput | null): string {
   if (!output) {
     return "None. PrismForge sends nothing to this device.";
   }
   const owner = output.owner;
   if (owner === "Effect") {
-    return "A PrismForge effect. It runs only while PrismForge runs and is connected.";
+    return session.backend.origin === "Simulated"
+      ? "A PrismForge effect, computed by PrismForge and sent to the demo backend. Nothing reaches hardware."
+      : "A PrismForge effect, computed by PrismForge and sent to the device through OpenRGB.";
   }
   if ("HardwareMode" in owner) {
     return `Hardware mode ${modeName(device, owner.HardwareMode.mode)}, selected in PrismForge. It runs on the device itself. PrismForge writes nothing to this device.`;
@@ -227,4 +232,76 @@ export function stopText(outcome: RestoreOutcome | null, server: string): StopTe
     headline: "Effect stopped. The earlier lighting was not put back.",
     details: [restoreFailureText(outcome.NotRestored.failure, server), "Select a hardware mode below, or set the lighting again in OpenRGB."],
   };
+}
+
+export function controlSummary(session: SessionSnapshot, device: SessionDevice, effectLabel: (id: string) => string | null): string | null {
+  const ref = reference(device);
+  const output = ref === null ? null : outputOf(session, ref);
+  if (!output || ref === null) {
+    return null;
+  }
+  const owner = output.owner;
+  if (owner === "Effect") {
+    const effects = session.output.scene.assignments.filter((assignment) => assignment.target.device === ref);
+    const names = [...new Set(effects.map((assignment) => effectLabel(assignment.effect.effect) ?? assignment.effect.effect))];
+    const what = names.length === 1 ? `the PrismForge effect ${names[0]}` : "PrismForge effects";
+    const state = shortCondition(output.condition);
+    return state === "running" || state === "idle" ? `Runs ${what}.` : `Runs ${what}, ${state} now.`;
+  }
+  if ("HardwareMode" in owner) {
+    return `Runs hardware mode ${modeName(device, owner.HardwareMode.mode)}, selected in PrismForge.`;
+  }
+  return `Left to ${owner.External.label}. PrismForge sends nothing to it.`;
+}
+
+export type Mode = { name: "Live" | "Draft" | "Off"; text: string };
+
+export type Nearby = { label: string; where: string | null };
+
+function nearbyText(nearby: Nearby[], chosen: string | null): string {
+  const one = nearby.length === 1 ? nearby[0] : null;
+  if (one && one.where === null) {
+    return `${one.label} runs on the whole device. Apply effect replaces it.`;
+  }
+  const what = one
+    ? `${one.label} runs on ${one.where}.`
+    : `Effects run on ${nearby.length} zones: ${nearby.map((each) => `${each.where} (${each.label})`).join(", ")}.`;
+  const it = one ? "it" : "them";
+  const replace = chosen === null ? "" : ` Apply effect replaces ${it} with one effect on the whole device.`;
+  return `${what}${replace} Stop effect stops ${it}.`;
+}
+
+export function editMode(state: {
+  blocked: string | null;
+  live: boolean;
+  chosen: string | null;
+  running: string | null;
+  runningLabel: string | null;
+  nearby: Nearby[];
+  target: string;
+}): Mode {
+  if (state.blocked !== null) {
+    return { name: "Off", text: `Effects are off. ${state.blocked}` };
+  }
+  if (state.live) {
+    return { name: "Live", text: `Changes go to ${state.target} as you make them.` };
+  }
+  if (state.running === null && state.nearby.length > 0) {
+    return { name: "Draft", text: nearbyText(state.nearby, state.chosen) };
+  }
+  if (state.chosen === null) {
+    return { name: "Draft", text: "Choose an effect. Your devices stay as they are until you apply it." };
+  }
+  if (state.running === state.chosen) {
+    return { name: "Draft", text: "This effect runs now. Press Apply effect to send your changes." };
+  }
+  if (state.runningLabel !== null) {
+    return { name: "Draft", text: `${state.runningLabel} runs now. Apply effect replaces it.` };
+  }
+  return { name: "Draft", text: "Your devices stay as they are until you press Apply effect." };
+}
+
+/** Effects on the same device that share LEDs with `target` without being on exactly `target`. */
+export function nearbyEffects(session: SessionSnapshot, target: OutputTarget): Assignment[] {
+  return session.output.scene.assignments.filter((assignment) => assignment.target.device === target.device && !sameTarget(assignment.target, target) && (target.zone === null || assignment.target.zone === null));
 }

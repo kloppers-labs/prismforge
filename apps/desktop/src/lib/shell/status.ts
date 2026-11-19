@@ -98,13 +98,13 @@ function markLines(view: ShellView): string[] {
 }
 
 /** `null` while the store of a running session is still being read, so nothing is claimed early. */
-export function profileStatus(view: ShellView, store: StoreView | null): ProfileStatus | null {
+export function profileStatus(view: ShellView, store: StoreView | null, marked: string | null = null): ProfileStatus | null {
   const applying = view.applying;
   if (applying) {
     return {
       title: `Applying ${applying.name}`,
       detail: applying.automatic ? "on connect" : null,
-      name: `Profile: applying ${applying.name}`,
+      name: `Profile: applying ${applying.name}${applying.automatic ? " on connect" : ""}`,
       lines: [applyingText(view) ?? ""],
       busy: true,
       saveable: null,
@@ -127,13 +127,22 @@ export function profileStatus(view: ShellView, store: StoreView | null): Profile
   if (store === null && view.session !== null && !ended(view.session)) {
     return null;
   }
-  const armed = typeof view.on_connect === "object" && "Armed" in view.on_connect ? view.on_connect.Armed.name : null;
+  const idle = view.session === null || ended(view.session);
+  const armed = typeof view.on_connect === "object" && "Armed" in view.on_connect ? view.on_connect.Armed.name : idle ? marked : null;
+  if (view.session === null && armed === null) {
+    return null;
+  }
   const detail = armed ? `${armed} applies on connect` : null;
   return {
     title: "No active profile",
     detail,
     name: detail ? `Profile: none active, ${detail}` : "Profile: none active",
-    lines: ["No profile is active. A profile becomes active when you apply it or save it while PrismForge is connected.", ...markLines(view)],
+    lines: [
+      "No profile is active. A profile becomes active when you apply it or save it while PrismForge is connected.",
+      ...(idle && armed !== null
+        ? [`When you connect to OpenRGB, PrismForge applies ${armed} as soon as it has read the devices.`]
+        : markLines(view)),
+    ],
     busy: false,
     saveable: null,
   };

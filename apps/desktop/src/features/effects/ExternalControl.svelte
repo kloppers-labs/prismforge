@@ -3,7 +3,6 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import { reference } from "../devices/present";
   import FailureNotice from "./FailureNotice.svelte";
-  import { declaredBy } from "./present";
   import type { EffectsState } from "./state.svelte";
 
   let {
@@ -14,10 +13,8 @@
   }: { effects: EffectsState; session: SessionSnapshot; device: SessionDevice; held: string | null } = $props();
 
   let ref = $derived(reference(device));
-  let label = $derived(ref === null ? null : declaredBy(session, ref));
   let identifying = $derived(ref !== null && session.identify?.device === ref);
   let program = $state("");
-  let problem = $derived(effects.externalProblem);
 
   function declare(event: SubmitEvent) {
     event.preventDefault();
@@ -28,74 +25,55 @@
 </script>
 
 <section class="external" aria-labelledby="external-title">
-  <h3 id="external-title">Another program</h3>
-  {#if label !== null}
-    <p class="headline">You said {label} controls this device. PrismForge sends nothing to it.</p>
-    <p>
-      Before you hand it back, stop this device's effect in {label}. PrismForge cannot check this. If two programs write to
-      one device, the lights flicker or the last writer wins.
-    </p>
-    <p class="hint">Handing back only records your statement that {label} no longer writes to this device.</p>
-    <div>
-      <button
-        type="button"
-        disabled={ref === null || held !== null}
-        aria-describedby={held ? "external-held" : undefined}
-        onclick={() => ref !== null && effects.clearExternal(ref)}
-      >
-        Hand back to PrismForge
-      </button>
-    </div>
-  {:else}
-    <p>
-      PrismForge cannot see other programs that write to a device, such as the OpenRGB Effects plugin, and it cannot stop
-      them. If two programs write to one device, the lights flicker or the last writer wins.
-    </p>
-    <p>
-      If another program controls this device, say so here. PrismForge then stops its own effect on this device, without
-      putting back the earlier lighting, and sends nothing to it until you hand it back.
-    </p>
-    <form class="declare" onsubmit={declare}>
-      <label for="program-name">Program name (optional)</label>
-      <input id="program-name" type="text" maxlength="60" autocomplete="off" bind:value={program} placeholder="another program" />
-      <button
-        type="submit"
-        disabled={ref === null || identifying || held !== null}
-        aria-describedby={held ? "external-held" : identifying ? "external-blocked" : undefined}
-      >
-        Another program controls this device
-      </button>
-    </form>
-    {#if identifying}
-      <p id="external-blocked" class="hint">Off while an identify runs on this device.</p>
-    {/if}
+  <h4 id="external-title">Used by another program</h4>
+  <p>
+    PrismForge cannot see other programs that write to a device, such as the OpenRGB Effects plugin or Windows Dynamic Lighting,
+    and it cannot stop them. If two programs write to one device, the lights flicker or the last writer wins.
+  </p>
+  <p>
+    If another program controls this device, say so here. PrismForge then stops its own effect on this device, without
+    putting back the earlier lighting, and sends nothing to it until you hand it back.
+  </p>
+  <form class="declare" onsubmit={declare}>
+    <label for="program-name">Program name (optional)</label>
+    <input id="program-name" type="text" maxlength="60" autocomplete="off" bind:value={program} placeholder="another program" />
+    <button
+      type="submit"
+      disabled={ref === null || identifying || held !== null}
+      aria-describedby={held ? "external-held" : identifying ? "external-blocked" : undefined}
+    >
+      Leave this device to another program
+    </button>
+  </form>
+  {#if identifying}
+    <p id="external-blocked" class="hint">Off while an identify runs on this device.</p>
   {/if}
   {#if held}
     <p id="external-held" class="hint">Off now. {held}</p>
   {/if}
-  {#if problem}
-    <FailureNotice error={problem} />
+  {#if effects.externalProblem}
+    <FailureNotice error={effects.externalProblem} />
   {/if}
 </section>
 
 <style>
   .external {
     display: grid;
-    gap: 10px;
+    gap: var(--space-2);
     color: var(--text-dim);
+  }
+
+  h4 {
+    margin: 0;
+    color: var(--text);
+    font-size: var(--font-m);
   }
 
   .external p {
     max-width: 72ch;
   }
 
-  .headline {
-    color: var(--text);
-    font-weight: var(--weight-strong);
-  }
-
   .hint {
-    color: var(--text-faint);
     font-size: var(--font-s);
   }
 
@@ -103,7 +81,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 12px;
+    gap: var(--space-2) var(--space-3);
   }
 
   label {
@@ -112,5 +90,6 @@
 
   input {
     width: 24ch;
+    max-width: 100%;
   }
 </style>

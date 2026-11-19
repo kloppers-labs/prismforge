@@ -50,11 +50,11 @@
 <style>
   .described {
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
   }
 </style>

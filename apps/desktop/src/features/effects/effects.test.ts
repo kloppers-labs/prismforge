@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { RestoreOutcome } from "../../lib/api/bindings/RestoreOutcome";
 import { fakeShell, refuse } from "../../test/backend";
-import { findDemoMarker } from "../../test/shell";
+import { findDemoMarker, go } from "../../test/shell";
 import { button, chooseTarget, effectHandlers, openEffects, wait } from "../../test/effects";
 import * as errors from "../../test/fixtures/errors";
 import {
@@ -42,7 +42,7 @@ test("renders_controls_from_the_definitions_of_each_effect", async () => {
   await chooseEffect("Gradient");
   const palette = screen.getByRole("group", { name: "Colours" });
   expect(within(palette).getAllByRole("textbox")).toHaveLength(2);
-  expect(within(palette).getByText("#ff0040")).toBeTruthy();
+  expect(within(palette).getAllByRole("textbox").map((field) => (field as HTMLInputElement).value)).toContain("#ff0040");
   expect(screen.getByRole("radio", { name: /^Forward/ })).toBeTruthy();
   expect(screen.queryByRole("textbox", { name: "Colour" })).toBeNull();
 
@@ -126,6 +126,7 @@ test("checks_values_on_the_client_before_sending", async () => {
   await chooseTarget("Demo Graphics Card");
   await chooseEffect("Solid colour");
 
+  await type(screen.getByRole("textbox", { name: "Colour" }), "");
   expect(screen.getByRole("textbox", { name: "Colour", description: /Required/ })).toBeTruthy();
   expect(button("Apply effect").disabled).toBe(true);
   await type(screen.getByRole("textbox", { name: "Colour" }), "orange");
@@ -228,18 +229,18 @@ test("shows_owner_and_output_condition_from_the_snapshot", async () => {
   const targets = await openEffects();
 
   const owner = (device: string, index = 0) =>
-    within(within(targets).getAllByRole("group", { name: device })[index] as HTMLElement).getByText(/^Owner:/).textContent;
-  expect(owner("Demo Graphics Card")).toBe("Owner: PrismForge effect, running");
-  expect(owner("Demo Memory Module")).toBe("Owner: PrismForge effect, refused");
-  expect(owner("Demo Memory Module", 1)).toBe("Owner: OpenRGB Effects plugin, as you said");
-  expect(owner("Demo Light Bar")).toBe("Owner: hardware mode Breathing");
-  expect(owner("Demo Motherboard")).toBe("Owner: PrismForge effect, running");
+    (within(targets).getAllByRole("group", { name: device })[index] as HTMLElement).querySelector(".tag")?.textContent;
+  expect(owner("Demo Graphics Card")).toBe("Effect running");
+  expect(owner("Demo Memory Module")).toBe("Effect refused");
+  expect(owner("Demo Memory Module", 1)).toBe("Left to OpenRGB Effects plugin");
+  expect(owner("Demo Light Bar")).toBe("Hardware mode Breathing");
+  expect(owner("Demo Motherboard")).toBe("Effect running");
 
   await chooseTarget("Demo Memory Module");
   expect(screen.getByText(/^Refused\. The demo backend refused the last frame\./)).toBeTruthy();
   await chooseTarget("Demo Motherboard", "Addressable Header 1");
   expect((screen.getByRole("radio", { name: "Moving highlight" }) as HTMLInputElement).checked).toBe(true);
-  expect(screen.getByText("#ff4000")).toBeTruthy();
+  expect((screen.getByRole("textbox", { name: "Highlight" }) as HTMLInputElement).value).toBe("#ff4000");
   expect((screen.getByRole("radio", { name: /^Backward/ }) as HTMLInputElement).checked).toBe(true);
 });
 
@@ -248,7 +249,8 @@ test("tells_software_effects_and_hardware_modes_apart", async () => {
   render(App);
 
   await chooseTarget("Demo Graphics Card");
-  expect(screen.getByText(/^A PrismForge effect\. It runs only while PrismForge runs and is connected\./)).toBeTruthy();
+  expect(screen.getByText(/^A PrismForge effect, computed by PrismForge and sent to the demo backend\./)).toBeTruthy();
+  expect(screen.getByText("Runs while PrismForge runs and is connected.")).toBeTruthy();
   expect(screen.getByText(/A hardware mode runs on the device itself/)).toBeTruthy();
   expect(screen.getByText(/Selecting one stops the PrismForge effect on this device/)).toBeTruthy();
 
@@ -262,7 +264,7 @@ test("says_effects_stop_when_prismforge_closes_and_nothing_is_saved_where_the_us
   render(App);
   await chooseTarget("Demo Graphics Card");
 
-  const apply = button("Apply effect").closest("section") as HTMLElement;
+  const apply = screen.getByText("How effects run").closest("details")?.parentElement as HTMLElement;
   expect(within(apply).getByText(/The first time you close the window, PrismForge asks whether to keep running or to quit\. Quitting stops its effects\./)).toBeTruthy();
   expect(within(apply).getByText(/PrismForge saves nothing by itself\./)).toBeTruthy();
   expect(within(apply).getByText(/Profiles are saved on this computer, not on the device\./)).toBeTruthy();
@@ -320,7 +322,7 @@ test("selects_a_hardware_mode_and_records_declarations", async () => {
   await fireEvent.click(button("Use Breathing"));
   expect(await screen.findByText(/^The demo backend accepted the request to use hardware mode Breathing\./)).toBeTruthy();
   await type(screen.getByRole("textbox", { name: /Program name/ }), "OpenRGB Effects plugin");
-  await fireEvent.click(button("Another program controls this device"));
+  await fireEvent.click(button("Leave this device to another program"));
   await chooseTarget("Demo Memory Module", "Whole device", 1);
   expect(screen.getByText(/Before you hand it back, stop this device's effect in OpenRGB Effects plugin\./)).toBeTruthy();
   await fireEvent.click(button("Hand back to PrismForge"));
@@ -335,6 +337,7 @@ test("sets_the_frame_rate_within_the_range_from_rust", async () => {
   const shell = fakeShell(demoConnected, effectHandlers({ set_frame_rate: () => 60 }));
   render(App);
   await openEffects();
+  await go("Settings");
 
   expect(screen.getByText(/From 1 to 60 frames per second\./)).toBeTruthy();
   expect(screen.getByText(/Higher rates use more processor time\. OpenRGB and the device may not keep up\./)).toBeTruthy();
@@ -354,6 +357,6 @@ test.each([
   render(App);
   await chooseTarget("Demo Graphics Card");
 
-  const apply = button("Apply effect").closest("section") as HTMLElement;
+  const apply = screen.getByText("How effects run").closest("details")?.parentElement as HTMLElement;
   await waitFor(() => expect(within(apply).getByText(text)).toBeTruthy());
 });

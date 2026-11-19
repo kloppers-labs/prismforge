@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Tone } from "../features/connection/wording";
+  import type { Tone } from "./tone";
 
   let { tone }: { tone: Tone | "idle" } = $props();
 </script>
@@ -58,5 +58,11 @@
 
   .idle {
     stroke: var(--text-dim);
+  }
+
+  @media (forced-colors: active) {
+    .tone {
+      stroke: CanvasText;
+    }
   }
 </style>

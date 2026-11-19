@@ -26,7 +26,7 @@
 </script>
 
 <section class="modes" aria-labelledby="modes-title">
-  <h3 id="modes-title">Hardware modes</h3>
+  <h4 id="modes-title">Hardware modes</h4>
   <p class="explain">
     A hardware mode runs on the device itself, also when PrismForge is closed. Selecting one stops the PrismForge effect
     on this device and does not put back the earlier lighting. PrismForge asks {serverName(session)} to use the mode with
@@ -47,7 +47,7 @@
             Use {mode.name}
           </button>
           {#if mode.index === selected}
-            <span class="tag">Selected in PrismForge</span>
+            <span class="tag good">Selected in PrismForge</span>
           {:else if mode.index === capabilities.active_mode}
             <span class="tag">Active in the last device scan</span>
           {/if}
@@ -71,7 +71,12 @@
 <style>
   .modes {
     display: grid;
-    gap: 10px;
+    gap: var(--space-2);
+  }
+
+  h4 {
+    margin: 0;
+    font-size: var(--font-m);
   }
 
   .explain,
@@ -86,18 +91,13 @@
     padding: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 16px;
+    gap: var(--space-2) var(--space-4);
   }
 
   li {
     display: flex;
     align-items: center;
-    gap: 8px;
-  }
-
-  .tag {
-    font-size: var(--font-xs);
-    color: var(--text-dim);
+    gap: var(--space-2);
   }
 
   .result {

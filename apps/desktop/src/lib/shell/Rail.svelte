@@ -6,6 +6,7 @@
   import { shortcutKeys, shortcutText } from "./keyboard";
 
   let {
+    compact,
     screen,
     diagnosticsOpen,
     ongo,
@@ -13,6 +14,7 @@
     region = $bindable(),
     diagnosticsButton = $bindable(),
   }: {
+    compact: boolean;
     screen: Screen;
     diagnosticsOpen: boolean;
     ongo: (screen: Screen) => void;
@@ -38,7 +40,7 @@
   </li>
 {/snippet}
 
-<nav class="rail" aria-label="Main" bind:this={region}>
+<nav class="rail" class:compact aria-label="Main" bind:this={region}>
   <div class="brand">
     <Mark />
     <span class="name">PrismForge</span>
@@ -160,37 +162,46 @@
     overflow-wrap: anywhere;
   }
 
-  @media (max-width: 1099px) {
-    .rail {
-      width: var(--rail-w-compact);
-      padding: var(--space-3) var(--space-1);
-    }
+  .compact {
+    width: var(--rail-w-compact);
+    padding: var(--space-3) var(--space-1);
+  }
 
-    .brand {
-      justify-content: center;
-      padding: var(--space-1) 0 var(--space-3);
-    }
+  .compact .brand {
+    justify-content: center;
+    padding: var(--space-1) 0 var(--space-3);
+  }
 
-    .name {
-      display: none;
-    }
+  .compact .name {
+    display: none;
+  }
 
-    .item {
-      flex-direction: column;
-      gap: 2px;
-      padding: var(--space-2) 2px;
-      text-align: center;
+  .compact .item {
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) 2px;
+    text-align: center;
+  }
+
+  .compact .item[aria-current="page"]::before {
+    left: calc(-1 * var(--space-1));
+  }
+
+  .compact .label {
+    max-width: 100%;
+    font-size: var(--font-2xs);
+    line-height: var(--leading-tight);
+    overflow-wrap: normal;
+  }
+
+  @media (forced-colors: active) {
+    .item[aria-current="page"] {
+      outline: 1px solid Highlight;
     }
 
     .item[aria-current="page"]::before {
-      left: calc(-1 * var(--space-1));
-    }
-
-    .label {
-      max-width: 100%;
-      font-size: var(--font-2xs);
-      line-height: var(--leading-tight);
-      overflow-wrap: normal;
+      forced-color-adjust: none;
+      background: Highlight;
     }
   }
 

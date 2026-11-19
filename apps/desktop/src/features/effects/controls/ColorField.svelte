@@ -46,7 +46,6 @@
       aria-describedby={described}
       oninput={(event) => onchange(event.currentTarget.value)}
     />
-    <output class="value numeric" for={id}>{hex ?? "Not set"}</output>
   </div>
   {#if problem}
     <p id="{id}-problem" class="problem">{problem}</p>
@@ -56,7 +55,7 @@
 <style>
   .color {
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   label {
@@ -66,7 +65,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2);
   }
 
   .swatch {
@@ -75,7 +74,8 @@
     height: 34px;
     border-radius: var(--radius-s);
     background: var(--swatch);
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+    box-shadow: inset 0 0 0 1px var(--line-control);
+    forced-color-adjust: none;
   }
 
   .swatch.unset {
@@ -101,11 +101,6 @@
   .hex {
     width: 9ch;
     font-variant-numeric: tabular-nums;
-  }
-
-  .value {
-    color: var(--text-dim);
-    font-size: var(--font-s);
   }
 
   .problem {

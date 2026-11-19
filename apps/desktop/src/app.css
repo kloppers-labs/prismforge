@@ -145,6 +145,126 @@ input {
   white-space: nowrap;
 }
 
+.two-pane {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.two-pane > * {
+  min-height: 0;
+}
+
+@media (max-width: 760px) {
+  .two-pane {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  .two-pane > :first-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+}
+
+.pick {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--control-h);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: transparent;
+  font-weight: var(--weight-regular);
+  text-align: left;
+}
+
+.pick:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: transparent;
+}
+
+.pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked)) {
+  background: var(--surface-3);
+}
+
+.pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked))::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  width: 3px;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  background: var(--accent);
+}
+
+.pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked)) .pick-name {
+  font-weight: var(--weight-heading);
+}
+
+.pick-name {
+  font-weight: var(--weight-strong);
+  color: var(--text);
+}
+
+.pick-meta {
+  color: var(--text-dim);
+  font-size: var(--font-s);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-regular);
+  color: var(--text-dim);
+}
+
+.tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.tag.caution {
+  color: var(--warning);
+}
+
+.tag.good {
+  color: var(--ok);
+}
+
+.tag.plain {
+  color: var(--text-dim);
+}
+
+.true-color {
+  forced-color-adjust: none;
+}
+
+@media (forced-colors: active) {
+  .pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked)) {
+    border-color: Highlight;
+  }
+
+  .pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked))::before {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+
+  .tag::before {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

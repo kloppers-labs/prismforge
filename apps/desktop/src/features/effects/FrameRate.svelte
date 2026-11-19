@@ -30,8 +30,7 @@
   }
 </script>
 
-<section class="rate" aria-labelledby="rate-title">
-  <h3 id="rate-title">Frame rate</h3>
+<div class="rate">
   <p>
     From {range.min} to {range.max} frames per second. Now {current}. The rate applies to every PrismForge effect; an
     effect that does not change is written once.
@@ -57,7 +56,7 @@
     <p id="frame-rate-held" class="hint">Off now. {held}</p>
   {/if}
   {#if problem}
-    <p id="frame-rate-problem" class="problem">{problem}</p>
+    <p id="frame-rate-problem" class="problem" role="alert">{problem}</p>
   {/if}
   <div class="result" role="status" aria-label="Frame rate result">
     {#if feedback?.kind === "set"}
@@ -70,13 +69,14 @@
       <p>{failureText(feedback.error)}</p>
     {/if}
   </div>
-</section>
+</div>
 
 <style>
   .rate {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
     color: var(--text-dim);
+    font-size: var(--font-s);
   }
 
   .rate p {
@@ -89,8 +89,9 @@
 
   form {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2) var(--space-3);
   }
 
   label {

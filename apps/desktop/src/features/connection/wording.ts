@@ -2,7 +2,9 @@ import type { LossCause } from "../../lib/api/bindings/LossCause";
 import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { StateReason } from "../../lib/api/bindings/StateReason";
 
-export type Tone = "ok" | "working" | "waiting" | "warning" | "problem";
+import type { Tone } from "../../lib/tone";
+
+export type { Tone };
 
 export type ConnectionSummary = {
   tone: Tone;
@@ -39,10 +41,10 @@ export function summarise(session: SessionSnapshot): ConnectionSummary {
     const { attempt, reason } = connection.Retrying;
     return {
       tone: "waiting",
-      label: `Retrying, retry ${attempt} next`,
+      label: "Retrying",
       reasons: [
         explain(reason, where, session),
-        `PrismForge tries again on its own. Retry ${attempt} comes next, with a longer wait before each retry (at most 30 seconds).`,
+        `PrismForge tries again by itself, with a longer wait each time, at most 30 seconds. Retry ${attempt} is next.`,
       ],
       retrying: true,
     };
@@ -107,4 +109,24 @@ function lossText(cause: LossCause): string {
 
 export function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export function nextStep(session: SessionSnapshot): string {
+  const connection = session.connection;
+  const reason = typeof connection === "object" && "Disconnected" in connection ? connection.Disconnected.reason : null;
+  if (reason === null || reason === "InventoryStale") {
+    return "Connect again.";
+  }
+  if (reason === "ServerUnreachable") {
+    return "Check that OpenRGB runs with its SDK server on, then connect again.";
+  }
+  if ("UnsupportedProtocol" in reason) {
+    return reason.UnsupportedProtocol.server_version === null
+      ? "Wait a moment, then connect again. If OpenRGB still does not answer, restart it, or update it to 1.0 or later."
+      : "Update OpenRGB to 1.0 or later, then connect again.";
+  }
+  if ("ConnectionLost" in reason) {
+    return "Check that OpenRGB still runs, then connect again.";
+  }
+  return "Connect again.";
 }

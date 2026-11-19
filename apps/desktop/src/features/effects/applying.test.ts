@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
 import { button, chooseTarget, effectHandlers } from "../../test/effects";
+import { go } from "../../test/shell";
 import { demoConnected } from "../../test/fixtures/sessions";
 import { viewApplying, viewConnectApplied } from "../../test/fixtures/views";
 
@@ -21,9 +22,11 @@ test("output_controls_are_off_with_a_reason_while_a_profile_applies", async () =
   expect(screen.getAllByText(REASON).length).toBeGreaterThan(0);
   expect(button("Stop effect").disabled).toBe(true);
   expect(screen.getAllByRole("button", { name: /^Use / }).every((use) => (use as HTMLButtonElement).disabled)).toBe(true);
-  expect(button("Another program controls this device").disabled).toBe(true);
-  expect(button("Set frame rate").disabled).toBe(true);
+  expect(button("Leave this device to another program").disabled).toBe(true);
 
+  await go("Settings");
+  expect((await screen.findByRole("button", { name: "Set frame rate" }) as HTMLButtonElement).disabled).toBe(true);
+  await go("Effects");
   await shell.pushView({ ...viewApplying, applying: null, revision: 51 });
   await waitFor(() => expect(button("Apply effect").disabled).toBe(false));
 });

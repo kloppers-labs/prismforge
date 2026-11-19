@@ -35,3 +35,10 @@ export function eventText(kind: SessionEventKind): string {
   }
   return `IdentifyFinished ${raw(kind.IdentifyFinished.outcome.restore)}`;
 }
+
+export type ReportPart = { title: string; rows: [string, string][] };
+
+export function reportText(parts: ReportPart[]): string {
+  const sections = parts.map((part) => [part.title, ...part.rows.map(([label, value]) => `  ${label}: ${value}`)].join("\n"));
+  return ["PrismForge diagnostics", ...sections].join("\n\n");
+}

@@ -68,17 +68,17 @@
     padding: 0;
     margin: 0;
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   legend {
     font-weight: var(--weight-strong);
     padding: 0;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
   }
 
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
   }
 
@@ -87,23 +87,23 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 10px;
+    gap: var(--space-2);
   }
 
   li {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 10px 16px;
+    gap: var(--space-2) var(--space-4);
   }
 
   .order {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
   }
 
   .order button {
-    padding: 5px 10px;
+    padding: var(--space-1) var(--space-2);
     font-size: var(--font-s);
   }
 

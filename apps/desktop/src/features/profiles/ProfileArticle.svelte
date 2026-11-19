@@ -8,7 +8,8 @@
   import { failureText } from "../../lib/errors";
   import ApplyOnConnect from "./ApplyOnConnect.svelte";
   import ChangeList from "./ChangeList.svelte";
-  import { notConnectedText, type Labels } from "./present";
+  import { notConnectedText, onConnectText, unsavedText, type Labels } from "./present";
+  import ResultPanel from "./ResultPanel.svelte";
   import SettingsList from "./SettingsList.svelte";
   import type { ProfilesState } from "./state.svelte";
 
@@ -24,6 +25,7 @@
     applying,
     session,
     onConnect,
+    onsavenew,
   }: {
     profiles: ProfilesState;
     details: ProfileDetails;
@@ -33,7 +35,16 @@
     applying: string | null;
     session: SessionSnapshot | null;
     onConnect: OnConnect;
+    onsavenew: () => void;
   } = $props();
+
+  let resultBox: HTMLDivElement | undefined = $state();
+
+  $effect(() => {
+    if (profiles.outcome) {
+      resultBox?.scrollIntoView?.({ block: "nearest" });
+    }
+  });
 
   let name = $derived(details.name);
   let active = $derived(summary.active === details.id);
@@ -51,13 +62,10 @@
   let renameField: HTMLInputElement | undefined = $state();
 
   function activeText(): string {
-    if (unsaved === null) {
-      return "Active in this session. PrismForge could not count the unsaved changes just now.";
-    }
     if (unsaved === 0) {
       return "Active in this session. No unsaved changes.";
     }
-    return `Active in this session. ${unsaved === 1 ? "1 setting changed" : `${unsaved} settings changed`} since you applied or saved it.`;
+    return `Active in this session. ${unsavedText(unsaved)}.`;
   }
 
   function startRename() {
@@ -128,10 +136,21 @@
         Save changes to {name}
       </button>
     {/if}
-    <button type="button" bind:this={renameButton} onclick={startRename}>Rename</button>
-    <button type="button" disabled={profiles.working !== null} onclick={() => profiles.duplicate(details.id)}>Duplicate</button>
-    <button type="button" bind:this={exportButton} onclick={() => (dialog = "export")}>Export</button>
-    <button type="button" bind:this={deleteButton} disabled={applying !== null} onclick={() => (dialog = "delete")}>Delete</button>
+    <span class="more">
+      <button type="button" class="small" bind:this={renameButton} onclick={startRename}>Rename</button>
+      <button type="button" class="small" disabled={profiles.working !== null} onclick={() => profiles.duplicate(details.id)}>Duplicate</button>
+      <button type="button" class="small" bind:this={exportButton} onclick={() => (dialog = "export")}>Export</button>
+    </span>
+    <button
+      type="button"
+      class="small danger delete"
+      bind:this={deleteButton}
+      disabled={applying !== null}
+      aria-describedby={applying ? "apply-off" : undefined}
+      onclick={() => (dialog = "delete")}
+    >
+      Delete
+    </button>
   </div>
   {#if applyReason}
     <p id="apply-off" class="hint">Apply is off. {applyReason}</p>
@@ -141,6 +160,10 @@
       To save changes to this profile, apply it first. PrismForge links your changes to a profile from the moment you apply or save it, until you disconnect, switch between demo mode and OpenRGB, or close PrismForge.
     </p>
   {/if}
+
+  <div bind:this={resultBox}>
+    <ResultPanel outcome={profiles.outcome} {labels} {onConnect} {onsavenew} />
+  </div>
 
   {#if renaming}
     <form class="rename" onsubmit={rename}>
@@ -163,7 +186,11 @@
     </form>
   {/if}
 
-  <ApplyOnConnect on={marked} onchange={(on) => profiles.setApplyOnConnect(on ? details.id : null)} />
+  <ApplyOnConnect
+    on={marked}
+    status={session ? onConnectText(onConnect, session) : null}
+    onchange={(on) => profiles.setApplyOnConnect(on ? details.id : null)}
+  />
 
   <SettingsList {details} {labels} />
 </article>
@@ -204,13 +231,13 @@
 <style>
   .profile {
     display: grid;
-    gap: 20px;
+    gap: var(--space-4);
     align-content: start;
   }
 
   header {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
   }
 
   .sub {
@@ -220,11 +247,24 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .more {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--line-subtle);
+  }
+
+  .delete {
+    margin-left: auto;
   }
 
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
     max-width: 72ch;
   }
@@ -233,7 +273,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .rename label {
@@ -242,11 +282,6 @@
 
   .problem {
     flex-basis: 100%;
-    color: var(--problem);
-  }
-
-  :global(button.danger) {
-    border-color: var(--problem-line);
     color: var(--problem);
   }
 </style>

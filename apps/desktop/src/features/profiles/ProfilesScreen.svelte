@@ -4,8 +4,9 @@
   import type { AppState } from "../../lib/state/app.svelte";
   import { isLive } from "../devices/present";
   import { applyingText } from "../effects/present";
+  import Notice from "../../lib/Notice.svelte";
   import ImportResult from "./ImportResult.svelte";
-  import { onConnectText, type Labels } from "./present";
+  import type { Labels } from "./present";
   import ProfileArticle from "./ProfileArticle.svelte";
   import ProfileList from "./ProfileList.svelte";
   import RecoveryNotices from "./RecoveryNotices.svelte";
@@ -25,7 +26,8 @@
     session,
     effect: (id: string) => app.effects.catalog?.effects.find((effect) => effect.id === id)?.label ?? null,
   });
-  let nameField: HTMLInputElement | undefined = $state();
+  let saving = $state(false);
+  let saveButton: HTMLButtonElement | undefined = $state();
 
   let connected = $derived(session !== null);
 
@@ -36,89 +38,99 @@
   });
 </script>
 
-<div class="screen">
-  <ProfileList {profiles} {store} />
+<div class="two-pane">
+  <ProfileList {profiles} {store} {live} onsave={() => (saving = true)} bind:saveButton />
   <div class="workspace">
-    {#if profiles.storeProblem}
-      <div class="notice" role="alert">
-        <p>{failureText(profiles.storeProblem)}</p>
-        <button type="button" onclick={() => profiles.refresh()}>Try again</button>
-      </div>
-    {:else if !store}
-      <p class="quiet" role="status">Reading the profiles.</p>
-    {:else}
-      {#if store.kind === "Demo"}
-        <p class="mode">These are demo profiles. They are kept apart from your real profiles and never apply to real hardware.</p>
-      {/if}
-      {#if !live}
-        <div class="mode">
-          <p>
-            PrismForge is not connected. You can still rename, duplicate, delete, export and import profiles, and choose the
-            profile to apply when PrismForge connects. To apply a profile or save the current lighting, connect first.
+    <div class="inner">
+      {#if profiles.storeProblem}
+        <Notice tone="problem" role="alert" title="PrismForge could not read the profiles.">
+          <p>{failureText(profiles.storeProblem)}</p>
+          {#snippet actions()}
+            <button type="button" class="small" onclick={() => profiles.refresh()}>Try again</button>
+          {/snippet}
+        </Notice>
+      {:else if !store}
+        <p class="quiet" role="status">Reading the profiles.</p>
+      {:else}
+        {#if !live}
+          <p class="mode">
+            <span>Not connected. You can still rename, duplicate, delete, export and import profiles.</span>
+            {#if !session}
+              <button type="button" class="small" onclick={() => app.go("devices")}>Connect to OpenRGB</button>
+            {/if}
           </p>
-          {#if !session && store.kind === "Real"}
-            <p>Demo profiles show only in demo mode.</p>
-          {/if}
-        </div>
-      {/if}
-      {#if session}
-        <p class="mode" role="status" aria-label="Apply on connect">{onConnectText(app.view.on_connect, session)}</p>
-      {/if}
-      {#if store.summary.notices.length > 0}
-        <RecoveryNotices notices={store.summary.notices} ondismiss={(notice) => profiles.dismiss(notice)} />
-      {/if}
-
-      <ResultPanel outcome={profiles.outcome} {labels} onConnect={app.view.on_connect} onsavenew={() => nameField?.focus()} />
-      <ImportResult report={profiles.imported} problem={profiles.importProblem} />
-
-      {#key profiles.scope}
-        {#if live}
-          <SaveCurrent {profiles} bind:field={nameField} />
-        {:else}
-          <p class="quiet">Connect to save the current lighting as a profile.</p>
         {/if}
-      {/key}
 
-      {#if details}
-        {#key profiles.scope}
-          <ProfileArticle {profiles} {details} summary={store.summary} {labels} {live} {applying} {session} onConnect={app.view.on_connect} />
-        {/key}
-      {:else if profiles.detailsProblem}
-        <p class="quiet" role="alert">{failureText(profiles.detailsProblem)}</p>
-      {:else if store.summary.profiles.length === 0}
-        <div class="empty">
-          <p class="lead">No profiles yet.</p>
-          <p>Set up effects or hardware modes on the Effects screen, then save the current lighting here.</p>
-        </div>
-      {:else if profiles.selected === null}
-        <p class="quiet">Choose a profile on the left to see what it holds.</p>
+        {#if details}
+          {#key profiles.scope}
+            <ProfileArticle
+              {profiles}
+              {details}
+              summary={store.summary}
+              {labels}
+              {live}
+              {applying}
+              {session}
+              onConnect={app.view.on_connect}
+              onsavenew={() => (saving = true)}
+            />
+          {/key}
+        {:else}
+          <ResultPanel outcome={profiles.outcome} {labels} onConnect={app.view.on_connect} onsavenew={() => (saving = true)} />
+          {#if profiles.detailsProblem}
+            <p class="quiet" role="alert">{failureText(profiles.detailsProblem)}</p>
+          {:else if store.summary.profiles.length === 0}
+            <div class="empty">
+              <p class="lead">No profiles yet.</p>
+              <p>Set up effects or hardware modes on the Effects screen, then save the current lighting with the button on the left.</p>
+            </div>
+          {:else if profiles.selected === null}
+            <p class="quiet">Choose a profile on the left to see what it holds.</p>
+          {/if}
+        {/if}
+
+        <ImportResult report={profiles.imported} problem={profiles.importProblem} />
+        {#if store.kind === "Demo"}
+          <p class="mode">These are demo profiles. They are kept apart from your real profiles and never apply to real hardware.</p>
+        {:else if !session}
+          <p class="quiet small-text">Demo profiles show only in demo mode.</p>
+        {/if}
+        {#if store.summary.notices.length > 0}
+          <RecoveryNotices notices={store.summary.notices} ondismiss={(notice) => profiles.dismiss(notice)} />
+        {/if}
       {/if}
-    {/if}
+    </div>
   </div>
 </div>
 
+{#if saving && live}
+  {#key profiles.scope}
+    <SaveCurrent {profiles} opener={saveButton} onclose={() => (saving = false)} />
+  {/key}
+{/if}
+
 <style>
-  .screen {
-    display: grid;
-    grid-template-columns: minmax(260px, 320px) 1fr;
-    min-height: 0;
-    height: 100%;
+  .workspace {
+    position: relative;
+    min-width: 0;
+    overflow-y: auto;
   }
 
-  .workspace {
-    overflow-y: auto;
-    padding: 28px 36px 48px;
-    display: grid;
-    gap: 24px;
-    align-content: start;
+  .inner {
     max-width: 920px;
+    padding: var(--space-5) var(--space-6) var(--space-7);
+    display: grid;
+    gap: var(--space-5);
+    align-content: start;
   }
 
   .mode {
-    display: grid;
-    gap: 4px;
-    padding: 10px 14px;
-    border-left: 3px solid var(--line-subtle);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-left: 3px solid var(--line-control);
     background: var(--surface-1);
     color: var(--text-dim);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
@@ -129,20 +141,18 @@
     color: var(--text-dim);
   }
 
+  .small-text {
+    font-size: var(--font-s);
+  }
+
   .empty {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
     color: var(--text-dim);
   }
 
   .lead {
     color: var(--text);
     font-weight: var(--weight-strong);
-  }
-
-  .notice {
-    display: grid;
-    gap: 8px;
-    justify-items: start;
   }
 </style>

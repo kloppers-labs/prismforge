@@ -1,10 +1,11 @@
 <script lang="ts">
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+  import type { AppState } from "../../lib/state/app.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import Prerequisites from "./Prerequisites.svelte";
   import { capitalise, isSimulated, serverName, summarise } from "./wording";
 
-  let { session }: { session: SessionSnapshot } = $props();
+  let { app, session }: { app: AppState; session: SessionSnapshot } = $props();
 
   let summary = $derived(summarise(session));
   let live = $derived(summary.tone === "ok" || summary.tone === "warning");
@@ -35,13 +36,22 @@
       {serverName(session)} reported. Diagnostics lists {rejected === 1 ? "it" : "them"} with the reason.
     </p>
   {:else if live}
-    <p>
-      {capitalise(serverName(session))} answered but reports no devices. Check the device list in {serverName(session)}, then
-      choose Rescan devices in the connection panel at the top of the window.
-    </p>
+    <p>{capitalise(serverName(session))} answered but reports no devices. Check the device list in {serverName(session)}, then rescan.</p>
   {:else if !summary.retrying}
     <p class="loading" aria-busy="true">Reading the device list when the server answers.</p>
   {/if}
+  <div class="actions">
+    {#if live}
+      <button type="button" class="primary" disabled={app.working !== null} onclick={() => app.refresh()}>
+        {app.working === "refresh" ? "Rescanning…" : "Rescan devices"}
+      </button>
+    {:else}
+      <button type="button" disabled={app.working !== null} onclick={() => app.disconnect()}>Stop and change the address</button>
+      {#if !isSimulated(session)}
+        <button type="button" disabled={app.working !== null} onclick={() => app.startDemo()}>Start demo mode</button>
+      {/if}
+    {/if}
+  </div>
   {#if !isSimulated(session) && !live}
     <Prerequisites />
   {/if}
@@ -51,15 +61,21 @@
   .waiting {
     max-width: 640px;
     margin: 0 auto;
-    padding: 64px 32px;
+    padding: var(--space-7) var(--space-6);
     display: grid;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   .head {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
   p {
@@ -71,7 +87,7 @@
     content: "";
     display: block;
     height: 2px;
-    margin-top: 12px;
+    margin-top: var(--space-3);
     background: var(--spectrum);
     background-size: 200% 100%;
     animation: sweep 1.6s linear infinite;

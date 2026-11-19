@@ -9,9 +9,9 @@ use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder, FilePath};
 use tokio::sync::oneshot;
 
-use crate::DesktopShell;
 use crate::stores::StoreView;
 use crate::view::{CommandError, FileRule};
+use crate::{DesktopLifecycle, DesktopShell, marks};
 
 const FILTER_NAME: &str = "PrismForge profile";
 const FILTER_EXTENSIONS: &[&str] = &["json"];
@@ -56,10 +56,11 @@ pub async fn update_profile(
 #[tauri::command]
 pub async fn rename_profile(
     shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
     id: ProfileId,
     name: String,
 ) -> Result<(), CommandError> {
-    shell.rename_profile(&id, &name).await
+    marks::rename_profile(&shell, &lifecycle, &id, &name).await
 }
 
 #[tauri::command]
@@ -73,9 +74,10 @@ pub async fn duplicate_profile(
 #[tauri::command]
 pub async fn delete_profile(
     shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
     id: ProfileId,
 ) -> Result<(), CommandError> {
-    shell.delete_profile(&id).await
+    marks::delete_profile(&shell, &lifecycle, &id).await
 }
 
 #[tauri::command]
@@ -89,9 +91,10 @@ pub async fn apply_profile(
 #[tauri::command]
 pub async fn set_apply_on_connect(
     shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
     id: Option<ProfileId>,
 ) -> Result<(), CommandError> {
-    shell.set_apply_on_connect(id).await
+    marks::set_apply_on_connect(&shell, &lifecycle, id).await
 }
 
 /// The WebView never names a path: Rust opens the native dialog and uses only the path it returns.
@@ -119,13 +122,16 @@ pub async fn import_profile(
     app: AppHandle,
     window: WebviewWindow,
     shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
 ) -> Result<Option<ImportReport>, CommandError> {
     let (sender, chosen) = oneshot::channel();
     file_dialog(&app, &window).pick_file(move |path| {
         let _ = sender.send(path);
     });
     match path_of(chosen.await)? {
-        Some(path) => shell.import_profile(path).await.map(Some),
+        Some(path) => marks::import_profile(&shell, &lifecycle, path)
+            .await
+            .map(Some),
         None => Ok(None),
     }
 }

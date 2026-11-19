@@ -1,12 +1,15 @@
-import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import type { LifecycleView } from "../../lib/api/bindings/LifecycleView";
+import { lifecycleStartPath } from "../../test/fixtures/lifecycles";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
-import { summarise } from "./wording";
+import { nextStep, summarise } from "./wording";
 import { connectionChip, findDemoMarker, openConnection, waitForConnection } from "../../test/shell";
 import {
   demoConnected,
   openRgbAllRejected,
+  openRgbConnected,
   openRgbConnecting,
   openRgbLostRetryFailed,
   openRgbLostWhileConnected,
@@ -58,9 +61,9 @@ test("shows_retry_attempt_and_cause", async () => {
   fakeShell(openRgbRefused);
   render(App);
 
-  await waitForConnection("Retrying, retry 3 next");
+  await waitForConnection("Retrying");
   expect(screen.getByText("Nothing answered at the OpenRGB server at 127.0.0.1:6742.")).toBeTruthy();
-  expect(screen.getByText(/PrismForge tries again on its own\. Retry 3 comes next/)).toBeTruthy();
+  expect(screen.getByText(/PrismForge tries again by itself.*Retry 3 is next\./)).toBeTruthy();
   const panel = await openConnection();
   expect(within(panel).getByRole("button", { name: "Stop retrying" })).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/Attempt \d+ failed/);
@@ -72,8 +75,8 @@ test("explains_a_lost_connection_without_inventing_failed_attempts", async () =>
 
   const notice = await screen.findByRole("status", { name: "Connection status" });
   expect(notice.textContent).toContain("The connection was lost: the server closed the connection.");
-  expect(notice.textContent).toContain("Retry 1 comes next");
-  expect(screen.getByText("Retrying, retry 1 next")).toBeTruthy();
+  expect(notice.textContent).toContain("Retry 1 is next.");
+  expect(screen.getByText("Retrying")).toBeTruthy();
   const list = screen.getByRole("navigation", { name: /Devices/ });
   expect(within(list).getAllByText("Unavailable")).toHaveLength(2);
   expect(screen.getByText(/Identify is off\. Not connected/)).toBeTruthy();
@@ -84,10 +87,10 @@ test("counts_retries_after_a_loss_as_the_core_does", async () => {
   fakeShell(openRgbLostRetryFailed);
   render(App);
 
-  expect(await screen.findByText("Retrying, retry 2 next")).toBeTruthy();
+  expect(await screen.findByText("Retrying")).toBeTruthy();
   const notice = screen.getByRole("status", { name: "Connection status" });
   expect(notice.textContent).toContain("did not answer the version request");
-  expect(notice.textContent).toContain("Retry 2 comes next");
+  expect(notice.textContent).toContain("Retry 2 is next.");
 });
 
 test("explains_when_every_controller_was_rejected", async () => {
@@ -135,15 +138,134 @@ test("the_connection_screen_says_a_marked_profile_is_applied_on_connect", async 
   fakeShell(null);
   render(App);
 
-  expect(
-    await screen.findByText(
-      "PrismForge does not download, install or change OpenRGB. It writes nothing to your devices until you choose an action such as Identify, Apply effect or Apply profile, or until it connects while a profile is set to “Apply this profile when PrismForge connects”: that profile is applied as soon as the connection is made.",
-    ),
-  ).toBeTruthy();
+  const promise = await screen.findByText(
+    "PrismForge does not download, install or change OpenRGB. It writes nothing to your devices until you choose an action such as Identify, Apply effect or Apply profile, or until it connects while a profile is set to “Apply this profile when PrismForge connects”: that profile is applied as soon as the connection is made.",
+  );
+  expect(promise.closest("details")).toBeTruthy();
 });
 
 test("retrying_reads_as_waiting_not_as_a_failure", () => {
   expect(summarise(openRgbRefused).tone).toBe("waiting");
   expect(summarise(openRgbLostWhileConnected).tone).toBe("waiting");
   expect(summarise(openRgbOldServer).tone).toBe("problem");
+});
+
+function rememberedAt(host: string, port: number): LifecycleView {
+  const view = structuredClone(lifecycleStartPath);
+  if ("Ready" in view.settings) {
+    view.settings.Ready.settings.address = { host, port };
+  }
+  return view;
+}
+
+test("the_connection_form_starts_from_the_last_openrgb_address", async () => {
+  const shell = fakeShell(null, { lifecycle: () => rememberedAt("192.168.1.20", 6800), connect_openrgb: () => shell.view(openRgbConnecting) });
+  render(App);
+
+  const host = (await screen.findByRole("textbox", { name: "Host" })) as HTMLInputElement;
+  await waitFor(() => expect(host.value).toBe("192.168.1.20"));
+  expect((screen.getByRole("spinbutton", { name: "Port" }) as HTMLInputElement).value).toBe("6800");
+  expect(screen.getByText("The address of your last Connect.")).toBeTruthy();
+  await fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+  expect(shell.calls.find((call) => call.command === "connect_openrgb")?.args).toEqual({ host: "192.168.1.20", port: 6800 });
+});
+
+test("waiting_for_openrgb_offers_a_way_back_and_demo_mode", async () => {
+  const shell = fakeShell(openRgbRefused, { disconnect: () => shell.view(null), start_demo: () => shell.view(demoConnected) });
+  render(App);
+  const page = await screen.findByRole("main");
+  await within(page).findByRole("heading", { name: "Waiting for OpenRGB" });
+
+  expect(within(page).getByRole("button", { name: "Start demo mode" })).toBeTruthy();
+  await fireEvent.click(within(page).getByRole("button", { name: "Stop and change the address" }));
+
+  expect(shell.commands()).toContain("disconnect");
+  expect(await screen.findByRole("textbox", { name: "Host" })).toBeTruthy();
+});
+
+test("an_invalid_port_is_announced_as_a_problem", async () => {
+  fakeShell(null);
+  render(App);
+  const port = await screen.findByRole("spinbutton", { name: "Port" });
+
+  await fireEvent.input(port, { target: { value: "0" } });
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Enter a port from 1 to 65535.");
+  expect(port.getAttribute("aria-invalid")).toBe("true");
+  expect((screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+test("the_prerequisites_are_one_line_with_the_rest_behind_details", async () => {
+  fakeShell(null);
+  render(App);
+
+  const line = await screen.findByText("You need OpenRGB 1.0 or later with its SDK server on.");
+  const details = line.parentElement?.querySelector("details");
+  expect(details?.open).toBe(false);
+  expect(within(details as HTMLElement).getByText(/Its SDK server is on/)).toBeTruthy();
+});
+
+function visible(element: HTMLElement) {
+  expect(element.closest("details:not([open])")).toBeNull();
+  return element;
+}
+
+test("a_marked_profile_is_named_by_the_connect_button_before_connecting", async () => {
+  fakeShell(null, { lifecycle: () => lifecycleStartPath });
+  render(App);
+
+  const line = visible(await screen.findByText("Connecting applies Evening, the profile marked to apply on connect, as soon as the devices are read."));
+  expect(line.closest("form")).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Profile: none active, Evening applies on connect" })).toBeTruthy();
+});
+
+test("an_old_server_is_told_to_update_openrgb_not_to_start_it", async () => {
+  fakeShell(openRgbOldServer);
+  render(App);
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Update OpenRGB to 1.0 or later, then connect again.");
+  expect(alert.textContent).not.toContain("Check that OpenRGB runs");
+});
+
+test("the_retry_number_counts_retries_after_the_first_connect", async () => {
+  fakeShell(openRgbRefused);
+  render(App);
+
+  expect(await screen.findByText(/PrismForge tries again by itself.*Retry 3 is next\./)).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/Try 3 is next/);
+});
+
+test("a_stopped_server_with_a_marked_profile_shows_the_same_mark_in_the_line_and_the_chip", async () => {
+  fakeShell(openRgbOldServer, { lifecycle: () => lifecycleStartPath });
+  render(App);
+
+  visible(await screen.findByText(/^Connecting applies Evening, the profile marked to apply on connect/));
+  expect(await screen.findByRole("button", { name: "Profile: none active, Evening applies on connect" })).toBeTruthy();
+});
+
+test("a_mark_made_during_a_session_shows_after_disconnect", async () => {
+  const marked = { ...lifecycleStartPath, revision: 30 };
+  const shell = fakeShell(openRgbConnected, {
+    lifecycle: () => ({ ...lifecycleStartPath, start_profile: "NotMarked" }),
+    disconnect: () => (void shell.pushLifecycle(marked), shell.view(null)),
+  });
+  render(App);
+  await waitForConnection("Connected");
+
+  await fireEvent.click(within(await openConnection()).getByRole("button", { name: /^Disconnect/ }));
+
+  visible(await screen.findByText(/^Connecting applies Evening/));
+  expect(await screen.findByRole("button", { name: "Profile: none active, Evening applies on connect" })).toBeTruthy();
+  await shell.pushLifecycle({ ...lifecycleStartPath, start_profile: "NotMarked", revision: 31 });
+  await waitFor(() => expect(screen.queryByText(/^Connecting applies/)).toBeNull());
+  expect(screen.queryByRole("button", { name: /^Profile:/ })).toBeNull();
+});
+
+test("a_server_that_did_not_answer_the_version_request_gets_advice_for_both_causes", () => {
+  const stopped = structuredClone(openRgbOldServer);
+  stopped.connection = { Disconnected: { reason: { UnsupportedProtocol: { server_version: null } } } };
+
+  expect(nextStep(stopped)).toBe("Wait a moment, then connect again. If OpenRGB still does not answer, restart it, or update it to 1.0 or later.");
 });

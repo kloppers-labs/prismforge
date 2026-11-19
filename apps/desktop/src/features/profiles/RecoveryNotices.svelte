@@ -27,8 +27,8 @@
 <style>
   .notices {
     display: grid;
-    gap: 10px;
-    padding: 14px 16px;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
     border-left: 3px solid var(--warning);
     background: var(--surface-1);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
@@ -39,18 +39,18 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   li {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    gap: 10px;
+    gap: var(--space-2);
     align-items: start;
   }
 
   li :global(svg) {
-    margin-top: 4px;
+    margin-top: var(--space-1);
   }
 
   li p {
@@ -58,12 +58,12 @@
   }
 
   .small {
-    padding: 3px 10px;
+    padding: 3px var(--space-2);
     font-size: var(--font-s);
   }
 
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
   }
 </style>

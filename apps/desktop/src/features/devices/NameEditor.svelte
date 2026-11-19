@@ -27,6 +27,7 @@
   let field: HTMLInputElement | undefined = $state();
 
   let renameLabel = $derived(kind === "device" ? "Rename device" : `Rename zone ${subject}`);
+  let renameText = $derived(kind === "device" ? "Rename device" : "Rename");
   let fieldLabel = $derived(kind === "device" ? "Device name" : `Name for zone ${subject}`);
   let clearLabel = $derived(kind === "device" ? "Use the reported name" : `Use the reported name for zone ${subject}`);
 
@@ -122,9 +123,11 @@
   </form>
 {:else}
   <span class="actions">
-    <button type="button" class="small" bind:this={renameButton} onclick={open}>{renameLabel}</button>
+    <button type="button" class="small" bind:this={renameButton} aria-label={renameLabel} onclick={open}>{renameText}</button>
     {#if given !== null}
-      <button type="button" class="small" disabled={saving} onclick={clear}>{clearLabel}</button>
+      <button type="button" class="small quiet" disabled={saving} aria-label={clearLabel} onclick={clear}>
+        {kind === "device" ? clearLabel : "Reported name"}
+      </button>
     {/if}
   </span>
   {#if cleared}
@@ -137,7 +140,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .editor label {
@@ -159,17 +162,12 @@
   }
 
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
   }
 
   .actions {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .small {
-    padding: 3px 10px;
-    font-size: var(--font-s);
+    gap: var(--space-2);
   }
 </style>
