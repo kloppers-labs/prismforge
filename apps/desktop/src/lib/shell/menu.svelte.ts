@@ -25,6 +25,7 @@ type Opened = {
 
 export const MENU_OVERLAY = "context-menu";
 const POINTER_WINDOW_MS = 1000;
+const MENU_SHORTCUT = "Shift+F10";
 const TEXT_INPUTS = new Set(["", "text", "search", "url", "email", "password", "number", "tel"]);
 
 class Menus {
@@ -186,6 +187,10 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
     show(event, origin, boxOf(origin), true);
   }
 
+  const announced = node.matches(FOCUSABLE) ? node.getAttribute("aria-keyshortcuts") : undefined;
+  if (announced !== undefined) {
+    node.setAttribute("aria-keyshortcuts", announced ? `${announced} ${MENU_SHORTCUT}` : MENU_SHORTCUT);
+  }
   node.addEventListener("contextmenu", oncontextmenu);
   node.addEventListener("keydown", onkeydown);
   return {
@@ -198,6 +203,11 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
       }
       node.removeEventListener("contextmenu", oncontextmenu);
       node.removeEventListener("keydown", onkeydown);
+      if (announced) {
+        node.setAttribute("aria-keyshortcuts", announced);
+      } else if (announced === null) {
+        node.removeAttribute("aria-keyshortcuts");
+      }
     },
   };
 }

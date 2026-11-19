@@ -309,3 +309,27 @@ test("a_menu_closes_when_its_item_scrolls_out_of_view", async () => {
 
   expect(screen.queryByRole("menu")).toBeNull();
 });
+
+test("rows_and_chips_with_a_menu_announce_shift_f10", async () => {
+  fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo });
+  render(App);
+  await waitForConnection("Connected");
+  const shortcut = (element: Element) => element.getAttribute("aria-keyshortcuts")?.split(" ") ?? [];
+
+  expect(shortcut(connectionChip())).toContain("Shift+F10");
+  expect(shortcut(await within(await findStrip()).findByRole("button", { name: /^Profile:/ }))).toContain("Shift+F10");
+  const devices = await screen.findByRole("navigation", { name: /Devices/ });
+  expect(within(devices).getAllByRole("button").every((row) => shortcut(row).includes("Shift+F10"))).toBe(true);
+
+  await go("Profiles");
+  const profiles = await screen.findByRole("navigation", { name: "Profiles" });
+  const rows = within(profiles).getAllByRole("button").filter((button) => button.classList.contains("pick"));
+  expect(rows.length).toBeGreaterThan(0);
+  expect(rows.every((row) => shortcut(row).includes("Shift+F10"))).toBe(true);
+  expect(within(profiles).getByRole("button", { name: "Import a profile" }).hasAttribute("aria-keyshortcuts")).toBe(false);
+
+  await go("Effects");
+  const targets = await screen.findByRole("navigation", { name: "Targets" });
+  expect(within(targets).getAllByRole("button").every((row) => shortcut(row).includes("Shift+F10"))).toBe(true);
+  expect(shortcut(screen.getByRole("button", { name: "Effects" }))).toEqual(["Control+2"]);
+});
