@@ -66,6 +66,10 @@ jobs:
         working-directory: apps/desktop
         run: pnpm test
 
+      - name: Production build holds no preview code or fixture data
+        working-directory: apps/desktop
+        run: pnpm check:build
+
       - name: Native build (unsigned)
         working-directory: apps/desktop
         run: pnpm tauri:build
