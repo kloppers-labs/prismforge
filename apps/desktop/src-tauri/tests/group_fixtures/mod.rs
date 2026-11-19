@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use prismforge_core::session::SessionSnapshot;
+use prismforge_core::store::GroupId;
 use prismforge_core::{ConnectionState, DeviceRef, OutputTarget, RgbBackend};
-use prismforge_desktop::{Shell, ShellConfig, ShellView, Stores, ViewSink};
+use prismforge_desktop::{GroupsView, Shell, ShellConfig, ShellView, Stores, ViewSink};
 use prismforge_openrgb::{ClientConfig, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 
@@ -45,6 +46,14 @@ async fn started<B: RgbBackend + Send + 'static>(
     }
 }
 
+/// Group ids come from the clock, so the fixture numbers them in list order.
+fn stable(mut view: GroupsView) -> GroupsView {
+    for (index, group) in view.groups.iter_mut().enumerate() {
+        group.id = GroupId::parse(&format!("g-{:016x}", index + 1)).expect("group id");
+    }
+    view
+}
+
 fn reference(snapshot: &SessionSnapshot, serial: &str) -> DeviceRef {
     snapshot
         .devices
@@ -81,7 +90,7 @@ pub async fn generate(groups: &mut Module, sessions: &mut Module) {
         )
         .await
         .expect("memory");
-    groups.add("groupsDemo", &demo);
+    groups.add("groupsDemo", &stable(demo));
 
     let server = FakeServer::new();
     server.add_device(0, strip("shelf", "Fixture Shelf Strip"));
@@ -110,7 +119,7 @@ pub async fn generate(groups: &mut Module, sessions: &mut Module) {
     .await;
     groups.add(
         "groupsRealMissing",
-        &shell.groups_view().await.expect("groups"),
+        &stable(shell.groups_view().await.expect("groups")),
     );
     sessions.add("openRgbShelfGone", &snapshot);
     shell.stop().await;

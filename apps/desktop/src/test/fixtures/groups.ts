@@ -14,7 +14,7 @@ export const groupsDemo: GroupsView = {
   "kind": "Demo",
   "groups": [
     {
-      "id": "g-61c719836b903612",
+      "id": "g-0000000000000001",
       "name": "Desk",
       "members": [
         {
@@ -38,7 +38,7 @@ export const groupsDemo: GroupsView = {
       ]
     },
     {
-      "id": "g-dbb4af912d1cc46c",
+      "id": "g-0000000000000002",
       "name": "Memory",
       "members": [
         {
@@ -72,7 +72,7 @@ export const groupsRealMissing: GroupsView = {
   "kind": "Real",
   "groups": [
     {
-      "id": "g-11e0d895772563cc",
+      "id": "g-0000000000000001",
       "name": "Shelf and desk",
       "members": [
         {
