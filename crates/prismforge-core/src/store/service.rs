@@ -239,16 +239,17 @@ impl Profiles {
         id: &ProfileId,
     ) -> Result<ApplyOutcome, ApplyError> {
         let key = id.clone();
-        let (profile, marked) = self
+        let (profile, marked, setup) = self
             .with(move |store| {
                 let profile = store.profile(&key)?.clone();
-                Ok::<_, StoreError>((profile, store.apply_on_connect() == Some(&key)))
+                let marked = store.apply_on_connect() == Some(&key);
+                Ok::<_, StoreError>((profile, marked, store.setup().clone()))
             })
             .await?;
         if marked && !is_live(&handle.snapshot().connection) {
             return Ok(ApplyOutcome::WaitingForConnection);
         }
-        let report = apply(handle, &profile).await?;
+        let report = apply(handle, &profile, &setup).await?;
         *self.lock_active() = intents(handle, u64::MAX).await.ok().map(|log| Active {
             session: handle.session_id(),
             profile: id.clone(),

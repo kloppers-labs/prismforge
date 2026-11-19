@@ -6,6 +6,7 @@ use crate::profile::{
     preflight, resolve,
 };
 use crate::session::{SessionDevice, SessionSnapshot};
+use crate::setup::Setup;
 use crate::store::StoreError;
 use crate::store::envelope::FileProblem;
 use crate::store::notice::StoreNotice;
@@ -165,6 +166,7 @@ impl ProfileDetails {
         profile: &Profile,
         now: Option<&SessionSnapshot>,
         apply_on_connect: Option<&ProfileId>,
+        setup: &Setup,
     ) -> Self {
         let (devices, owners) = now.map_or((&[][..], &[][..]), |snapshot| {
             (&snapshot.devices[..], &snapshot.output.devices[..])
@@ -176,7 +178,7 @@ impl ProfileDetails {
             apply_on_connect: apply_on_connect == Some(id),
             checked: now.is_some(),
             devices: resolve(profile, devices),
-            settings: preflight(profile, devices, owners)
+            settings: preflight(profile, devices, owners, setup)
                 .into_iter()
                 .map(|checked| StoredSetting::of(profile, checked))
                 .collect(),

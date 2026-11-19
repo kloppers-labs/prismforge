@@ -1,0 +1,14 @@
+{
+  "format": "prismforge.profile",
+  "schema_version": {
+    "major": 3,
+    "minor": 0
+  },
+  "id": "p-future",
+  "name": "From a later PrismForge",
+  "scenes": [
+    {
+      "name": "Something this version does not know"
+    }
+  ]
+}

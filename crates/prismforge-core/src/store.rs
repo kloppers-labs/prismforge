@@ -34,8 +34,8 @@ pub use app_settings::{
 };
 pub use durable::{STORE_FILE_LIMIT, WriteFailure, WriteStep};
 pub use envelope::{
-    EXPORT_FORMAT, FileProblem, PROFILE_FORMAT, REGISTRY_FORMAT, SCHEMA_VERSION, SETTINGS_FORMAT,
-    SchemaVersion,
+    EXPORT_FORMAT, FileProblem, PROFILE_FORMAT, PROFILE_SCHEMA_VERSION, REGISTRY_FORMAT,
+    SCHEMA_VERSION, SETTINGS_FORMAT, SchemaVersion,
 };
 pub use files::{FileOps, StdFileOps};
 pub(crate) use groups::target_state;
@@ -415,7 +415,7 @@ impl ProfileStore {
         let profile = self.profile(&id)?;
         Ok(ImportReport {
             renamed_from: (profile.name != requested).then_some(requested),
-            details: ProfileDetails::of(&id, profile, now, self.apply_on_connect()),
+            details: ProfileDetails::of(&id, profile, now, self.apply_on_connect(), self.setup()),
         })
     }
 
@@ -429,6 +429,7 @@ impl ProfileStore {
             self.profile(id)?,
             now,
             self.apply_on_connect(),
+            self.setup(),
         ))
     }
 

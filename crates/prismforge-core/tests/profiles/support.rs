@@ -11,7 +11,7 @@ use prismforge_core::profile::{
     StoredIdentity, StoredZone,
 };
 use prismforge_core::store::{FileOps, StdFileOps};
-use prismforge_core::{DeviceKind, DeviceRef, Rgb, ZoneKind};
+use prismforge_core::{ApplyMode, DeviceKind, DeviceRef, Rgb, ZoneKind};
 use prismforge_effects::{ControlValue, Direction, EffectInstance};
 use serde_json::{Value, json};
 
@@ -228,6 +228,7 @@ pub fn assignment(device: &str, zone: Option<usize>, effect: StoredEffect) -> Pr
         device: DeviceRef::new(device),
         zone,
         effect,
+        mode: ApplyMode::EachDevice,
         extra: Extra::new(),
     }
 }

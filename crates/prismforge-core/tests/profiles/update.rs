@@ -289,6 +289,7 @@ async fn a_setting_that_never_ran_survives_an_update_after_an_update() {
             effect: prismforge_core::profile::StoredEffect::from_instance(&solid(Rgb::new(
                 1, 1, 1,
             ))),
+            mode: prismforge_core::ApplyMode::EachDevice,
             extra: Default::default(),
         });
     profiles.replace(&id, stored.clone()).await.expect("edit");
@@ -633,6 +634,7 @@ async fn save_as_from_the_active_profile_keeps_skipped_and_unresolved_settings()
             device: DeviceRef::new("dev-absent"),
             zone: None,
             effect: effect("fire", &[]),
+            mode: prismforge_core::ApplyMode::EachDevice,
             extra: Default::default(),
         });
     profiles.replace(&id, stored.clone()).await.expect("edit");

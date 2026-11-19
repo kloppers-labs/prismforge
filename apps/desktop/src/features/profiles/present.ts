@@ -95,6 +95,9 @@ export function skipText(labels: Labels, reason: SkipReason): string {
   if (reason === "NoDirectMode") {
     return "No Direct Mode. PrismForge effects cannot run on this device.";
   }
+  if (reason === "SetupChanged") {
+    return "The setup changed. The setup view this effect runs across is gone, or this device is no longer placed in it.";
+  }
   if ("DeclaredExternal" in reason) {
     return `You said ${reason.DeclaredExternal.label} controls this device, so PrismForge sends it nothing.`;
   }

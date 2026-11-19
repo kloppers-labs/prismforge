@@ -166,6 +166,7 @@ fn expected(
                     device: device.clone(),
                     zone: assignment.target.zone,
                     effect: StoredEffect::from_instance(&assignment.effect),
+                    mode: assignment.mode.clone(),
                     extra: Extra::new(),
                 });
             }

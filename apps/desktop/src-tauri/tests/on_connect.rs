@@ -328,7 +328,7 @@ async fn a_marked_profile_from_a_newer_version_is_unreadable_and_fails_without_w
     marked_profile(&dir, &["alpha"]).await;
     let file = profile_file(&dir);
     let text = std::fs::read_to_string(&file).expect("profile");
-    std::fs::write(&file, text.replacen("\"major\": 1", "\"major\": 2", 1)).expect("newer");
+    std::fs::write(&file, text.replacen("\"major\": 2", "\"major\": 3", 1)).expect("newer");
 
     let server = FakeServer::new();
     server.add_device(0, strip("alpha"));
@@ -450,7 +450,7 @@ async fn an_unreadable_or_missing_marked_profile_publishes_no_apply_and_no_empty
     marked_profile(&newer, &["alpha"]).await;
     let file = profile_file(&newer);
     let text = std::fs::read_to_string(&file).expect("profile");
-    std::fs::write(&file, text.replacen("\"major\": 1", "\"major\": 2", 1)).expect("newer");
+    std::fs::write(&file, text.replacen("\"major\": 2", "\"major\": 3", 1)).expect("newer");
     let missing = TempDir::new("unreadable-missing-quiet");
     marked_profile(&missing, &["alpha"]).await;
     let file = profile_file(&missing);

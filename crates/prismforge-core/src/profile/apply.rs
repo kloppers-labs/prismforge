@@ -1,3 +1,4 @@
+use prismforge_effects::{EffectInstance, Flow};
 use serde::{Deserialize, Serialize};
 
 use crate::connection::ConnectionState;
@@ -7,8 +8,11 @@ use crate::ownership::OutputOwner;
 use crate::profile::effects::EffectProblem;
 use crate::profile::model::{Profile, ProfileDevice};
 use crate::profile::resolve::{DeviceResolution, DeviceStatus, resolve};
-use crate::scene::OutputTarget;
-use crate::session::{Origin, OutputError, SessionDevice, SessionError, SessionHandle};
+use crate::scene::{ApplyMode, OutputTarget};
+use crate::session::{
+    Origin, OutputError, SessionDevice, SessionError, SessionHandle, TargetOutcome, TargetResult,
+};
+use crate::setup::{Setup, ViewId, plan_across};
 
 /// What happened to each stored setting; partial application is normal and nothing is rolled back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +76,8 @@ pub enum SkipReason {
     NotAvailable {
         problem: EffectProblem,
     },
+    /// The effect runs across a setup view that is gone, or this target is no longer placed in it as the setup says.
+    SetupChanged,
     Refused {
         error: OutputError,
     },
@@ -87,7 +93,12 @@ pub enum ApplyError {
 }
 
 /// Applies `profile` through the session commands as a profile, so it creates no user intent records.
-pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyReport, ApplyError> {
+/// Effects across a setup view run as one batch per view, flow and effect, so they share one start.
+pub async fn apply(
+    handle: &SessionHandle,
+    profile: &Profile,
+    setup: &Setup,
+) -> Result<ApplyReport, ApplyError> {
     let snapshot = handle.snapshot();
     if !is_live(&snapshot.connection) {
         return Err(ApplyError::NotConnected);
@@ -139,11 +150,9 @@ pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyRep
         };
         items.push(report(profile, &resolutions, &mode.device, item, outcome));
     }
-    for assignment in &profile.assignments {
-        let item = ProfileItem::Effect {
-            zone: assignment.zone,
-            effect: assignment.effect.effect.clone(),
-        };
+    let mut outcomes: Vec<Option<ItemOutcome>> = vec![None; profile.assignments.len()];
+    let mut pictures: Vec<Picture> = Vec::new();
+    for (index, assignment) in profile.assignments.iter().enumerate() {
         let outcome = match (
             target_of(&resolutions, &assignment.device),
             assignment.effect.instance(),
@@ -155,13 +164,32 @@ pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyRep
                     device,
                     zone: assignment.zone,
                 };
-                done(
-                    handle
-                        .apply_effect_as(Origin::Profile, target, instance)
-                        .await,
-                )
+                match &assignment.mode {
+                    ApplyMode::EachDevice => done(
+                        handle
+                            .apply_effect_as(Origin::Profile, target, instance)
+                            .await,
+                    ),
+                    ApplyMode::AcrossSetup { view, flow } => {
+                        Picture::join(&mut pictures, view, *flow, instance, index, target);
+                        continue;
+                    }
+                }
             }
         };
+        outcomes[index] = Some(outcome);
+    }
+    for picture in pictures {
+        picture
+            .apply(handle, setup, &snapshot.devices, &mut outcomes)
+            .await;
+    }
+    for (assignment, outcome) in profile.assignments.iter().zip(outcomes) {
+        let item = ProfileItem::Effect {
+            zone: assignment.zone,
+            effect: assignment.effect.effect.clone(),
+        };
+        let outcome = outcome.unwrap_or_else(|| skip(SkipReason::SetupChanged));
         items.push(report(
             profile,
             &resolutions,
@@ -171,6 +199,85 @@ pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyRep
         ));
     }
     Ok(ApplyReport { frame_rate, items })
+}
+
+/// The stored effects that run as one picture: same view, flow and effect; `members` are assignment indexes.
+struct Picture {
+    view: ViewId,
+    flow: Flow,
+    effect: EffectInstance,
+    members: Vec<(usize, OutputTarget)>,
+}
+
+impl Picture {
+    fn join(
+        pictures: &mut Vec<Self>,
+        view: &ViewId,
+        flow: Flow,
+        effect: EffectInstance,
+        index: usize,
+        target: OutputTarget,
+    ) {
+        let found = pictures.iter_mut().find(|picture| {
+            &picture.view == view && picture.flow == flow && picture.effect == effect
+        });
+        match found {
+            Some(picture) => picture.members.push((index, target)),
+            None => pictures.push(Self {
+                view: view.clone(),
+                flow,
+                effect,
+                members: vec![(index, target)],
+            }),
+        }
+    }
+
+    async fn apply(
+        self,
+        handle: &SessionHandle,
+        setup: &Setup,
+        devices: &[SessionDevice],
+        outcomes: &mut [Option<ItemOutcome>],
+    ) {
+        let plan = plan_across(setup, &self.view, self.flow, devices);
+        let placeable = |target: &OutputTarget| {
+            plan.as_ref()
+                .is_some_and(|plan| plan.targets.iter().any(|placed| &placed.target == target))
+        };
+        let (placed, gone): (Vec<_>, Vec<_>) = self
+            .members
+            .into_iter()
+            .partition(|(_, target)| placeable(target));
+        for (index, _) in gone {
+            outcomes[index] = Some(skip(SkipReason::SetupChanged));
+        }
+        let Some(plan) = plan.filter(|_| !placed.is_empty()) else {
+            return;
+        };
+        let targets: Vec<OutputTarget> = placed.iter().map(|(_, target)| target.clone()).collect();
+        let result = handle
+            .apply_across_as(Origin::Profile, plan.only(&targets), self.effect)
+            .await;
+        for (index, target) in placed {
+            outcomes[index] = Some(match &result {
+                Ok(report) => report
+                    .results
+                    .iter()
+                    .find(|result| result.target == target)
+                    .map_or_else(|| skip(SkipReason::SetupChanged), outcome_of),
+                Err(error) => skip(reason_of(error.clone())),
+            });
+        }
+    }
+}
+
+fn outcome_of(result: &TargetResult) -> ItemOutcome {
+    match &result.outcome {
+        TargetOutcome::Skipped { error } => skip(reason_of(error.clone())),
+        TargetOutcome::Applied | TargetOutcome::Covered { .. } | TargetOutcome::Stopped { .. } => {
+            ItemOutcome::Applied
+        }
+    }
 }
 
 pub(crate) fn is_live(connection: &ConnectionState) -> bool {

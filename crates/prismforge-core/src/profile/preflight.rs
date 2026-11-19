@@ -1,9 +1,13 @@
+use std::collections::BTreeMap;
+
 use crate::device::DeviceRef;
 use crate::ownership::OutputOwner;
 use crate::profile::apply::{ProfileItem, SkipReason, mode_now, target_of};
 use crate::profile::model::Profile;
 use crate::profile::resolve::resolve;
+use crate::scene::{ApplyMode, OutputTarget};
 use crate::session::{DeviceOutput, SessionDevice};
+use crate::setup::{Setup, ViewId, plan_across};
 
 /// One stored setting with the reason apply would skip it today, in apply order.
 pub(crate) struct Checked {
@@ -17,6 +21,7 @@ pub(crate) fn preflight(
     profile: &Profile,
     devices: &[SessionDevice],
     owners: &[DeviceOutput],
+    setup: &Setup,
 ) -> Vec<Checked> {
     let resolutions = resolve(profile, devices);
     let external = |device: &DeviceRef| {
@@ -57,6 +62,7 @@ pub(crate) fn preflight(
             skip,
         });
     }
+    let mut placed: BTreeMap<ViewId, Vec<OutputTarget>> = BTreeMap::new();
     for assignment in &profile.assignments {
         let skip = match (
             target_of(&resolutions, &assignment.device),
@@ -64,15 +70,34 @@ pub(crate) fn preflight(
         ) {
             (Err(reason), _) => Some(reason),
             (Ok(_), Err(problem)) => Some(SkipReason::NotAvailable { problem }),
-            (Ok(device), Ok(_)) => external(&device).or_else(|| {
-                let direct = devices
-                    .iter()
-                    .find(|candidate| candidate.identity.reference() == Some(&device))
-                    .is_some_and(|candidate| {
-                        candidate.descriptor.capabilities.direct_mode.is_some()
+            (Ok(device), Ok(_)) => external(&device)
+                .or_else(|| {
+                    let direct = devices
+                        .iter()
+                        .find(|candidate| candidate.identity.reference() == Some(&device))
+                        .is_some_and(|candidate| {
+                            candidate.descriptor.capabilities.direct_mode.is_some()
+                        });
+                    (!direct).then_some(SkipReason::NoDirectMode)
+                })
+                .or_else(|| {
+                    let ApplyMode::AcrossSetup { view, flow } = &assignment.mode else {
+                        return None;
+                    };
+                    let targets = placed.entry(view.clone()).or_insert_with(|| {
+                        plan_across(setup, view, *flow, devices).map_or_else(Vec::new, |plan| {
+                            plan.targets
+                                .into_iter()
+                                .map(|placed| placed.target)
+                                .collect()
+                        })
                     });
-                (!direct).then_some(SkipReason::NoDirectMode)
-            }),
+                    let target = OutputTarget {
+                        device,
+                        zone: assignment.zone,
+                    };
+                    (!targets.contains(&target)).then_some(SkipReason::SetupChanged)
+                }),
         };
         checked.push(Checked {
             device: assignment.device.clone(),
