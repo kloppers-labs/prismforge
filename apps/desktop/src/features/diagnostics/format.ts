@@ -38,7 +38,6 @@ export function eventText(kind: SessionEventKind): string {
 
 export type ReportPart = { title: string; rows: [string, string][] };
 
-/** The drawer's facts as plain text, for a bug report the user pastes themselves. */
 export function reportText(parts: ReportPart[]): string {
   const sections = parts.map((part) => [part.title, ...part.rows.map(([label, value]) => `  ${label}: ${value}`)].join("\n"));
   return ["PrismForge diagnostics", ...sections].join("\n\n");

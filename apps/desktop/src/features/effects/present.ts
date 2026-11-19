@@ -125,7 +125,6 @@ export function stopBlocked(session: SessionSnapshot, target: OutputTarget): str
 
 export type TargetMark = { text: string; tone: "good" | "caution" | "plain" };
 
-/** A short mark for a target row; null when nothing controls the device. */
 export function targetMark(session: SessionSnapshot, device: SessionDevice): TargetMark | null {
   const ref = reference(device);
   const output = ref === null ? null : outputOf(session, ref);
@@ -233,7 +232,6 @@ export function stopText(outcome: RestoreOutcome | null, server: string): StopTe
   };
 }
 
-/** One line for the Devices screen: what drives this device's lighting now, as PrismForge knows it. */
 export function controlSummary(session: SessionSnapshot, device: SessionDevice, effectLabel: (id: string) => string | null): string | null {
   const ref = reference(device);
   const output = ref === null ? null : outputOf(session, ref);
@@ -256,7 +254,6 @@ export function controlSummary(session: SessionSnapshot, device: SessionDevice, 
 
 export type Mode = { name: "Live" | "Draft" | "Off"; text: string };
 
-/** Whether edits reach the device now, in words the action bar shows. */
 export function editMode(state: {
   blocked: string | null;
   live: boolean;

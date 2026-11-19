@@ -125,7 +125,6 @@ export function ledCount(count: number): string {
   return count === 1 ? "1 LED" : `${count} LEDs`;
 }
 
-/** For devices whose shown names collide: the detail that tells each apart, or null. */
 export function distinction(devices: SessionDevice[], name: (device: SessionDevice) => string): (string | null)[] {
   return devices.map((device) => {
     const twins = devices.filter((other) => name(other) === name(device));
