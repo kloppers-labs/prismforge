@@ -15,7 +15,7 @@
   import ClosePrompt from "./features/settings/ClosePrompt.svelte";
   import SettingsScreen from "./features/settings/SettingsScreen.svelte";
   import TrayStopNotice from "./features/settings/TrayStopNotice.svelte";
-  import { isMac } from "./features/settings/wording";
+  import { isMac, lifecycleFailureText } from "./features/settings/wording";
   import { failureText } from "./lib/errors";
   import Mark from "./lib/Mark.svelte";
   import { AppState } from "./lib/state/app.svelte";
@@ -52,6 +52,9 @@
   });
 
   function onkeydown(event: KeyboardEvent) {
+    if (event.repeat) {
+      return;
+    }
     if (!isMac() && event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.key.toLowerCase() === "q") {
       event.preventDefault();
       app.lifecycle.quit();
@@ -125,6 +128,13 @@
 
   {#if connectApply}
     <ConnectApplyNotice applied={connectApply} {labels} ondismiss={() => (app.connectApplyDismissed = true)} />
+  {/if}
+
+  {#if app.lifecycle.failure && (app.lifecycle.failure.key === "close" || app.lifecycle.failure.key === "quit")}
+    <div class="notice problem" role="alert">
+      <ToneIcon tone="problem" />
+      <p>{lifecycleFailureText(app.lifecycle.failure.key, failureText(app.lifecycle.failure.error))}</p>
+    </div>
   {/if}
 
   {#if app.problem}

@@ -57,7 +57,7 @@ export function stopResultText(result: StopResult, server: string): string[] {
 }
 
 export type StartPath = {
-  system: boolean;
+  system: boolean | null;
   hidden: boolean;
   connect: boolean;
   address: string | null;
@@ -65,6 +65,9 @@ export type StartPath = {
 };
 
 export function startPathText(path: StartPath): string {
+  if (path.system === null) {
+    return "PrismForge cannot tell whether your lights change at system start, because it cannot read its start entry.";
+  }
   if (path.system && path.connect && path.address !== null && path.profile !== null) {
     const start = path.hidden ? `starts hidden in ${trayName()}` : "starts";
     return `When you sign in, PrismForge ${start}, connects to OpenRGB at ${path.address} and applies ${path.profile}. Your lights change at system start without a click.`;
@@ -75,4 +78,12 @@ export function startPathText(path: StartPath): string {
     ...(path.profile !== null ? [] : ["a profile marked to apply when PrismForge connects"]),
   ];
   return `Your lights do not change by themselves at system start. Not set: ${missing.join(", ")}.`;
+}
+
+export const MACHINE_ENTRY_REMOVAL = 'reg delete "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v PrismForge /f';
+
+export function lifecycleFailureText(key: "close" | "quit", failure: string): string {
+  return key === "close"
+    ? `PrismForge could not remember your choice for closing the window. ${failure} It asks again the next time you close the window.`
+    : `PrismForge could not start to quit. ${failure}`;
 }

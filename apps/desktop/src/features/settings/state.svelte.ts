@@ -73,6 +73,9 @@ export class LifecycleState {
   }
 
   async quit() {
+    if (this.pending === "quit" || this.view?.quitting) {
+      return;
+    }
     this.pending = "quit";
     const answer = await api.quit();
     if (!answer.ok) {

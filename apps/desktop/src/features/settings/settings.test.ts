@@ -10,6 +10,8 @@ import {
   lifecycleEntryUnknown,
   lifecycleFresh,
   lifecycleInUse,
+  lifecycleMachineEntry,
+  lifecycleQuitting,
   lifecycleNoTray,
   lifecycleRecovered,
   lifecycleStartPath,
@@ -303,4 +305,76 @@ test("without_a_marked_profile_the_start_up_path_says_none_and_links_to_profiles
   await screen.findByRole("navigation", { name: "Profiles" }).catch(() => null);
   expect(called(shell, "profile_store").length).toBeGreaterThan(0);
   expect(screen.queryByRole("heading", { level: 1, name: "Settings" })).toBeNull();
+});
+
+test("a_close_answer_that_could_not_be_stored_is_shown_when_the_window_is_back", async () => {
+  const shell = fakeShell(demoConnected, { answer_close: refuse(errors.settingsInUse) });
+  render(App);
+  await screen.findByRole("navigation", { name: "Screens" });
+  await shell.pushLifecycle(at(lifecycleAsking, 30));
+  const dialog = await screen.findByRole("dialog");
+
+  await fireEvent.click(within(dialog).getByRole("button", { name: "Keep running in the system tray" }));
+  await shell.pushLifecycle(at(lifecycleFresh, 31));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent?.trim()).toBe(
+    "PrismForge could not remember your choice for closing the window. Another PrismForge window is using the profile folder. This window does not read or save profiles. Close the other window, then try again. It asks again the next time you close the window.",
+  );
+});
+
+test("further_quit_requests_are_ignored_while_prismforge_quits", async () => {
+  const shell = fakeShell(null, { lifecycle: () => lifecycleQuitting, quit: () => null });
+  render(App);
+  await openSettings();
+
+  const quit = await screen.findByRole("button", { name: "Quitting PrismForge" });
+  expect((quit as HTMLButtonElement).disabled).toBe(true);
+  await fireEvent.keyDown(window, { key: "q", ctrlKey: true });
+
+  expect(called(shell, "quit")).toHaveLength(0);
+});
+
+test("a_held_quit_shortcut_sends_one_quit", async () => {
+  const shell = fakeShell(null, { quit: () => new Promise(() => {}) });
+  render(App);
+  await screen.findByRole("navigation", { name: "Screens" });
+
+  await fireEvent.keyDown(window, { key: "q", ctrlKey: true });
+  await fireEvent.keyDown(window, { key: "q", ctrlKey: true, repeat: true });
+  await fireEvent.keyDown(window, { key: "q", ctrlKey: true });
+
+  await waitFor(() => expect(called(shell, "quit")).toHaveLength(1));
+});
+
+test("the_close_choice_can_be_reached_by_tab_without_a_tray", async () => {
+  fakeShell(null, { lifecycle: () => lifecycleNoTray });
+  render(App);
+  await openSettings();
+
+  await waitFor(() => expect(radio("Quit PrismForge").getAttribute("tabindex")).toBe("0"));
+  expect(radio("Keep PrismForge running in the system tray").getAttribute("tabindex")).toBe("-1");
+});
+
+test("an_unreadable_start_entry_makes_the_start_up_result_unknown", async () => {
+  fakeShell(null, { lifecycle: () => lifecycleEntryUnknown });
+  render(App);
+  await openSettings();
+
+  expect((await screen.findByRole("status", { name: "Start-up result" })).textContent?.trim()).toBe(
+    "PrismForge cannot tell whether your lights change at system start, because it cannot read its start entry.",
+  );
+});
+
+test("an_entry_for_every_user_is_explained_with_its_removal", async () => {
+  fakeShell(null, { lifecycle: () => lifecycleMachineEntry });
+  render(App);
+  await openSettings();
+
+  expect(
+    await screen.findByText(
+      "A start entry for every user of this computer exists. An earlier PrismForge that ran as administrator added it, and PrismForge starts from it whatever this switch shows. PrismForge cannot remove it without administrator rights.",
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText('reg delete "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v PrismForge /f')).toBeTruthy();
 });

@@ -6,7 +6,7 @@
   import Switch from "../../lib/Switch.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { SettingKey, LifecycleState } from "./state.svelte";
-  import { addressText, quitShortcut, settingsNoticeText, startPathText, trayName } from "./wording";
+  import { MACHINE_ENTRY_REMOVAL, addressText, quitShortcut, settingsNoticeText, startPathText, trayName } from "./wording";
 
   let { lifecycle, onprofiles }: { lifecycle: LifecycleState; onprofiles: () => void } = $props();
 
@@ -24,7 +24,7 @@
   let startProfile = $derived(view?.start_profile ?? null);
   let startPath = $derived(
     startPathText({
-      system: entry === "Registered",
+      system: typeof entry === "object" ? null : entry === "Registered",
       hidden: settings?.start_hidden ?? false,
       connect: settings?.connect_at_start ?? false,
       address: settings?.address ? addressText(settings.address) : null,
@@ -33,7 +33,13 @@
   );
   let trayDetail = $derived(view && typeof view.tray === "object" ? view.tray.Unavailable.detail : null);
 
-  function failed(key: SettingKey | "quit"): string | null {
+  let quitting = $derived(lifecycle.pending === "quit" || (view?.quitting ?? false));
+  let backgroundEnabled = $derived(ready && tray);
+  let closeFocus = $derived<CloseAction>(
+    settings?.on_close === "Quit" || (settings?.on_close !== "Background" && !backgroundEnabled) ? "Quit" : "Background",
+  );
+
+  function failed(key: SettingKey): string | null {
     const failure = lifecycle.failure;
     return failure && failure.key === key ? failureText(failure.error) : null;
   }
@@ -86,7 +92,7 @@
         type="button"
         role="radio"
         aria-checked={settings?.on_close === "Background" ? "true" : "false"}
-        tabindex={settings?.on_close === "Quit" ? -1 : 0}
+        tabindex={closeFocus === "Background" ? 0 : -1}
         disabled={!ready || !tray || lifecycle.pending !== null}
         onclick={() => choose("Background")}
         onkeydown={closeKey}
@@ -99,7 +105,7 @@
         type="button"
         role="radio"
         aria-checked={settings?.on_close === "Quit" ? "true" : "false"}
-        tabindex={settings?.on_close === "Quit" ? 0 : -1}
+        tabindex={closeFocus === "Quit" ? 0 : -1}
         disabled={!ready || lifecycle.pending !== null}
         onclick={() => choose("Quit")}
         onkeydown={closeKey}
@@ -145,6 +151,13 @@
           <p>Adds PrismForge to the programs your system starts for your user account. It needs no administrator rights. Turn it off before you uninstall PrismForge.</p>
           {#if typeof entry === "object"}
             <p class="unavailable">PrismForge cannot read its start entry: {entry.Unknown.detail}</p>
+          {/if}
+          {#if view?.machine_start_entry}
+            <p class="unavailable">
+              A start entry for every user of this computer exists. An earlier PrismForge that ran as administrator added it, and PrismForge starts from it whatever this switch shows. PrismForge cannot remove it without administrator rights.
+            </p>
+            <p>To remove it, run this in a Command Prompt opened as administrator:</p>
+            <p class="command">{MACHINE_ENTRY_REMOVAL}</p>
           {/if}
         </div>
         {#if failed("StartWithSystem")}
@@ -234,15 +247,13 @@
 
   <section class="group quit" aria-labelledby="quit-title">
     <h2 id="quit-title">Quit PrismForge</h2>
-    <p class="help">
-      Stops PrismForge effects, puts back the lighting from before where it can, disconnects and ends PrismForge. The shortcut is {quitShortcut()}.
-    </p>
-    <button type="button" disabled={lifecycle.pending === "quit"} onclick={() => lifecycle.quit()}>
-      {lifecycle.pending === "quit" ? "Quitting PrismForge" : "Quit PrismForge"}
+    <div class="help">
+      <p>Stops PrismForge effects, puts back the lighting from before where it can, disconnects and ends PrismForge. The shortcut is {quitShortcut()}. Quit in the tray menu does the same. While PrismForge quits, further Quit requests wait for it.</p>
+      <p>When the system ends PrismForge instead, for example when you log out or shut down, PrismForge tries the same for up to 6 seconds. The system may end it sooner, and then the devices keep the last effect frame. Ending PrismForge in Task Manager or Activity Monitor puts nothing back.</p>
+    </div>
+    <button type="button" disabled={quitting} onclick={() => lifecycle.quit()}>
+      {quitting ? "Quitting PrismForge" : "Quit PrismForge"}
     </button>
-    {#if failed("quit")}
-      <p class="failure" role="alert">{failed("quit")}</p>
-    {/if}
   </section>
 </div>
 
@@ -427,6 +438,13 @@
   .folder {
     font-variant-numeric: tabular-nums;
     color: var(--text);
+  }
+
+  .command {
+    user-select: text;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
   }
 
   .folder {
