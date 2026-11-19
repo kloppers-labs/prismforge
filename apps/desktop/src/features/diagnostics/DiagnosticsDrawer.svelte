@@ -3,6 +3,7 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { StoreView } from "../../lib/api/bindings/StoreView";
   import type { Names } from "../../lib/names";
+  import { copyShortcut } from "../../lib/platform";
   import { contextMenu } from "../../lib/shell/menu.svelte";
   import { deviceKey, reference } from "../devices/present";
   import { errorName, eventText, raw, reportText, type ReportPart } from "./format";
@@ -108,7 +109,7 @@
   </header>
   <p class="intro">What PrismForge knows about this session, for a bug report. Copy as text puts the server address, the device names and references, the counters, the last error and the recent events on the clipboard. The copy leaves out the folder path.</p>
   <p class="copied" role="status">
-    {#if copied === "done"}Copied. Paste it into your report.{:else if copied === "failed"}PrismForge could not reach the clipboard. Select the values below and copy them.{/if}
+    {#if copied === "done"}Copied. Paste it into your report.{:else if copied === "failed"}PrismForge could not reach the clipboard. Select the values below and press {copyShortcut()}.{/if}
   </p>
 
   {#snippet sectionHead(key: Section, id: string, title: string)}

@@ -71,3 +71,12 @@ test("a_section_menu_opens_from_the_keyboard_on_its_copy_button", async () => {
   expect(document.activeElement).toBe(button);
   expect(screen.getByRole("complementary", { name: "Diagnostics" })).toBeTruthy();
 });
+
+test("a_failed_copy_names_the_copy_keys", async () => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } });
+  const drawer = await openDiagnostics();
+
+  await fireEvent.click(within(drawer).getByRole("button", { name: "Copy the Backend section" }));
+
+  expect(await within(drawer).findByText("PrismForge could not reach the clipboard. Select the values below and press Ctrl+C.")).toBeTruthy();
+});
