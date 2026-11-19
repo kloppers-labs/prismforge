@@ -14,10 +14,12 @@
   let {
     setup,
     colors,
+    live,
     onaction,
   }: {
     setup: SetupState;
     colors: Record<ComponentId, Rgb[]> | null;
+    live: boolean;
     onaction: (action: EditAction) => void;
   } = $props();
 
@@ -128,7 +130,7 @@
 
 <svelte:window {onkeydown} />
 
-<div class="canvas" role="img" aria-label={title} aria-describedby="drawing-keys">
+<div class="canvas" class:live role="img" aria-label={title} aria-describedby="drawing-keys">
   <svg
     bind:this={svg}
     viewBox="0 0 {CANVAS.width} {CANVAS.height}"
@@ -174,11 +176,15 @@
 
 <style>
   .canvas {
-    border: 1px solid var(--line-subtle);
+    border: 1px dashed var(--line-control);
     border-radius: var(--radius-m);
     background: var(--surface-stage);
     overflow: hidden;
     touch-action: none;
+  }
+
+  .canvas.live {
+    border: 2px solid var(--ok);
   }
 
   svg {

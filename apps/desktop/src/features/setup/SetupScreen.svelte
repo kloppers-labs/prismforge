@@ -1,11 +1,18 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import type { ComponentId } from "../../lib/api/bindings/ComponentId";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import { failureText } from "../../lib/errors";
   import Notice from "../../lib/Notice.svelte";
   import type { AppState } from "../../lib/state/app.svelte";
   import { isTyping } from "../../lib/shell/keyboard";
+  import { nativeWindow } from "../../lib/window.svelte";
+  import { LiveWatcher } from "../effects/live.svelte";
+  import AcrossPanel from "./AcrossPanel.svelte";
   import Canvas from "./Canvas.svelte";
+  import { componentColors, liveColors, viewTargets } from "./colors";
+  import { AcrossPlayer } from "./player.svelte";
+  import StageBar from "./StageBar.svelte";
   import ComponentList from "./ComponentList.svelte";
   import DetectedList from "./DetectedList.svelte";
   import Inspector from "./Inspector.svelte";
@@ -19,11 +26,69 @@
 
   let { app, session }: { app: AppState; session: SessionSnapshot } = $props();
 
+  const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
   let setup = $derived(app.setup);
+  let across = $derived(app.across);
   let identified = $state<ComponentId | null>(null);
+  let documentShown = $state(true);
+  const player = new AcrossPlayer(() => app.effects.catalog?.preview ?? null);
+  const watcher = new LiveWatcher();
+  let targets = $derived(viewTargets(setup.draft, setup.tab));
+  let instance = $derived(across.checked?.instance ?? null);
+  let colors = $derived.by(() => {
+    if (across.stage === "live") {
+      const output = watcher.output;
+      return output ? componentColors(setup.draft, (target) => liveColors(output, target)) : null;
+    }
+    return player.frame ? componentColors(setup.draft, (target) => player.colorsOf(target)) : null;
+  });
+  let note = $derived.by(() => {
+    if (across.stage === "live") {
+      if (watcher.refusal) {
+        return `The live output cannot be shown. ${watcher.refusal}`;
+      }
+      return across.running.length === 0 && session.output.scene.assignments.length === 0 ? "No PrismForge effect runs, so nothing is sent and the LEDs show no colour." : null;
+    }
+    if (instance === null) {
+      return "Choose an effect below to see a draft of it across this view.";
+    }
+    return player.problem;
+  });
 
   $effect(() => {
     setup.follow(session);
+  });
+
+  $effect(() => {
+    player.show(across.stage === "draft" && instance ? { setup: setup.draft, view: setup.tab, flow: across.flow, instance } : null);
+  });
+
+  $effect(() => {
+    player.setWindowShown(nativeWindow.visible);
+  });
+
+  $effect(() => {
+    const visible = across.stage === "live" && nativeWindow.visible && documentShown;
+    watcher.watch(visible ? targets : []);
+  });
+
+  function onVisibility() {
+    documentShown = document.visibilityState !== "hidden";
+  }
+
+  onMount(() => {
+    void app.effects.load();
+    player.open();
+    void watcher.open();
+    const motion = typeof window.matchMedia === "function" ? window.matchMedia(REDUCED_MOTION) : null;
+    watcher.reduced = motion?.matches ?? false;
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      player.close();
+      watcher.close();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   });
 
   function act(action: EditAction) {
@@ -88,10 +153,11 @@
       <div id="setup-panel" class="inner" role="tabpanel" aria-labelledby="tab-{setup.tab}">
         <div class="workspace">
           <div class="drawing">
-            <Canvas {setup} colors={null} onaction={act} />
+            <StageBar {across} {session} reduced={across.stage === "draft" ? player.reduced : watcher.reduced} slowed={across.stage === "draft" ? player.slowed : watcher.slowed} {note} />
+            <Canvas {setup} {colors} live={across.stage === "live"} onaction={act} />
           </div>
           <aside class="side" aria-label="Components and editor">
-            <ComponentList {setup} {session} names={app.names} colors={null} onaction={act} menu={() => null} />
+            <ComponentList {setup} {session} names={app.names} {colors} onaction={act} menu={() => null} />
             <Inspector {setup} {session} names={app.names} onidentify={identify} />
             {#if identified && setup.selection.includes(identified)}
               <p class="identify" role="status">
@@ -101,6 +167,7 @@
             {/if}
           </aside>
         </div>
+        <AcrossPanel {across} {setup} {session} names={app.names} catalog={app.effects.catalog} />
         <UnwiredList {setup} {session} names={app.names} />
         <OutputList {setup} {session} names={app.names} />
         <DetectedList {setup} {session} names={app.names} />
@@ -133,6 +200,12 @@
     grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
     gap: var(--space-4);
     align-items: start;
+  }
+
+  .drawing {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
   }
 
   .side {
