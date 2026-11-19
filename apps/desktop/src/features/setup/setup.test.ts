@@ -62,7 +62,7 @@ test("the_list_twin_says_what_each_component_is_where_it_is_wired_its_first_led_
   expect(fan.textContent).toContain("Demo Motherboard, Addressable Header 1");
   expect(fan.textContent).toContain("Mirror: one control with Front fan 2, Front fan 3 and Rear fan. All four always show the same colours.");
   expect(fan.textContent).toContain("LED 1 at the top, runs clockwise");
-  expect(fan.textContent).toContain("x 170, y 150, size 110, turned 0°");
+  expect(fan.textContent).toContain("x 160, y 130, size 100, turned 0°");
   expect(cooler.textContent).toContain("Part 2 of 2 of a daisy chain on Addressable Header 2: LEDs 9 to 16");
   expect(memory.textContent).toContain("LED 1 at the top end, runs down");
   expect(memory.textContent).toContain("turned 90°");
@@ -151,8 +151,8 @@ test("several_selected_components_move_together_with_the_buttons", async () => {
   await fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
 
   await waitFor(() => expect(shell.commands()).toContain("save_setup"));
-  expect(placementIn(savedSetup(shell), "v-pc", "c-front-fan-1")).toMatchObject({ x: 170, y: 160 });
-  expect(placementIn(savedSetup(shell), "v-pc", "c-rear-fan")).toMatchObject({ x: 820, y: 160 });
+  expect(placementIn(savedSetup(shell), "v-pc", "c-front-fan-1")).toMatchObject({ x: 160, y: 140 });
+  expect(placementIn(savedSetup(shell), "v-pc", "c-rear-fan")).toMatchObject({ x: 860, y: 140 });
 });
 
 test("number_fields_set_the_place_and_each_change_is_one_undo_step", async () => {

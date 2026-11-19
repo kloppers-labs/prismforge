@@ -4,12 +4,12 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import Dialog from "../../lib/Dialog.svelte";
   import type { Names } from "../../lib/names";
-  import { CANVAS, NUDGE, SIZE_LIMITS, placementOf, type Joining } from "./edits";
+  import { CANVAS, NUDGE, SIZE_LIMITS, placementOf } from "./edits";
   import { COMPONENT_LED_LIMIT, ledCount, reversed, withLeds } from "./geometry";
   import NumberField from "./NumberField.svelte";
-  import { firstLedText, kindText, nameOf, outputLine, selectionName, wiringTexts } from "./present";
+  import { firstLedText, kindText, outputLine, selectionName, wiringTexts } from "./present";
   import type { SetupState } from "./state.svelte";
-  import { detected, existing } from "./targets";
+  import WireForm from "./WireForm.svelte";
   import { chainOf, outputOf } from "./wiring";
 
   let {
@@ -39,11 +39,6 @@
   let chain = $derived(one ? chainOf(setup.draft, one) : null);
   let issues = $derived(setup.issues.filter((issue) => issue.component === one || (issue.component === null && output !== null && issue.output === output.id)));
   let title = $derived(ids.length === 0 ? "Edit the selection" : `Edit ${selectionName(setup.draft, ids)}`);
-  let choices = $derived(detected(session, names));
-  let wireTo = $state("");
-  let joining = $state<Joining | null>(null);
-  let chosen = $derived(choices.find((entry) => entry.key === wireTo) ?? null);
-  let taken = $derived(chosen ? existing(setup.draft, chosen) : null);
   let deleting = $state(false);
   let deleteButton: HTMLButtonElement | undefined = $state();
 
@@ -53,22 +48,10 @@
     }
   }
 
-  function listNames(ids: string[]): string {
-    return ids.length === 1 ? nameOf(setup.draft, ids[0]!) : `${ids.length} components`;
-  }
-
   function bounded(value: number): number {
     return Math.min(Math.max(Math.round(value), 1), COMPONENT_LED_LIMIT);
   }
 
-  function wire() {
-    if (!one || !chosen) {
-      return;
-    }
-    setup.wire(one, chosen.choice, taken ? (joining ?? "chain") : "own");
-    wireTo = "";
-    joining = null;
-  }
 </script>
 
 <section class="inspector" aria-label={title}>
@@ -218,23 +201,7 @@
         <p id="output-first-note" class="hint">The first LED of the zone that this output uses. Most outputs start at LED 1.</p>
       {:else}
         <p class="unwired">Not wired. It shows no colour and gets nothing until you choose its output.</p>
-        <div class="field">
-          <label for="wire-to">Output</label>
-          <select id="wire-to" bind:value={wireTo}>
-            <option value="">Choose a detected device or zone</option>
-            {#each choices as entry (entry.key)}
-              <option value={entry.key}>{entry.title}</option>
-            {/each}
-          </select>
-        </div>
-        {#if chosen && taken}
-          <fieldset class="choices">
-            <legend>{chosen.title} already shows {listNames(taken.branches.flat())}. This component is</legend>
-            <label><input type="radio" name="joining" value="mirror" bind:group={joining} /> Mirror: the same colours, one control</label>
-            <label><input type="radio" name="joining" value="chain" bind:group={joining} /> Next part of the daisy chain, on the following LEDs</label>
-          </fieldset>
-        {/if}
-        <button type="button" class="small" disabled={!chosen || (taken !== null && joining === null)} onclick={wire}>Wire</button>
+        <WireForm {setup} {session} {names} id={component.id} />
       {/if}
     </fieldset>
 
@@ -316,14 +283,6 @@
   .field label {
     font-size: var(--font-s);
     color: var(--text-dim);
-  }
-
-  .choices {
-    display: grid;
-    gap: var(--space-1);
-    border: 0;
-    padding: 0;
-    margin: 0;
   }
 
   .problems {

@@ -53,16 +53,16 @@ describe("editing a component", () => {
   test("a_move_keeps_the_component_inside_the_view", () => {
     const moved = moveBy(tower(), PC, ["c-front-fan-1"], -5000, 20);
 
-    expect(at(moved, "c-front-fan-1")).toMatchObject({ x: 0, y: 170 });
+    expect(at(moved, "c-front-fan-1")).toMatchObject({ x: 0, y: 150 });
     expect(at(moved, "c-front-fan-2")).toEqual(at(tower(), "c-front-fan-2"));
   });
 
   test("moving_several_components_moves_them_together_and_keeps_their_spacing", () => {
     const moved = moveBy(tower(), PC, ["c-front-fan-1", "c-rear-fan"], 400, -10);
 
-    expect(at(moved, "c-front-fan-1")).toMatchObject({ x: 350, y: 140 });
-    expect(at(moved, "c-rear-fan")).toMatchObject({ x: 1000, y: 140 });
-    expect(at(moved, "c-rear-fan").x - at(moved, "c-front-fan-1").x).toBe(650);
+    expect(at(moved, "c-front-fan-1")).toMatchObject({ x: 300, y: 120 });
+    expect(at(moved, "c-rear-fan")).toMatchObject({ x: 1000, y: 120 });
+    expect(at(moved, "c-rear-fan").x - at(moved, "c-front-fan-1").x).toBe(700);
   });
 
   test("rotation_turns_in_fifteen_degree_steps_and_wraps", () => {

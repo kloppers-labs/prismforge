@@ -1,4 +1,6 @@
 import type { GroupsView } from "../lib/api/bindings/GroupsView";
+import type { SetupStoreView } from "../lib/api/bindings/SetupStoreView";
+import { setupDemoTower } from "../test/fixtures/setups";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
 import { batchDuringIdentify } from "../test/fixtures/batches";
@@ -14,7 +16,7 @@ import { storeEmpty, storeOffline, storeRecovered, storeSaved, storeTwo, storeUn
 import { viewApplying, viewArmedRetrying, viewConnectApplied } from "../test/fixtures/views";
 import type { Handler } from "./transport";
 
-export type Area = "Devices" | "Effects" | "Profiles" | "Settings";
+export type Area = "Devices" | "Effects" | "Setup" | "Profiles" | "Settings";
 
 export type Scenario = {
   label: string;
@@ -35,6 +37,7 @@ export type Scenario = {
   stage?: "live";
   live?: LiveOutput;
   rescan?: boolean;
+  setup?: SetupStoreView;
 };
 
 function onConnect(session: SessionSnapshot | null): ShellView["on_connect"] {
@@ -174,5 +177,9 @@ export const SCENARIOS: Record<string, Scenario> = {
     effect: "Gradient",
   },
 };
+
+Object.assign(SCENARIOS, {
+  "setup-tower": { ...base, label: "Setup, the PC view of the demo tower", view: view(sessions.demoConnected), area: "Setup", setup: setupDemoTower },
+});
 
 export const DEFAULT_SCENARIO = "demo";

@@ -9,6 +9,8 @@
   import ComponentList from "./ComponentList.svelte";
   import DetectedList from "./DetectedList.svelte";
   import Inspector from "./Inspector.svelte";
+  import LibraryPanel from "./LibraryPanel.svelte";
+  import UnwiredList from "./UnwiredList.svelte";
   import { editAction, type EditAction } from "./keys";
   import OutputList from "./OutputList.svelte";
   import { identifyText } from "./present";
@@ -99,8 +101,10 @@
             {/if}
           </aside>
         </div>
+        <UnwiredList {setup} {session} names={app.names} />
         <OutputList {setup} {session} names={app.names} />
         <DetectedList {setup} {session} names={app.names} />
+        <LibraryPanel {setup} />
       </div>
     {/if}
   </div>

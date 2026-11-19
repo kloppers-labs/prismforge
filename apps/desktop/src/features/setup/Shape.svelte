@@ -64,7 +64,11 @@
     if (length < 1) {
       return { x: first.x, y: first.y - radius - 8 };
     }
-    return { x: first.x + (away.x / length) * (radius + 12), y: first.y + (away.y / length) * (radius + 12) };
+    const back = arrow ? { x: (arrow.from.x - arrow.to.x) / ARROW, y: (arrow.from.y - arrow.to.y) / ARROW } : { x: 0, y: 0 };
+    return {
+      x: first.x + (away.x / length) * (radius + 10) + back.x * 10,
+      y: first.y + (away.y / length) * (radius + 10) + back.y * 10,
+    };
   });
   let line = $derived("Line" in component.geometry ? lineOutline(component.geometry.Line.leds) : null);
   let label = $derived(component.name.length > 26 ? `${component.name.slice(0, 25)}…` : component.name);
@@ -83,7 +87,7 @@
 <g class="shape" class:selected class:unwired={!wired} data-component={component.id}>
   <g transform="translate({at.x} {at.y}) rotate({at.rotation}) scale({at.flipped ? -at.size : at.size} {at.size})">
     {#if "Ring" in component.geometry}
-      <circle class="outline" r="0.6" />
+      <circle class="outline" r="0.58" />
       <circle class="hub" r="0.2" />
     {:else if "Point" in component.geometry}
       <circle class="outline" r="0.25" />

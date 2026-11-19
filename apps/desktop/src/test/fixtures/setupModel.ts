@@ -637,48 +637,48 @@ export const demoTower: Setup = {
       "placements": [
         {
           "component": "c-front-fan-1",
-          "x": 170,
-          "y": 150,
-          "size": 110,
+          "x": 160,
+          "y": 130,
+          "size": 100,
           "rotation": 0,
           "flipped": false
         },
         {
           "component": "c-front-fan-2",
-          "x": 170,
-          "y": 290,
-          "size": 110,
+          "x": 160,
+          "y": 300,
+          "size": 100,
           "rotation": 0,
           "flipped": false
         },
         {
           "component": "c-front-fan-3",
-          "x": 170,
-          "y": 430,
-          "size": 110,
+          "x": 160,
+          "y": 470,
+          "size": 100,
           "rotation": 0,
           "flipped": false
         },
         {
           "component": "c-rear-fan",
-          "x": 820,
-          "y": 150,
-          "size": 110,
+          "x": 860,
+          "y": 130,
+          "size": 100,
           "rotation": 0,
           "flipped": false
         },
         {
           "component": "c-cooler-left",
-          "x": 470,
-          "y": 250,
+          "x": 440,
+          "y": 270,
           "size": 120,
           "rotation": 90,
           "flipped": false
         },
         {
           "component": "c-cooler-right",
-          "x": 590,
-          "y": 250,
+          "x": 560,
+          "y": 270,
           "size": 120,
           "rotation": 90,
           "flipped": false
@@ -686,15 +686,15 @@ export const demoTower: Setup = {
         {
           "component": "c-memory-1",
           "x": 690,
-          "y": 250,
+          "y": 270,
           "size": 130,
           "rotation": 90,
           "flipped": false
         },
         {
           "component": "c-memory-2",
-          "x": 730,
-          "y": 250,
+          "x": 820,
+          "y": 270,
           "size": 130,
           "rotation": 90,
           "flipped": false

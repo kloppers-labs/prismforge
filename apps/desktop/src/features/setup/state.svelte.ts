@@ -34,6 +34,7 @@ import {
   type OutputChoice,
 } from "./edits";
 import type { ShapePart } from "./library";
+import type { Template } from "./templates";
 import { nameOf, selectionName } from "./present";
 import { History } from "./history";
 
@@ -273,18 +274,6 @@ export class SetupState {
     this.edit(`${what} of ${nameOf(this.draft, id)}`, (setup) => setGeometry(setup, id, geometry));
   }
 
-  /** Adds a component to the current view and, when the user chose one, wires it. */
-  add(component: NewComponent, at: { x: number; y: number; size?: number; rotation?: number }, wiring: { choice: OutputChoice; joining: Joining } | null) {
-    this.edit(
-      `Place ${component.name}`,
-      (setup) => {
-        const added = addComponent(setup, this.tab, component, at);
-        return wiring ? wire(added, component.id, wiring.choice, wiring.joining, freeId(added, "o-")) : added;
-      },
-      [component.id],
-    );
-  }
-
   /** Adds the parts of one shape at one spot as one step; later parts follow the first on the wire. */
   addShape(name: string, parts: ShapePart[], at: { x: number; y: number; size: number }, wiring: { choice: OutputChoice; joining: Joining } | null) {
     const ids: ComponentId[] = [];
@@ -300,6 +289,22 @@ export class SetupState {
           }
           const joining = index === 0 ? wiring.joining : "chain";
           return wire(added, id, wiring.choice, joining, freeId(added, "o-"));
+        }, setup),
+      ids,
+    );
+  }
+
+  /** Adds a template's components to its view as one step; none of them is wired. */
+  addTemplate(template: Template) {
+    const ids: ComponentId[] = [];
+    this.show(template.view);
+    this.edit(
+      `Add the ${template.label} template`,
+      (setup) =>
+        template.slots.reduce((next, slot) => {
+          const id = freeId(next, "c-");
+          ids.push(id);
+          return addComponent(next, template.view, { id, name: slot.name, geometry: slot.geometry }, slot);
         }, setup),
       ids,
     );

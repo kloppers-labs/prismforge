@@ -9,6 +9,7 @@ import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import { catalog } from "../test/fixtures/catalog";
 import { groupsEmpty } from "../test/fixtures/groups";
+import { setupDemoEmpty } from "../test/fixtures/setups";
 import { detailsEvening, detailsImported, detailsOffline } from "../test/fixtures/profileDetails";
 import { demoConnected, openRgbConnecting } from "../test/fixtures/sessions";
 import type { Scenario } from "./scenarios";
@@ -74,6 +75,8 @@ export function installTransport(scenario: Scenario) {
     profile_details: (args) => details[String(args.id)] ?? Promise.reject({ Profile: "NotFound" }),
     effect_catalog: () => catalog,
     groups: () => scenario.groups ?? { ...groupsEmpty, kind: scenario.store.kind },
+    setup: () => scenario.setup ?? { ...setupDemoEmpty, kind: scenario.store.kind },
+    save_setup: (args) => ({ ...(scenario.setup ?? setupDemoEmpty), setup: args.setup }),
     watch_live_output: liveFeed(scenario.live),
     preview_effect: preview,
     refresh: () => null,
