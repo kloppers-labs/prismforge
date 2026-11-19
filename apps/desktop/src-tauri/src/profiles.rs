@@ -57,9 +57,9 @@ impl<S: ViewSink> Shell<S> {
 
     pub async fn rename_profile(&self, id: &ProfileId, name: &str) -> Result<(), CommandError> {
         let (_, profiles) = self.store().await?;
-        profiles.rename(id, name).await?;
+        let renamed = profiles.rename(id, name).await;
         self.report_on_connect().await;
-        Ok(())
+        Ok(renamed?)
     }
 
     pub async fn duplicate_profile(&self, id: &ProfileId) -> Result<ProfileId, CommandError> {
@@ -70,10 +70,10 @@ impl<S: ViewSink> Shell<S> {
     pub async fn delete_profile(&self, id: &ProfileId) -> Result<(), CommandError> {
         let (permit, _, kind) = self.permitted().await?;
         let profiles = self.stores.profiles(kind).await?;
-        profiles.delete(id).await?;
+        let deleted = profiles.delete(id).await;
         drop(permit);
         self.report_on_connect().await;
-        Ok(())
+        Ok(deleted?)
     }
 
     /// Holds the apply lock for the whole apply, so no other output command interleaves with it.
@@ -93,9 +93,9 @@ impl<S: ViewSink> Shell<S> {
 
     pub async fn set_apply_on_connect(&self, id: Option<ProfileId>) -> Result<(), CommandError> {
         let (_, profiles) = self.store().await?;
-        profiles.set_apply_on_connect(id).await?;
+        let marked = profiles.set_apply_on_connect(id).await;
         self.report_on_connect().await;
-        Ok(())
+        Ok(marked?)
     }
 
     pub async fn export_file_name(&self, id: &ProfileId) -> Result<String, CommandError> {
@@ -118,7 +118,9 @@ impl<S: ViewSink> Shell<S> {
     pub async fn import_profile(&self, source: PathBuf) -> Result<ImportReport, CommandError> {
         self.check_source(&source)?;
         let (handle, profiles) = self.store().await?;
-        Ok(profiles.import_from(source, handle.as_ref()).await?)
+        let imported = profiles.import_from(source, handle.as_ref()).await;
+        self.report_on_connect().await;
+        Ok(imported?)
     }
 
     pub async fn set_device_name(

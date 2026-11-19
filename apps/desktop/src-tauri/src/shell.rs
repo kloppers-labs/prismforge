@@ -142,7 +142,7 @@ impl<S: ViewSink> Shell<S> {
         self.publisher.publish(None)
     }
 
-    /// Publishes the apply-on-connect state again after the mark or a profile name changed.
+    /// Publishes the apply-on-connect state again; called after every command that can change the mark.
     pub(crate) async fn report_on_connect(&self) {
         let report = self
             .active

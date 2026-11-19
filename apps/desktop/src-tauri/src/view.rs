@@ -31,11 +31,30 @@ pub enum OnConnect {
     NotArmed,
     /// Not live yet; this profile is applied as soon as the devices are read.
     Armed { id: ProfileId, name: String },
-    /// It came due in this session; nothing more is applied until the user connects again.
+    /// Not live yet; the marked profile cannot be read, so the apply on connect fails and writes nothing.
+    Unreadable { id: ProfileId, problem: MarkProblem },
+    /// It came due in this session; `ran` is its result, `None` when nothing was marked then.
     Fired {
-        applied: Option<String>,
-        next: Option<String>,
+        ran: Option<ConnectApply>,
+        next: Option<Marked>,
     },
+}
+
+/// The profile marked for the next connect.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub enum Marked {
+    Ready { name: String },
+    Unreadable { problem: MarkProblem },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub enum MarkProblem {
+    /// The file needs a newer PrismForge; this version leaves it as it is.
+    NewerVersion,
+    /// The store has no readable profile with this id.
+    Missing,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

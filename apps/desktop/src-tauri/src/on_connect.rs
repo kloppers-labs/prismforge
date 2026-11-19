@@ -1,17 +1,24 @@
 use std::sync::Arc;
 
+use prismforge_core::profile::ProfileId;
 use prismforge_core::session::SessionHandle;
 use prismforge_core::store::{ConnectTrigger, Profiles};
 use tokio::sync::Mutex;
 
 use crate::apply_lock::ApplyLock;
 use crate::publisher::{Publisher, ViewSink};
-use crate::view::{ApplyingProfile, ConnectApply, ConnectOutcome, OnConnect};
+use crate::view::{ApplyingProfile, ConnectApply, ConnectOutcome, MarkProblem, Marked, OnConnect};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Phase {
     Waiting,
-    Fired { applied: Option<String> },
+    Fired { ran: Option<ConnectApply> },
+}
+
+/// The profile the store marks now, as far as this version can read it.
+enum Mark {
+    Ready(ProfileId, String),
+    Unreadable(ProfileId, MarkProblem),
 }
 
 /// Publishes the session's apply-on-connect state from its trigger and the store's current mark.
@@ -43,28 +50,34 @@ impl<S: ViewSink> Report<S> {
         }
     }
 
-    async fn marked(&self) -> Option<(prismforge_core::profile::ProfileId, String)> {
+    async fn mark(&self) -> Option<Mark> {
         let summary = self.profiles.summary(None).await;
         let id = summary.apply_on_connect?;
-        let name = summary
-            .profiles
-            .iter()
-            .find(|profile| profile.id == id)
-            .map(|profile| profile.name.clone())
-            .unwrap_or_default();
-        Some((id, name))
+        if let Some(profile) = summary.profiles.iter().find(|profile| profile.id == id) {
+            return Some(Mark::Ready(id, profile.name.clone()));
+        }
+        let problem = if summary.unreadable.iter().any(|locked| locked.id == id) {
+            MarkProblem::NewerVersion
+        } else {
+            MarkProblem::Missing
+        };
+        Some(Mark::Unreadable(id, problem))
     }
 
     async fn publish_with(&self, phase: &Phase) {
-        let marked = self.marked().await;
+        let mark = self.mark().await;
         let state = match phase {
-            Phase::Waiting => marked.map_or(OnConnect::NotArmed, |(id, name)| OnConnect::Armed {
-                id,
-                name,
-            }),
-            Phase::Fired { applied } => OnConnect::Fired {
-                applied: applied.clone(),
-                next: marked.map(|(_, name)| name),
+            Phase::Waiting => match mark {
+                None => OnConnect::NotArmed,
+                Some(Mark::Ready(id, name)) => OnConnect::Armed { id, name },
+                Some(Mark::Unreadable(id, problem)) => OnConnect::Unreadable { id, problem },
+            },
+            Phase::Fired { ran } => OnConnect::Fired {
+                ran: ran.clone(),
+                next: mark.map(|mark| match mark {
+                    Mark::Ready(_, name) => Marked::Ready { name },
+                    Mark::Unreadable(_, problem) => Marked::Unreadable { problem },
+                }),
             },
         };
         self.publisher.set_on_connect(state);
@@ -83,8 +96,8 @@ pub(crate) async fn apply_on_connect<S: ViewSink>(
     loop {
         let snapshot = updates.borrow_and_update().clone();
         if trigger.due(&snapshot) {
-            let applied = apply_marked(&report, &handle, &lock, &publisher).await;
-            report.set(Phase::Fired { applied }).await;
+            let ran = apply_marked(&report, &handle, &lock, &publisher).await;
+            report.set(Phase::Fired { ran }).await;
         } else if !trigger.fired() {
             report.set(Phase::Waiting).await;
         }
@@ -94,19 +107,17 @@ pub(crate) async fn apply_on_connect<S: ViewSink>(
     }
 }
 
-/// Returns the name of the profile it applied, or tried to apply.
+/// An unreadable profile gets an empty name; its apply fails before anything is sent.
 async fn apply_marked<S: ViewSink>(
     report: &Report<S>,
     handle: &SessionHandle,
     lock: &ApplyLock<S>,
     publisher: &Publisher<S>,
-) -> Option<String> {
-    let (id, name) = report.marked().await?;
-    report
-        .set(Phase::Fired {
-            applied: Some(name.clone()),
-        })
-        .await;
+) -> Option<ConnectApply> {
+    let (id, name) = match report.mark().await? {
+        Mark::Ready(id, name) => (id, name),
+        Mark::Unreadable(id, _) => (id, String::new()),
+    };
     let _guard = lock
         .begin(ApplyingProfile {
             id: id.clone(),
@@ -119,10 +130,7 @@ async fn apply_marked<S: ViewSink>(
         Ok(None) => return None,
         Err(error) => ConnectOutcome::Failed { error },
     };
-    publisher.set_connect_apply(Some(ConnectApply {
-        id,
-        name: name.clone(),
-        outcome,
-    }));
-    Some(name)
+    let ran = ConnectApply { id, name, outcome };
+    publisher.set_connect_apply(Some(ran.clone()));
+    Some(ran)
 }

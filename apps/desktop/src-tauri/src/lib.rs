@@ -20,7 +20,8 @@ pub use publisher::{Publisher, ViewSink};
 pub use shell::{Shell, ShellConfig};
 pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};
 pub use view::{
-    ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, OnConnect, ShellView,
+    ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, MarkProblem, Marked,
+    OnConnect, ShellView,
 };
 
 pub const VIEW_EVENT: &str = "session-view";

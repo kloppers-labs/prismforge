@@ -2,7 +2,7 @@
 import type { ShellView } from "../../lib/api/bindings/ShellView";
 
 export const viewApplying: ShellView = {
-  "revision": 17,
+  "revision": 19,
   "session": {
     "connection": "Connected",
     "backend": {
@@ -1043,14 +1043,14 @@ export const viewApplying: ShellView = {
   "connect_apply": null,
   "on_connect": {
     "Fired": {
-      "applied": null,
+      "ran": null,
       "next": null
     }
   }
 };
 
 export const viewConnectApplied: ShellView = {
-  "revision": 37,
+  "revision": 39,
   "session": {
     "connection": "Connected",
     "backend": {
@@ -2140,8 +2140,75 @@ export const viewConnectApplied: ShellView = {
   },
   "on_connect": {
     "Fired": {
-      "applied": "Evening",
-      "next": "Evening"
+      "ran": {
+        "id": "p-0000000000000001",
+        "name": "Evening",
+        "outcome": {
+          "Applied": {
+            "report": {
+              "frame_rate": {
+                "Applied": {
+                  "in_use": 45
+                }
+              },
+              "items": [
+                {
+                  "device": "demo-memory-2",
+                  "label": "Demo Memory Module",
+                  "target": "demo-memory-2",
+                  "item": {
+                    "External": {
+                      "label": "OpenRGB Effects plugin"
+                    }
+                  },
+                  "outcome": "Applied"
+                },
+                {
+                  "device": "demo-light-bar",
+                  "label": "Demo Light Bar",
+                  "target": "demo-light-bar",
+                  "item": {
+                    "HardwareMode": {
+                      "index": 1,
+                      "name": "Breathing"
+                    }
+                  },
+                  "outcome": "Applied"
+                },
+                {
+                  "device": "demo-graphics-card",
+                  "label": "Demo Graphics Card",
+                  "target": "demo-graphics-card",
+                  "item": {
+                    "Effect": {
+                      "zone": null,
+                      "effect": "moving-highlight"
+                    }
+                  },
+                  "outcome": "Applied"
+                },
+                {
+                  "device": "demo-motherboard",
+                  "label": "Demo Motherboard",
+                  "target": "demo-motherboard",
+                  "item": {
+                    "Effect": {
+                      "zone": 1,
+                      "effect": "solid"
+                    }
+                  },
+                  "outcome": "Applied"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "next": {
+        "Ready": {
+          "name": "Evening"
+        }
+      }
     }
   }
 };
@@ -2584,8 +2651,40 @@ export const viewFiredRetrying: ShellView = {
   },
   "on_connect": {
     "Fired": {
-      "applied": "Desk",
-      "next": "Desk"
+      "ran": {
+        "id": "p-0000000000000003",
+        "name": "Desk",
+        "outcome": {
+          "Applied": {
+            "report": {
+              "frame_rate": {
+                "Applied": {
+                  "in_use": 30
+                }
+              },
+              "items": [
+                {
+                  "device": "dev-5ae0445e22cbba19",
+                  "label": "Fixture Strip",
+                  "target": "dev-5ae0445e22cbba19",
+                  "item": {
+                    "Effect": {
+                      "zone": null,
+                      "effect": "rainbow-wave"
+                    }
+                  },
+                  "outcome": "Applied"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "next": {
+        "Ready": {
+          "name": "Desk"
+        }
+      }
     }
   }
 };
