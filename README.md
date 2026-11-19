@@ -66,7 +66,7 @@ After a connection, **Devices** shows the device list and identify. **Effects** 
 
 - **Save as new profile** stores the effects, hardware modes, program statements and frame rate in use. Profiles are files on this computer. Nothing is saved to the devices.
 - **Apply profile** sends the stored settings and lists each one as applied or skipped, with the reason. A device that is missing, identical to another one or changed is skipped and stays in the profile. PrismForge never moves a setting to a similar device.
-- **Save changes** adds what you changed since you applied the profile. It shows the change list first. PrismForge links your changes to a profile only until it closes; after a restart, apply the profile first.
+- **Save changes** adds what you changed since you applied the profile. It shows the change list first. PrismForge links your changes to a profile only until you disconnect, switch between demo mode and OpenRGB, or close PrismForge; after that, apply the profile first.
 - **Apply this profile when PrismForge connects** is off by default. When it is on, PrismForge applies the profile once each time you connect. It does not start PrismForge or connect by itself.
 - **Export** writes a file without serial numbers or locations. **Import** adds a new profile and never replaces one.
 - Demo mode has its own profiles. They never apply to real hardware.

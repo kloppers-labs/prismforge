@@ -73,7 +73,11 @@ The shell seeds the backend with `Profiles::known_devices`, creates the session,
 
 ### Apply on connect
 
-The watcher feeds every snapshot to `ConnectTrigger` and calls `apply_marked` when it is due. The profile applies once each time the session becomes live after the user connects. A connection that the session restores by itself after a loss is the same connect: the profile is not applied again, and the effects in the session resume. PrismForge never starts or connects by itself, so the user must start PrismForge and connect for the profile to apply. The window shows the result of each automatic apply with a line per setting.
+The watcher feeds every snapshot to `ConnectTrigger` and calls `apply_marked` when it is due. The profile applies once each time the session becomes live after the user connects. A connection that the session restores by itself after a loss is the same connect: the profile is not applied again, and the effects in the session resume. The Profiles screen says so while the session retries, and the connection screen says that Connect applies a marked profile. PrismForge never starts or connects by itself, so the user must start PrismForge and connect for the profile to apply. The window shows the result of each automatic apply with a line per setting.
+
+### Lock order
+
+The shell has four kinds of lock: the session slot (`active`), the apply slot, the output gate (permits and the apply's write side), and the store mutexes. Every command takes them in that order and never waits for an earlier one while it holds a later one. A command that needs a permit takes it while it holds the session slot, then releases the slot before it waits for the session's answer. A task that holds a session handle (an apply, a save) never waits for the session slot, because disconnect, a mode switch and exit hold that slot while they wait for every handle to go. Tests join an apply, a disconnect or the window close, and one more command (frame rate, save, identify, a second apply, an effect), under a bounded simulated time.
 
 ### The apply lock
 
@@ -84,6 +88,7 @@ A user command sent while a profile applies would get a sequence number before t
 3. An output command already sent holds a permit until the session answers it. The apply waits for those permits before it sends anything.
 4. The lock is a guard value, released when it is dropped: after success, a partial result, an error, a cancelled command and the end of the session. Tests cover each path.
 5. The view carries the profile being applied, so the interface turns its output controls off with the reason.
+6. Disconnect clears the result of the last apply on connect from the view. The interface also drops every profile result, open dialog and draft when the session ends or the store changes between demo and real.
 
 ### Export and import paths
 
