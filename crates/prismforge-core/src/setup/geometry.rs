@@ -11,6 +11,7 @@ pub const LINE_POINT_LIMIT: usize = 256;
 
 /// The shape of a lit component and the order of its LEDs; the user declares it, PrismForge never guesses it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Geometry {
     Strip(Strip),
     Ring(Ring),
@@ -22,25 +23,30 @@ pub enum Geometry {
 
 /// LEDs in a straight line; LED 1 is at the `first` end and the LEDs run to the other end.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Strip {
     pub leds: u32,
     pub first: FirstLed,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// LEDs round a circle; LED 1 sits `first_angle` degrees clockwise from the top.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Ring {
     pub leds: u32,
     pub first_angle: u16,
     pub turn: Turn,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// A grid with LED 1 in the `first` corner; the LEDs fill one line after another, and turn back on each line when `serpentine`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Matrix {
     pub columns: u32,
     pub rows: u32,
@@ -48,11 +54,13 @@ pub struct Matrix {
     pub runs: Runs,
     pub serpentine: bool,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// LEDs round the edge of a `width` by `height` rectangle, counted per side, from the `first` corner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Perimeter {
     pub top: u32,
     pub right: u32,
@@ -63,47 +71,57 @@ pub struct Perimeter {
     pub first: Corner,
     pub turn: Turn,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// One LED, such as a logo.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Single {
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// LEDs spread evenly along the path through `points`, LED 1 at the `first` end.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Line {
     pub leds: u32,
     pub points: Vec<GridPoint>,
     pub first: FirstLed,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct GridPoint {
     pub x: i32,
     pub y: i32,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum FirstLed {
     AtStart,
     AtEnd,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Turn {
     Clockwise,
     CounterClockwise,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Corner {
     TopLeft,
     TopRight,
@@ -113,6 +131,7 @@ pub enum Corner {
 
 /// Whether the LEDs of a grid fill a row or a column first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Runs {
     AlongRows,
     AlongColumns,

@@ -1,6 +1,7 @@
 use prismforge_core::OutputTarget;
 use prismforge_core::profile::{ApplyError, ApplyReport, ProfileId};
 use prismforge_core::session::{OutputError, SessionError, SessionSnapshot};
+use prismforge_core::setup::PlanError;
 use prismforge_core::store::{FileProblem, ImportError, StoreError};
 use prismforge_effects::InstanceError;
 use serde::Serialize;
@@ -104,15 +105,27 @@ pub enum CommandError {
     EmptyHost,
     Session(SessionError),
     InvalidEffect(InstanceError),
-    NoEffect { target: OutputTarget },
-    TooManyTargets { limit: usize },
+    NoEffect {
+        target: OutputTarget,
+    },
+    TooManyTargets {
+        limit: usize,
+    },
     ProfileApplying,
     NotConnected,
     Store(StoreError),
     StoreUnavailable(StoreUnavailable),
-    Unreadable { problem: FileProblem },
+    Unreadable {
+        problem: FileProblem,
+    },
     File(FileRule),
     Setting(SettingProblem),
+    /// No picture across the setup could be made; nothing was sent.
+    Plan(PlanError),
+    /// The draft preview would draw more LEDs than it allows.
+    PreviewTooLarge {
+        limit: usize,
+    },
 }
 
 /// Why an app setting was not changed; the settings view always shows the state that holds.
@@ -186,6 +199,12 @@ impl From<ImportError> for CommandError {
 impl From<SettingProblem> for CommandError {
     fn from(problem: SettingProblem) -> Self {
         Self::Setting(problem)
+    }
+}
+
+impl From<PlanError> for CommandError {
+    fn from(error: PlanError) -> Self {
+        Self::Plan(error)
     }
 }
 

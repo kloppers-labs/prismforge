@@ -8,14 +8,18 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use prismforge_core::profile::ProfileId;
+use prismforge_core::profile::{Extra, ProfileId};
+use prismforge_core::setup::{
+    Component, ComponentId, Geometry, OutputId, Placement, Ring, Setup, SetupOutput,
+    Turn as RingTurn, View, ViewId,
+};
 use prismforge_core::store::{CloseAction, GroupId, NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_desktop::{
-    AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores, TrayState, marks,
-    preview_effect, stop_then_exit,
+    AcrossPreviewRequest, AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores,
+    TrayState, marks, preview_across, preview_effect, stop_then_exit,
 };
-use prismforge_effects::{EffectInstance, PreviewRequest};
+use prismforge_effects::{EffectInstance, Flow, PreviewRequest};
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 
@@ -106,6 +110,65 @@ fn preview(name: &str) -> PreviewRequest {
     PreviewRequest {
         instance: effect(name),
         led_count: 12,
+        start_ms: 0,
+        frame_count: 30,
+        interval_ms: 33,
+    }
+}
+
+fn pc() -> ViewId {
+    ViewId::parse("v-pc").expect("view id")
+}
+
+/// The graphics card's logo as one ring placed in the PC view.
+fn logo_setup() -> Setup {
+    let logo = ComponentId::parse("c-logo").expect("component id");
+    Setup {
+        components: vec![Component {
+            id: logo.clone(),
+            name: "Logo".into(),
+            geometry: Geometry::Ring(Ring {
+                leds: 12,
+                first_angle: 0,
+                turn: RingTurn::Clockwise,
+                extra: Extra::new(),
+            }),
+            extra: Extra::new(),
+        }],
+        outputs: vec![SetupOutput {
+            id: OutputId::parse("o-logo").expect("output id"),
+            device: DeviceRef::new(GPU),
+            zone: None,
+            label: "Demo Graphics Card".into(),
+            zone_name: None,
+            first_led: 0,
+            branches: vec![vec![logo.clone()]],
+            extra: Extra::new(),
+        }],
+        views: vec![View {
+            id: pc(),
+            name: "PC".into(),
+            placements: vec![Placement {
+                component: logo,
+                x: 100,
+                y: 100,
+                size: 100,
+                rotation: 0,
+                flipped: false,
+                extra: Extra::new(),
+            }],
+            extra: Extra::new(),
+        }],
+        extra: Extra::new(),
+    }
+}
+
+fn across_preview() -> AcrossPreviewRequest {
+    AcrossPreviewRequest {
+        setup: logo_setup(),
+        view: pc(),
+        flow: Flow::Along { angle: 0 },
+        instance: effect("rainbow-wave"),
         start_ms: 0,
         frame_count: 30,
         interval_ms: 33,
@@ -261,6 +324,39 @@ fn cases() -> Vec<Case> {
             .shell
             .delete_group(&unknown_group())
             .await),
+        case!("setup", "view", |f| f.shell.setup_view().await),
+        case!("save_setup", "logo", |f| f
+            .shell
+            .save_setup(logo_setup())
+            .await),
+        case!("save_setup", "not valid", |f| {
+            let mut setup = logo_setup();
+            setup.views[0].placements[0].size = 0;
+            f.shell.save_setup(setup).await
+        }),
+        case!("apply_across", "saved here", |f| {
+            let _ = f.shell.save_setup(logo_setup()).await;
+            f.shell
+                .apply_across(pc(), Flow::Along { angle: 0 }, effect("rainbow-wave"), None)
+                .await
+        }),
+        case!("apply_across", "unknown view", |f| f
+            .shell
+            .apply_across(
+                ViewId::parse("v-nowhere").expect("view id"),
+                Flow::Along { angle: 0 },
+                effect("rainbow-wave"),
+                Some(vec![gpu()])
+            )
+            .await),
+        case!("preview_across", "logo", |_f| preview_across(
+            across_preview()
+        )),
+        case!("preview_across", "unknown effect", |_f| {
+            let mut request = across_preview();
+            request.instance = effect("no-such-effect");
+            preview_across(request)
+        }),
         case!("profile_store", "store", |f| f.shell.store_view().await),
         case!("profile_details", "profile", |f| f
             .shell

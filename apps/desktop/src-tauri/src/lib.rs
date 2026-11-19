@@ -16,6 +16,8 @@ mod profile_commands;
 mod profiles;
 mod publisher;
 mod settings;
+mod setup;
+mod setup_commands;
 mod shell;
 mod stores;
 mod system_entry;
@@ -40,6 +42,10 @@ pub use lifecycle::{
 };
 pub use publisher::{Publisher, ViewSink};
 pub use settings::SettingsStore;
+pub use setup::{
+    AcrossPreview, AcrossPreviewRequest, AcrossReport, NotPlaced, PREVIEW_LED_LIMIT, PreviewTarget,
+    SetupLimits, SetupStoreView, preview_across,
+};
 pub use shell::{Shell, ShellConfig};
 pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};
 pub use system_entry::{SystemStartEntry, run_command, startup_disabled};
@@ -138,6 +144,10 @@ pub fn run() {
             group_commands::add_group_members,
             group_commands::remove_group_member,
             group_commands::delete_group,
+            setup_commands::setup,
+            setup_commands::save_setup,
+            setup_commands::apply_across,
+            setup_commands::preview_across,
             profile_commands::profile_store,
             profile_commands::profile_details,
             profile_commands::create_profile,

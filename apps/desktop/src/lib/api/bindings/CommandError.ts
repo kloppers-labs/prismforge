@@ -3,9 +3,10 @@ import type { FileProblem } from "./FileProblem";
 import type { FileRule } from "./FileRule";
 import type { InstanceError } from "./InstanceError";
 import type { OutputTarget } from "./OutputTarget";
+import type { PlanError } from "./PlanError";
 import type { SessionError } from "./SessionError";
 import type { SettingProblem } from "./SettingProblem";
 import type { StoreError } from "./StoreError";
 import type { StoreUnavailable } from "./StoreUnavailable";
 
-export type CommandError = "NoSession" | "EmptyHost" | { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } } | { "TooManyTargets": { limit: number, } } | "ProfileApplying" | "NotConnected" | { "Store": StoreError } | { "StoreUnavailable": StoreUnavailable } | { "Unreadable": { problem: FileProblem, } } | { "File": FileRule } | { "Setting": SettingProblem };
+export type CommandError = "NoSession" | "EmptyHost" | { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } } | { "TooManyTargets": { limit: number, } } | "ProfileApplying" | "NotConnected" | { "Store": StoreError } | { "StoreUnavailable": StoreUnavailable } | { "Unreadable": { problem: FileProblem, } } | { "File": FileRule } | { "Setting": SettingProblem } | { "Plan": PlanError } | { "PreviewTooLarge": { limit: number, } };

@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { AcrossPreview } from "./bindings/AcrossPreview";
+import type { AcrossPreviewRequest } from "./bindings/AcrossPreviewRequest";
+import type { AcrossReport } from "./bindings/AcrossReport";
 import type { ApplyOutcome } from "./bindings/ApplyOutcome";
 import type { BatchReport } from "./bindings/BatchReport";
 import type { GroupId } from "./bindings/GroupId";
@@ -11,6 +14,7 @@ import type { DeviceRef } from "./bindings/DeviceRef";
 import type { EffectCatalog } from "./bindings/EffectCatalog";
 import type { EffectInstance } from "./bindings/EffectInstance";
 import type { ExportReport } from "./bindings/ExportReport";
+import type { Flow } from "./bindings/Flow";
 import type { IdentifyOutcome } from "./bindings/IdentifyOutcome";
 import type { ImportReport } from "./bindings/ImportReport";
 import type { LifecycleView } from "./bindings/LifecycleView";
@@ -21,10 +25,13 @@ import type { ProfileDetails } from "./bindings/ProfileDetails";
 import type { ProfileId } from "./bindings/ProfileId";
 import type { RestoreOutcome } from "./bindings/RestoreOutcome";
 import type { Saved } from "./bindings/Saved";
+import type { Setup } from "./bindings/Setup";
+import type { SetupStoreView } from "./bindings/SetupStoreView";
 import type { AppSettingChange } from "./bindings/AppSettingChange";
 import type { ShellView } from "./bindings/ShellView";
 import type { StoreNotice } from "./bindings/StoreNotice";
 import type { StoreView } from "./bindings/StoreView";
+import type { ViewId } from "./bindings/ViewId";
 
 export const VIEW_EVENT = "session-view";
 export const LIFECYCLE_EVENT = "lifecycle-view";
@@ -44,7 +51,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 }
 
 const PLAIN_ERRORS = ["NoSession", "EmptyHost", "ProfileApplying", "NotConnected"];
-const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "TooManyTargets", "Store", "StoreUnavailable", "Unreadable", "File", "Setting"];
+const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "TooManyTargets", "Store", "StoreUnavailable", "Unreadable", "File", "Setting", "Plan", "PreviewTooLarge"];
 
 function asFailure(error: unknown): Failure {
   if (typeof error === "string" && PLAIN_ERRORS.includes(error)) {
@@ -77,6 +84,11 @@ export const api = {
   addGroupMembers: (id: GroupId, targets: OutputTarget[]) => call<GroupsView>("add_group_members", { id, targets }),
   removeGroupMember: (id: GroupId, target: OutputTarget) => call<GroupsView>("remove_group_member", { id, target }),
   deleteGroup: (id: GroupId) => call<GroupsView>("delete_group", { id }),
+  setup: () => call<SetupStoreView>("setup"),
+  saveSetup: (setup: Setup) => call<SetupStoreView>("save_setup", { setup }),
+  applyAcross: (view: ViewId, flow: Flow, effect: EffectInstance, targets: OutputTarget[] | null) =>
+    call<AcrossReport>("apply_across", { view, flow, effect, targets }),
+  previewAcross: (request: AcrossPreviewRequest) => call<AcrossPreview>("preview_across", { request }),
   onLive: (handler: (live: LiveOutput) => void): Promise<UnlistenFn> =>
     listen<LiveOutput>(LIVE_EVENT, (event) => handler(event.payload)),
   selectMode: (device: DeviceRef, mode: number) => call<null>("select_mode", { device, mode }),

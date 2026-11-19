@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-apply-across"
+description = "Enables the apply_across command without any pre-configured scope."
+commands.allow = ["apply_across"]
+
+[[permission]]
+identifier = "deny-apply-across"
+description = "Denies the apply_across command without any pre-configured scope."
+commands.deny = ["apply_across"]

@@ -3,6 +3,7 @@ import type { BackendError } from "./api/bindings/BackendError";
 import type { FileProblem } from "./api/bindings/FileProblem";
 import type { FileRule } from "./api/bindings/FileRule";
 import type { NameProblem } from "./api/bindings/NameProblem";
+import type { PlanError } from "./api/bindings/PlanError";
 import type { SessionError } from "./api/bindings/SessionError";
 import type { SettingProblem } from "./api/bindings/SettingProblem";
 import type { StoreError } from "./api/bindings/StoreError";
@@ -48,7 +49,23 @@ export function failureText(failure: Failure): string {
   if ("Setting" in failure) {
     return settingProblemText(failure.Setting);
   }
+  if ("Plan" in failure) {
+    return planErrorText(failure.Plan);
+  }
+  if ("PreviewTooLarge" in failure) {
+    return `The draft preview draws at most ${failure.PreviewTooLarge.limit} LEDs, so it shows nothing for this setup. Your devices stay as they are.`;
+  }
   return sessionErrorText(failure.Session);
+}
+
+export function planErrorText(error: PlanError): string {
+  if ("UnknownView" in error) {
+    return "The saved setup has no such view, so nothing was sent. Save the setup first.";
+  }
+  if ("InvalidSetup" in error) {
+    return "The saved setup is not valid, so nothing was sent.";
+  }
+  return "The flow is outside its range: an angle from 0 to 359 degrees, or a centre from 0 to 100 percent. Nothing was sent.";
 }
 
 export function settingProblemText(problem: SettingProblem): string {

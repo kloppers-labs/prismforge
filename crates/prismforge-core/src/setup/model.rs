@@ -8,6 +8,7 @@ use crate::setup::ids::{ComponentId, OutputId, ViewId};
 
 /// Where each LED of the user's devices is: components with a shape, the outputs they are wired to, and views that place them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Setup {
     #[serde(default)]
     pub components: Vec<Component>,
@@ -16,21 +17,25 @@ pub struct Setup {
     #[serde(default)]
     pub views: Vec<View>,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Component {
     pub id: ComponentId,
     pub name: String,
     pub geometry: Geometry,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// One channel PrismForge writes: a whole device, a zone, or the part of a zone from `first_led`.
 /// Every branch gets the same data from `first_led` on; the components of one branch follow each other on the wire.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SetupOutput {
     pub id: OutputId,
     pub device: DeviceRef,
@@ -40,21 +45,25 @@ pub struct SetupOutput {
     pub first_led: u32,
     pub branches: Vec<Vec<ComponentId>>,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// A named picture of the setup, such as the PC or the desk; a component appears at most once in it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "SetupView"))]
 pub struct View {
     pub id: ViewId,
     pub name: String,
     pub placements: Vec<Placement>,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
 /// The centre (`x`, `y`) in view units, the length of the longer side, degrees clockwise, and a left-right flip before the turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct Placement {
     pub component: ComponentId,
     pub x: i32,
@@ -63,6 +72,7 @@ pub struct Placement {
     pub rotation: u16,
     pub flipped: bool,
     #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
 }
 
