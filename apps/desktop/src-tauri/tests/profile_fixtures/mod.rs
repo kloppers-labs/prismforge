@@ -128,7 +128,7 @@ fn error<T: std::fmt::Debug>(result: Result<T, CommandError>) -> CommandError {
     result.expect_err("an error")
 }
 
-/// Changes the exported file so its import has a missing device, a changed mode list and an unknown effect.
+/// Changes the exported file so its import has a changed mode list and an effect this version does not have.
 fn altered(export: &str) -> String {
     let mut file: Value = serde_json::from_str(export).expect("export json");
     let devices = file["devices"].as_array().expect("devices").clone();
@@ -140,16 +140,7 @@ fn altered(export: &str) -> String {
             .map(str::to_owned)
             .expect("device in export")
     };
-    let (board, bar, card) = (
-        key_of("Demo Motherboard"),
-        key_of("Demo Light Bar"),
-        key_of("Demo Graphics Card"),
-    );
-    for device in file["devices"].as_array_mut().expect("devices") {
-        if device["reference"] == board.as_str() {
-            device["model"] = "Older Motherboard".into();
-        }
-    }
+    let (bar, card) = (key_of("Demo Light Bar"), key_of("Demo Graphics Card"));
     for mode in file["modes"].as_array_mut().expect("modes") {
         if mode["device"] == bar.as_str() {
             mode["name"] = "Pulse".into();

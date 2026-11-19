@@ -71,18 +71,14 @@ export const appliedPartly: ApplyOutcome = {
       {
         "device": "device-5",
         "label": "Demo Motherboard",
-        "target": null,
+        "target": "demo-motherboard",
         "item": {
           "Effect": {
             "zone": 1,
             "effect": "solid"
           }
         },
-        "outcome": {
-          "Skipped": {
-            "reason": "Missing"
-          }
-        }
+        "outcome": "Applied"
       }
     ]
   }

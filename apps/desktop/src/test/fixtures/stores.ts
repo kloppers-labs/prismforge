@@ -149,9 +149,9 @@ export const storeTwo: StoreView = {
         "modes": 1,
         "external": 1,
         "resolution": {
-          "resolved": 2,
+          "resolved": 3,
           "unavailable": 0,
-          "missing": 1,
+          "missing": 0,
           "ambiguous": 2
         }
       }

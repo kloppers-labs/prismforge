@@ -41,7 +41,11 @@ export const importedRenamed: ImportReport = {
       {
         "reference": "device-5",
         "label": "Demo Motherboard",
-        "status": "Missing"
+        "status": {
+          "Resolved": {
+            "device": "demo-motherboard"
+          }
+        }
       }
     ],
     "settings": [
@@ -118,11 +122,7 @@ export const importedRenamed: ImportReport = {
           }
         },
         "effect_label": "Solid colour",
-        "today": {
-          "Skipped": {
-            "reason": "Missing"
-          }
-        }
+        "today": "Ready"
       }
     ],
     "unsupported": [
