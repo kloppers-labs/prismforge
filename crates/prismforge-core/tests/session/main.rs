@@ -1,3 +1,4 @@
+mod across;
 mod batch;
 mod connection;
 mod diagnostics;

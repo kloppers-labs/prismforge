@@ -2,4 +2,4 @@
 import type { EffectProblem } from "./EffectProblem";
 import type { OutputError } from "./OutputError";
 
-export type SkipReason = "Missing" | "Ambiguous" | "Unavailable" | { "DeclaredExternal": { label: string, } } | "NoDirectMode" | { "ModeListChanged": { found: string | null, } } | { "NotAvailable": { problem: EffectProblem, } } | { "Refused": { error: OutputError, } };
+export type SkipReason = "Missing" | "Ambiguous" | "Unavailable" | { "DeclaredExternal": { label: string, } } | "NoDirectMode" | { "ModeListChanged": { found: string | null, } } | { "NotAvailable": { problem: EffectProblem, } } | "SetupChanged" | "NewerSetup" | { "Refused": { error: OutputError, } };

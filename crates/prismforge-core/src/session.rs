@@ -24,7 +24,8 @@ use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::identity::KnownDevice;
 use crate::ownership::OutputOwner;
-use crate::scene::{Assignment, OutputTarget};
+use crate::scene::{ApplyMode, Assignment, OutputTarget};
+use crate::setup::AcrossPlan;
 
 pub use batch::{BatchReport, MAX_BATCH_TARGETS, TargetOutcome, TargetResult};
 pub use diagnostics::{
@@ -142,6 +143,12 @@ pub(crate) enum OutputCommand {
         effect: EffectInstance,
         reply: Reply<BatchReport, OutputError>,
     },
+    ApplyAcross {
+        plan: AcrossPlan,
+        effect: EffectInstance,
+        origin: Origin,
+        reply: Reply<BatchReport, OutputError>,
+    },
     /// `None` stops every effect PrismForge runs.
     StopBatch {
         targets: Option<Vec<OutputTarget>>,
@@ -253,7 +260,11 @@ impl SessionHandle {
         target: OutputTarget,
         effect: EffectInstance,
     ) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
-        let assignment = Assignment { target, effect };
+        let assignment = Assignment {
+            target,
+            effect,
+            mode: ApplyMode::EachDevice,
+        };
         self.send(move |reply| {
             Command::Output(OutputCommand::Apply {
                 assignment,
@@ -281,6 +292,31 @@ impl SessionHandle {
             Command::Output(OutputCommand::ApplyBatch {
                 targets,
                 effect,
+                reply,
+            })
+        })
+    }
+
+    /// Runs `effect` as one picture across the plan's targets, with the batch rules and one shared start time.
+    pub fn apply_across(
+        &self,
+        plan: AcrossPlan,
+        effect: EffectInstance,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.apply_across_as(Origin::User, plan, effect)
+    }
+
+    pub(crate) fn apply_across_as(
+        &self,
+        origin: Origin,
+        plan: AcrossPlan,
+        effect: EffectInstance,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::ApplyAcross {
+                plan,
+                effect,
+                origin,
                 reply,
             })
         })

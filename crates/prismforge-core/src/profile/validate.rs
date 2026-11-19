@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceRef;
 use crate::profile::model::Profile;
-use crate::scene::OutputTarget;
+use crate::scene::{ApplyMode, OutputTarget};
 use crate::session::{MAX_FRAME_RATE, MIN_FRAME_RATE};
 use crate::store::envelope::FileProblem;
 
@@ -119,6 +119,13 @@ impl Profile {
             }
             if assignment.effect.effect.chars().count() > TEXT_LIMIT {
                 return Err(FileProblem::invalid("an effect id is too long"));
+            }
+            if let ApplyMode::AcrossSetup { view, flow } = &assignment.mode
+                && (!view.is_valid() || !flow.is_valid())
+            {
+                return Err(FileProblem::invalid(format!(
+                    "an effect runs across the view {view} with the flow {flow:?}, which is not valid"
+                )));
             }
             targets.push(target);
         }

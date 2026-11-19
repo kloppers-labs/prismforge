@@ -33,7 +33,11 @@ export function contents(profile: ProfileSummary): string {
   return [
     count(profile.effects, "effect", "effects"),
     count(profile.modes, "hardware mode", "hardware modes"),
-    count(profile.external, "device for another program", "devices for another program"),
+    count(
+      profile.external,
+      "device for another program",
+      "devices for another program",
+    ),
   ].join(", ");
 }
 
@@ -47,11 +51,20 @@ export function found(total: number, counts: ResolutionCounts | null): string {
   return `${counts.resolved} of ${total} devices found. ${total - counts.resolved} not found today.`;
 }
 
-export function deviceLabel(labels: Labels, device: DeviceRef | null, stored: string): string {
+export function deviceLabel(
+  labels: Labels,
+  device: DeviceRef | null,
+  stored: string,
+): string {
   return (device === null ? null : labels.names.given(device)) ?? stored;
 }
 
-function zoneLabel(labels: Labels, device: DeviceRef | null, zone: number, stored: string | null): string {
+function zoneLabel(
+  labels: Labels,
+  device: DeviceRef | null,
+  zone: number,
+  stored: string | null,
+): string {
   const given = device === null ? null : labels.names.givenZone(device, zone);
   if (given) {
     return given;
@@ -59,7 +72,9 @@ function zoneLabel(labels: Labels, device: DeviceRef | null, zone: number, store
   if (stored) {
     return stored;
   }
-  const current = labels.session?.devices.find((candidate) => reference(candidate) === device);
+  const current = labels.session?.devices.find(
+    (candidate) => reference(candidate) === device,
+  );
   return current?.descriptor.zones[zone]?.name ?? `zone ${zone + 1}`;
 }
 
@@ -71,8 +86,12 @@ export function itemText(
 ): string {
   if ("Effect" in item) {
     const { zone, effect } = item.Effect;
-    const name = stored.effect ?? labels.effect(effect) ?? `the effect “${effect}”`;
-    const where = zone === null ? "the whole device" : zoneLabel(labels, device, zone, stored.zone ?? null);
+    const name =
+      stored.effect ?? labels.effect(effect) ?? `the effect “${effect}”`;
+    const where =
+      zone === null
+        ? "the whole device"
+        : zoneLabel(labels, device, zone, stored.zone ?? null);
     return `${name} on ${where}`;
   }
   if ("HardwareMode" in item) {
@@ -94,6 +113,12 @@ export function skipText(labels: Labels, reason: SkipReason): string {
   }
   if (reason === "NoDirectMode") {
     return "No Direct Mode. PrismForge effects cannot run on this device.";
+  }
+  if (reason === "NewerSetup") {
+    return "The setup file needs a newer PrismForge, so this effect across the setup cannot run.";
+  }
+  if (reason === "SetupChanged") {
+    return "The setup changed. The setup view this effect runs across is gone, or this device is no longer placed in it.";
   }
   if ("DeclaredExternal" in reason) {
     return `You said ${reason.DeclaredExternal.label} controls this device, so PrismForge sends it nothing.`;
@@ -121,25 +146,39 @@ export function effectProblemText(problem: EffectProblem): string {
 }
 
 export function outcomeText(labels: Labels, outcome: ItemOutcome): string {
-  return outcome === "Applied" ? "Applied." : `Skipped. ${skipText(labels, outcome.Skipped.reason)}`;
+  return outcome === "Applied"
+    ? "Applied."
+    : `Skipped. ${skipText(labels, outcome.Skipped.reason)}`;
 }
 
 export function fullyApplied(report: ApplyReport): boolean {
-  return "Applied" in report.frame_rate && report.items.length > 0 && report.items.every((item) => item.outcome === "Applied");
+  return (
+    "Applied" in report.frame_rate &&
+    report.items.length > 0 &&
+    report.items.every((item) => item.outcome === "Applied")
+  );
 }
 
 export function applySummary(report: ApplyReport): string {
   const total = report.items.length;
-  const skipped = report.items.filter((item) => item.outcome !== "Applied").length;
-  const rate = "Refused" in report.frame_rate ? " The frame rate was refused." : "";
+  const skipped = report.items.filter(
+    (item) => item.outcome !== "Applied",
+  ).length;
+  const rate =
+    "Refused" in report.frame_rate ? " The frame rate was refused." : "";
   if (total === 0) {
     return `There was nothing to apply: it holds no effect, hardware mode or program statement.${rate}`;
   }
   if (skipped === 0) {
-    return rate ? rate.trim() : `${total === 1 ? "Its setting was" : `All ${total} settings were`} accepted.`;
+    return rate
+      ? rate.trim()
+      : `${total === 1 ? "Its setting was" : `All ${total} settings were`} accepted.`;
   }
   if (skipped === total) {
-    const every = total === 1 ? "Its setting was skipped and stays" : `All ${total} settings were skipped and stay`;
+    const every =
+      total === 1
+        ? "Its setting was skipped and stays"
+        : `All ${total} settings were skipped and stay`;
     return `${every} in the profile.${rate}`;
   }
   return `${skipped} of ${total} settings were skipped and stay in the profile.${rate}`;
@@ -148,8 +187,11 @@ export function applySummary(report: ApplyReport): string {
 /** A partial result, a refused frame rate or an empty profile never reads as a complete apply. */
 export function applyHeadline(name: string, report: ApplyReport): string {
   const total = report.items.length;
-  const skipped = report.items.filter((item) => item.outcome !== "Applied").length;
-  const rate = "Refused" in report.frame_rate ? " The frame rate was refused." : "";
+  const skipped = report.items.filter(
+    (item) => item.outcome !== "Applied",
+  ).length;
+  const rate =
+    "Refused" in report.frame_rate ? " The frame rate was refused." : "";
   if (total === 0) {
     return `${name} has nothing to apply: it holds no effect, hardware mode or program statement.${rate}`;
   }
@@ -164,7 +206,9 @@ export function applyHeadline(name: string, report: ApplyReport): string {
 
 export function connectHeadline(name: string, report: ApplyReport): string {
   const total = report.items.length;
-  const skipped = report.items.filter((item) => item.outcome !== "Applied").length;
+  const skipped = report.items.filter(
+    (item) => item.outcome !== "Applied",
+  ).length;
   if (fullyApplied(report)) {
     return `PrismForge applied ${name} when it connected. ${applySummary(report)}`;
   }
@@ -176,11 +220,18 @@ export function connectHeadline(name: string, report: ApplyReport): string {
 
 function stopped(session: SessionSnapshot | null): boolean {
   const connection = session?.connection;
-  return typeof connection === "object" && connection !== null && "Disconnected" in connection && connection.Disconnected.reason !== null;
+  return (
+    typeof connection === "object" &&
+    connection !== null &&
+    "Disconnected" in connection &&
+    connection.Disconnected.reason !== null
+  );
 }
 
 function markProblemText(problem: MarkProblem): string {
-  return problem === "NewerVersion" ? "needs a newer PrismForge, so this version cannot read it" : "is not in the store any more";
+  return problem === "NewerVersion"
+    ? "needs a newer PrismForge, so this version cannot read it"
+    : "is not in the store any more";
 }
 
 function profileLabel(name: string | null): string {
@@ -206,7 +257,10 @@ function nextText(next: Marked | null): string {
 }
 
 /** Every sentence about a pending apply on connect comes from the state the shell publishes. */
-export function onConnectText(state: OnConnect, session: SessionSnapshot | null): string {
+export function onConnectText(
+  state: OnConnect,
+  session: SessionSnapshot | null,
+): string {
   if (stopped(session)) {
     let next = "";
     if (state === "NotArmed") {
@@ -239,16 +293,30 @@ export function onConnectText(state: OnConnect, session: SessionSnapshot | null)
   return `${done}${nextText(next)}`;
 }
 
-export function notConnectedText(state: OnConnect, session: SessionSnapshot | null): string {
+export function notConnectedText(
+  state: OnConnect,
+  session: SessionSnapshot | null,
+): string {
   if (stopped(session)) {
     return onConnectText(state, session);
   }
-  const lead = session === null ? "PrismForge is not connected. Connect first." : "PrismForge is not connected right now.";
+  const lead =
+    session === null
+      ? "PrismForge is not connected. Connect first."
+      : "PrismForge is not connected right now.";
   return `${lead} ${onConnectText(state, session)}`;
 }
 
-export function waitingText(name: string, state: OnConnect, session: SessionSnapshot | null): string {
-  if (typeof state === "object" && "Armed" in state && state.Armed.name === name) {
+export function waitingText(
+  name: string,
+  state: OnConnect,
+  session: SessionSnapshot | null,
+): string {
+  if (
+    typeof state === "object" &&
+    "Armed" in state &&
+    state.Armed.name === name
+  ) {
     return `${name} will be applied as soon as PrismForge has read the devices.`;
   }
   return `${name} was not applied now: PrismForge is not connected. ${onConnectText(state, session)}`;
@@ -261,7 +329,11 @@ export function frameRateText(report: ApplyReport): string {
     : `The frame rate was refused. ${failureText(outcome.Refused.error)}`;
 }
 
-export function changeText(labels: Labels, device: DeviceRef, change: Change): string {
+export function changeText(
+  labels: Labels,
+  device: DeviceRef,
+  change: Change,
+): string {
   if ("Added" in change) {
     return `adds ${lower(itemText(labels, change.Added.now, device))}`;
   }
@@ -273,7 +345,9 @@ export function changeText(labels: Labels, device: DeviceRef, change: Change): s
 }
 
 function lower(text: string): string {
-  return text.startsWith("Hardware mode") || text.startsWith("Another program") ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+  return text.startsWith("Hardware mode") || text.startsWith("Another program")
+    ? text.charAt(0).toLowerCase() + text.slice(1)
+    : text;
 }
 
 export function noticeText(notice: StoreNotice): string[] {
@@ -286,14 +360,18 @@ export function noticeText(notice: StoreNotice): string[] {
         ? `${file} was missing, so PrismForge used its backup.`
         : `PrismForge could not read ${file} and used its backup. ${fileProblemText(problem)}`,
       "Your last change to it may be missing. Check the profile or the device names.",
-      ...(set_aside ? [`The damaged file is still there, now called ${set_aside}.`] : []),
+      ...(set_aside
+        ? [`The damaged file is still there, now called ${set_aside}.`]
+        : []),
     ];
   }
   if ("StartedEmpty" in event) {
     const { set_aside } = event.StartedEmpty;
     return [
       `PrismForge could not read ${file} or its backup, so it started that part empty.`,
-      ...(set_aside.length > 0 ? [`The damaged files are still there: ${set_aside.join(", ")}.`] : []),
+      ...(set_aside.length > 0
+        ? [`The damaged files are still there: ${set_aside.join(", ")}.`]
+        : []),
       "Close PrismForge before you touch them. If you have a copy of the file from elsewhere, put it back under the original name.",
     ];
   }
@@ -304,7 +382,10 @@ export function noticeText(notice: StoreNotice): string[] {
     ];
   }
   const failure = event.WriteFailed.failure;
-  return [`PrismForge could not save ${failure.file}: ${failure.detail}.`, "The previous version is still in place."];
+  return [
+    `PrismForge could not save ${failure.file}: ${failure.detail}.`,
+    "The previous version is still in place.",
+  ];
 }
 
 export function unsavedText(unsaved: number | null): string {

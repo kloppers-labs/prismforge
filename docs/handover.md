@@ -26,7 +26,9 @@ Rows, effect cards, the status strip chips and the Diagnostics sections have con
 
 Effects work on several targets at once (plan 2, Task 9, on branch `task-9-multi-target`, waiting for review). The target list is a multi-select list with check marks, a mixed mark for a device with some zones checked, and a keyboard model where focus and selection are apart. One Apply sends one batch: every target runs the whole effect on its own LEDs with one shared start time, so they move in step; each target gets its own result (applied, covered by the whole device, skipped with the reason) and a Retry button for the targets a second try can reach. Stop works on the selection the same way, and Stop all PrismForge effects is one session command, from the tray and from Effects. Saved groups select their members again; each store keeps them in `groups.json`, a member missing today is shown and never guessed, and Everything selects every target that can take an effect. The stage shows the draft preview or the live output, the colours PrismForge last wrote per zone (a row for a linear zone, a grid for a matrix), and both views cap flashing at three a second on the screen only. See "Several targets in one command" and "Live output" in `docs/decisions/0003-effects-engine.md`, "Groups" in `docs/decisions/0002-profile-and-identity.md`, and decisions 21 to 24 in `docs/decisions/0005-shell-and-design-tokens.md`.
 
-All tests pass on macOS. The Task 9 commits have no Windows CI result yet. The Task 8b commits have no Windows CI result yet. The Task 8 commits have no Windows CI result yet. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+The Rust core has the setup model (plan 2, Task 10, on branch `task-10-setup-model`, waiting for review). A setup is components with a declared shape (strip, ring, matrix, perimeter, point, free line), the outputs they are wired to and views that place them. An output with several branches is a mirrored output, such as fans on a hub behind one header: one control, never separate ones. One branch with several components is a daisy chain: one zone split into consecutive parts. PrismForge never guesses either. A component's LED count must lie within the bounds the backend reports, and parts must fit the zone's LEDs today; PrismForge does not resize zones. A planner gives each LED a place on the plane of a view, and the session's second apply mode, "across the setup", runs one effect as one picture across several devices with the batch rules and one shared start; LEDs without a place get black and are reported. The six effects cross the plane along a direction or out from a centre, and the mode "each device" is unchanged. The setup is stored durably in `setup.json` in each store folder, and profiles moved to schema version 2, which stores each effect's mode; version 1 files are migrated on load. There is no interface for any of it yet: that is Task 11. See `docs/decisions/0006-setup-model.md`.
+
+All tests pass on macOS. The Task 10 commits have no Windows CI result yet. The Task 9 commits have no Windows CI result yet. The Task 8b commits have no Windows CI result yet. The Task 8 commits have no Windows CI result yet. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -63,6 +65,9 @@ All tests pass on macOS. The Task 9 commits have no Windows CI result yet. The T
 | Export and import take no path from the window. A path inside the configuration folder is refused; an import above 1 MiB is refused before it is read. | same |
 | Navigation is a left rail with fixed items and one status strip at the top of the page. Global state and its actions sit in the strip; notices share one slot. Colours, type, spacing, radii, shadows, motion and layers come from one token file. The interface preview is for development only and never enters the build. | `docs/decisions/0005-shell-and-design-tokens.md` |
 | Applying the same effect id to the same target keeps its start time, so a changed setting does not restart the animation. | `docs/decisions/0003-effects-engine.md` |
+| A setup is components with a declared shape, outputs and views. Mirrored outputs are branches of one output and one control; a daisy chain is one branch. The user declares both; PrismForge never guesses them and never resizes a zone. | `docs/decisions/0006-setup-model.md` |
+| "In sync" stays the meaning of several targets. "Across the setup" is a second, explicit apply mode with the batch rules and one shared start. LEDs no placed component covers get black and are reported as not placed. | same |
+| Profiles and exports are schema version 2: each stored effect has its mode. Version 1 files are migrated on load to "each device". The setup is `setup.json` in each store folder. | `docs/decisions/0002-profile-and-identity.md` |
 | The preview is rendered in Rust in bounded batches by the engine's own strip renderer. The interface only plays frames and stops when hidden or closed. | same |
 | The effects screen renders controls only from the effect definitions. Rust validation is the authority. The screen states only what the user declared and what PrismForge did. | same |
 
@@ -81,6 +86,22 @@ The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
+
+Task 10 run on macOS (Apple Silicon) on 2026-11-20, at the last code commit of Task 10.
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all --check` | Pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
+| `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
+| `cargo test --workspace` | Pass: 424 tests (60 new in Task 10: setup model and planner 27, effects across a plane 8, the strip output guard 1, the session's apply across 8, setup store 9, profiles across the setup 3, schema 2 and migration 4), with the extended profile property test and the fixture drift check |
+| `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 379 interface tests in 31 files (1 new: the text of the skip reason "setup changed") |
+| `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (277 modules, 3 files checked) |
+
+`pnpm tauri:build` was not run: Task 10 changes no interface code beyond the generated types and fixtures, one test helper, one store error mapping and two skip reason texts.
+
+Task 10 fix round 1 adds 12 Rust tests (436) and 1 interface test (380 in 31 files): the band of the moving highlight follows each component's own LED spacing and no longer lights both ends of the plane at once; the planner refuses a setup that is not valid, an unknown view and a flow out of range; a stored flow out of range makes a profile not valid; a setup file that needs a newer PrismForge gives its own skip reason; apply and details give one reason in one order; frames across the setup render without a copy per frame. fmt, both clippy runs, the bindings test, typecheck and the interface tests pass.
 
 Task 9 run on macOS (Apple Silicon) on 2026-11-20, at `1ad8a85`, the last code commit of Task 9.
 
@@ -228,7 +249,7 @@ Not done:
 6. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
 7. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
 8. With the owner's consent, check the export and import dialogs by hand on macOS and Windows, and start a second PrismForge to see the hand-over to the first window.
-9. Task 5: component setup and layout. A layout will be a new field in a later profile schema version.
+9. Plan 2, Task 11: the setup views (PC and desk) on top of the Task 10 core. Its commands enter the lock table; `docs/decisions/0006-setup-model.md` lists the core entry points.
 
 ## Known issues
 
@@ -266,7 +287,7 @@ Not done:
 - **The tray and window glue has no automated test.** Tauri's mock runtime cannot exit and cannot show a tray. The decisions behind it are tested through fake window, exit and start-entry seams.
 - **Settings refresh when the screen opens.** A mark changed on Profiles shows on Settings when Settings opens again; the lifecycle view is not republished after a mark.
 - **The connection screen still starts with the default address.** Connect at start uses the remembered address, but the Host and Port fields show `127.0.0.1` and `6742` after a restart.
-- **Several targets run in step, not across a layout.** Each target runs the whole effect from its own first LED, on one shared clock. "Flow by real position" needs the setup views (Tasks 10 and 11). A device with one zone lists only "Whole device". Zones checked one by one stay zone targets; only the device row selects the whole device.
+- **Several targets run in step; across the setup needs Task 11.** In the app each target runs the whole effect from its own first LED, on one shared clock. The core can run one picture across a setup view (Task 10), but there is no view, editor or command for it yet. A device with one zone lists only "Whole device". Zones checked one by one stay zone targets; only the device row selects the whole device.
 - **The draft preview is a line of LEDs per target.** It shows the pattern on up to 60 LEDs in a line for each selected target. The live view draws a matrix zone as a grid of its width and height but does not use OpenRGB's matrix map, so a keyboard with gaps is drawn as a full grid.
 - **A batch holds the output of other devices for its own backend calls.** A batch is one session command: while it takes over several devices (one direct-mode call each), the frames of other devices wait, as they wait for a restore. At most 256 targets.
 - **Several targets with different values.** When the selected targets run the chosen effect with different settings, those settings say "Mixed" and show the first target's value; Live stays off until an Apply makes the running values equal, also when the user has changed every Mixed setting, and also when values start to differ under the same selection. There is no per-target editing in one selection.
@@ -287,6 +308,10 @@ Not done:
 - **The strip divider can stand alone.** When the strip wraps at 200 % text, the divider between the chips ends the first row.
 - **Screen copy is still long.** The audit's per-screen findings (E1 to E16, P1 to P10, C1 to C9, D2 to D10) are for Task 8. The Effects paragraph now states the stored close choice, but its full rewrite (E2) is Task 8.
 - **Context menus are checked in the browser preview only.** WebView2's own secondary-click and Menu-key events, the suppression of its menu in a release build, and a screen reader on the menu are not checked. Selected text outside a field cannot be copied from a right-click menu in a release build; Ctrl+C still copies it, and Diagnostics says so when the clipboard fails. Whether WebView2 sends `contextmenu` for a disabled button is not known; the guard listens in the capture phase, but if no event is sent, WebView2's own menu may appear on a disabled button.
+- **The setup has no interface.** A setup can be built and stored only through the Rust API. The Effects screen does not know the mode "across the setup": a Live edit there applies on each device. Task 11 adds the views, the commands and the mode cues.
+- **Unplaced LEDs are black across the setup.** An ARGB header reports a fixed LED count whatever is connected, so the LEDs past the declared parts get black in the mode "across the setup", and the plan lists them. PrismForge does not resize zones; a user whose fans need more LEDs resizes the zone in OpenRGB first.
+- **An effect across the setup in an export.** An export keeps the view id but not the setup. On another computer those effects are skipped as "setup changed".
+- **Point sampling.** Effects across the setup are sampled at each LED's point, with the moving highlight's band at least one LED spacing of the LED's own component wide. The research's footprint filter is not built; real hardware decides whether it is needed.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## What only the owner can check (Task 8)
@@ -306,6 +331,10 @@ Not done:
 - A Windows contrast theme: the check marks, the mixed mark, the dashed mark of a blocked target, and the Draft and Live frames.
 - A real keyboard with a matrix zone in the live view.
 - Groups in the real store: `groups.json` beside `devices.json`, and a group whose device was unplugged.
+
+## What only the owner can check (Task 10)
+
+- Nothing in the window yet. With Task 11: one picture across the case fans, RAM and GPU on real hardware, in the right order and direction; the first LED and direction of each fan; the hub behind `D_LED1` declared as mirrored fans and seen as one control; a daisy chain against the LED count OpenRGB reports for its header; and the skew between devices on different controllers.
 
 ## Missing information from the owner
 

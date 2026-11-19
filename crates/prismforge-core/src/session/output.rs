@@ -1,15 +1,17 @@
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
 
-use prismforge_effects::{Effect, Rgb};
+use prismforge_effects::{Effect, Flow, Plane, Rgb, ScenePoint};
 use tokio::time::Instant;
 
 use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::inventory::Inventory;
 use crate::ownership::OutputOwner;
-use crate::scene::{Assignment, OutputTarget, Scene};
+use crate::scene::{ApplyMode, Assignment, OutputTarget, Scene};
 use crate::session::previous::PreviousState;
+use crate::setup::ViewId;
 
 pub const MIN_FRAME_RATE: u32 = 1;
 pub const MAX_FRAME_RATE: u32 = 60;
@@ -68,8 +70,24 @@ pub(crate) struct EffectOutput {
 pub(crate) struct Running {
     pub target: OutputTarget,
     pub effect: Effect,
+    pub layout: Layout,
     pub started: Instant,
     pub written: bool,
+}
+
+/// How a running effect turns a moment into a frame: along the LEDs of its target, or at each LED's place across a view.
+#[derive(Clone)]
+pub(crate) enum Layout {
+    Strip,
+    Across(Arc<Across>),
+}
+
+/// The place of each LED of one target, by LED index, on the plane of the whole view.
+pub(crate) struct Across {
+    pub view: ViewId,
+    pub flow: Flow,
+    pub plane: Plane,
+    pub points: Arc<[Option<ScenePoint>]>,
 }
 
 pub(crate) struct Refusal {
@@ -138,6 +156,7 @@ impl Output {
                 .map(|running| Assignment {
                     target: running.target.clone(),
                     effect: running.effect.instance().clone(),
+                    mode: running.layout.mode(),
                 })
                 .collect(),
         }
@@ -197,6 +216,34 @@ impl Output {
 impl Running {
     pub fn needs_frame(&self) -> bool {
         !self.written || !self.effect.is_static()
+    }
+}
+
+impl Layout {
+    pub fn mode(&self) -> ApplyMode {
+        match self {
+            Self::Strip => ApplyMode::EachDevice,
+            Self::Across(across) => ApplyMode::AcrossSetup {
+                view: across.view.clone(),
+                flow: across.flow,
+            },
+        }
+    }
+
+    /// A full frame of `leds` colours; an LED the view does not place is black.
+    pub fn render(&self, effect: &Effect, time: Duration, leds: usize) -> Vec<Rgb> {
+        match self {
+            Self::Strip => effect.render_strip(time, leds),
+            Self::Across(across) if across.points.len() == leds => {
+                effect.render_across(time, across.flow, across.plane, &across.points)
+            }
+            Self::Across(across) => {
+                let points: Vec<Option<ScenePoint>> = (0..leds)
+                    .map(|index| across.points.get(index).copied().flatten())
+                    .collect();
+                effect.render_across(time, across.flow, across.plane, &points)
+            }
+        }
     }
 }
 

@@ -186,7 +186,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             (start, descriptor.zones[zone].led_count)
         });
         let time = now.saturating_duration_since(running.started);
-        let colors = running.effect.render_strip(time, leds);
+        let colors = running.layout.render(&running.effect, time, leds);
         let written = match target.zone {
             Some(zone) => self.backend.write_zone_frame(device, zone, &colors).await,
             None => self.backend.write_device_frame(device, &colors).await,

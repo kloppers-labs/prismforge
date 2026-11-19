@@ -6,6 +6,7 @@ use serde_json::{Map, Value};
 
 use crate::device::{DeviceKind, DeviceRef, ZoneKind};
 use crate::identity::{DeviceFingerprint, ZoneShape};
+use crate::scene::ApplyMode;
 
 /// Fields from a newer minor schema version; kept and written back unchanged.
 pub type Extra = Map<String, Value>;
@@ -90,6 +91,7 @@ pub struct ProfileAssignment {
     pub device: DeviceRef,
     pub zone: Option<usize>,
     pub effect: StoredEffect,
+    pub mode: ApplyMode,
     #[serde(flatten)]
     pub extra: Extra,
 }

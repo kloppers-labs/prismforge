@@ -1,9 +1,13 @@
+use std::collections::BTreeMap;
+
 use crate::device::DeviceRef;
 use crate::ownership::OutputOwner;
 use crate::profile::apply::{ProfileItem, SkipReason, mode_now, target_of};
 use crate::profile::model::Profile;
 use crate::profile::resolve::resolve;
+use crate::scene::{ApplyMode, OutputTarget};
 use crate::session::{DeviceOutput, SessionDevice};
+use crate::setup::{Setup, ViewId, plan_across};
 
 /// One stored setting with the reason apply would skip it today, in apply order.
 pub(crate) struct Checked {
@@ -17,6 +21,7 @@ pub(crate) fn preflight(
     profile: &Profile,
     devices: &[SessionDevice],
     owners: &[DeviceOutput],
+    setup: Option<&Setup>,
 ) -> Vec<Checked> {
     let resolutions = resolve(profile, devices);
     let external = |device: &DeviceRef| {
@@ -57,6 +62,7 @@ pub(crate) fn preflight(
             skip,
         });
     }
+    let mut placed: BTreeMap<ViewId, Vec<OutputTarget>> = BTreeMap::new();
     for assignment in &profile.assignments {
         let skip = match (
             target_of(&resolutions, &assignment.device),
@@ -64,15 +70,23 @@ pub(crate) fn preflight(
         ) {
             (Err(reason), _) => Some(reason),
             (Ok(_), Err(problem)) => Some(SkipReason::NotAvailable { problem }),
-            (Ok(device), Ok(_)) => external(&device).or_else(|| {
-                let direct = devices
-                    .iter()
-                    .find(|candidate| candidate.identity.reference() == Some(&device))
-                    .is_some_and(|candidate| {
-                        candidate.descriptor.capabilities.direct_mode.is_some()
-                    });
-                (!direct).then_some(SkipReason::NoDirectMode)
-            }),
+            (Ok(device), Ok(_)) => {
+                let target = OutputTarget {
+                    device: device.clone(),
+                    zone: assignment.zone,
+                };
+                across(&assignment.mode, &target, setup, devices, &mut placed)
+                    .or_else(|| external(&device))
+                    .or_else(|| {
+                        let direct = devices
+                            .iter()
+                            .find(|candidate| candidate.identity.reference() == Some(&device))
+                            .is_some_and(|candidate| {
+                                candidate.descriptor.capabilities.direct_mode.is_some()
+                            });
+                        (!direct).then_some(SkipReason::NoDirectMode)
+                    })
+            }
         };
         checked.push(Checked {
             device: assignment.device.clone(),
@@ -84,4 +98,32 @@ pub(crate) fn preflight(
         });
     }
     checked
+}
+
+/// Why an effect across the setup cannot run on `target`, checked before the session's own reasons as apply does.
+fn across(
+    mode: &ApplyMode,
+    target: &OutputTarget,
+    setup: Option<&Setup>,
+    devices: &[SessionDevice],
+    placed: &mut BTreeMap<ViewId, Vec<OutputTarget>>,
+) -> Option<SkipReason> {
+    let ApplyMode::AcrossSetup { view, flow } = mode else {
+        return None;
+    };
+    let Some(setup) = setup else {
+        return Some(SkipReason::NewerSetup);
+    };
+    let targets = placed.entry(view.clone()).or_insert_with(|| {
+        plan_across(setup, view, *flow, devices).map_or_else(
+            |_| Vec::new(),
+            |plan| {
+                plan.targets
+                    .into_iter()
+                    .map(|placed| placed.target)
+                    .collect()
+            },
+        )
+    });
+    (!targets.contains(target)).then_some(SkipReason::SetupChanged)
 }

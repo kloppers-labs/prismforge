@@ -7,8 +7,10 @@ mod identity;
 mod inventory;
 mod ownership;
 pub mod profile;
+mod resolution;
 mod scene;
 pub mod session;
+pub mod setup;
 pub mod store;
 
 pub use backend::{BackendEvent, BackendInfo, RgbBackend};
@@ -28,4 +30,4 @@ pub use identity::{
 pub use inventory::{DeviceIdentity, DeviceIssue, Inventory, InventoryDevice, IssueReason};
 pub use ownership::OutputOwner;
 pub use prismforge_effects::Rgb;
-pub use scene::{Assignment, OutputTarget, Scene};
+pub use scene::{ApplyMode, Assignment, OutputTarget, Scene};

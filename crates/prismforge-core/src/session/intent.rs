@@ -1,7 +1,7 @@
 use prismforge_effects::EffectInstance;
 
 use crate::device::DeviceRef;
-use crate::scene::OutputTarget;
+use crate::scene::{ApplyMode, OutputTarget};
 
 /// Who asked for an output command; only the user's commands become intent records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,8 +21,11 @@ pub(crate) enum Slot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Intent {
-    /// The complete validated instance the session runs.
-    Applied(EffectInstance),
+    /// The complete validated instance the session runs, and how it uses the LEDs.
+    Applied {
+        effect: EffectInstance,
+        mode: ApplyMode,
+    },
     Stopped,
     ModeSelected {
         index: usize,

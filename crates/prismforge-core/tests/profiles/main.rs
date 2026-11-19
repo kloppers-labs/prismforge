@@ -1,3 +1,4 @@
+mod across;
 mod app_settings;
 mod apply;
 mod displaced;
@@ -10,5 +11,6 @@ mod property;
 mod quiet;
 mod service;
 mod session;
+mod setup_store;
 mod support;
 mod update;

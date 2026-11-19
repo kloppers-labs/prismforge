@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use prismforge_effects::{Effect, EffectInstance};
@@ -7,12 +8,13 @@ use crate::backend::RgbBackend;
 use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::ownership::OutputOwner;
-use crate::scene::{Assignment, OutputTarget};
-use crate::session::batch::TargetOutcome;
+use crate::scene::{ApplyMode, Assignment, OutputTarget};
+use crate::session::batch::{BatchReport, TargetOutcome};
 use crate::session::diagnostics::Operation;
 use crate::session::identify::RestoreOutcome;
-use crate::session::output::{Claim, EffectOutput, Running};
+use crate::session::output::{Across, Claim, EffectOutput, Layout, Running};
 use crate::session::previous::PreviousState;
+use crate::session::runner::intents::Held;
 use crate::session::runner::{Session, not_restored_after_loss};
 use crate::session::{Intent, Origin, OutputCommand, OutputError, SessionError, Slot};
 
@@ -30,7 +32,13 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 let target = assignment.target.clone();
                 let result = self.apply(assignment).await;
                 if let Ok(instance) = &result {
-                    let own = (Slot::Effect(target), Intent::Applied(instance.clone()));
+                    let own = (
+                        Slot::Effect(target),
+                        Intent::Applied {
+                            effect: instance.clone(),
+                            mode: ApplyMode::EachDevice,
+                        },
+                    );
                     self.record_user(before, vec![own]);
                 }
                 self.answer(reply, result.map(|_| ()));
@@ -41,18 +49,44 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 reply,
             } => {
                 let before = self.held_for(Origin::User);
+                let targets = targets
+                    .into_iter()
+                    .map(|target| (target, Layout::Strip))
+                    .collect();
                 let result = self.apply_batch(targets, &effect).await;
                 if let Ok((report, instance)) = &result {
-                    let own = report
-                        .results
-                        .iter()
-                        .filter(|result| result.outcome == TargetOutcome::Applied)
-                        .map(|result| {
-                            let target = result.target.clone();
-                            (Slot::Effect(target), Intent::Applied(instance.clone()))
-                        })
-                        .collect();
-                    self.record_user(before, own);
+                    self.record_applied(before, report, instance, ApplyMode::EachDevice);
+                }
+                self.answer(reply, result.map(|(report, _)| report));
+            }
+            OutputCommand::ApplyAcross {
+                plan,
+                effect,
+                origin,
+                reply,
+            } => {
+                let before = self.held_for(origin);
+                let (view, flow, plane) = (plan.view().clone(), plan.flow(), plan.plane());
+                let mode = ApplyMode::AcrossSetup {
+                    view: view.clone(),
+                    flow,
+                };
+                let targets = plan
+                    .targets
+                    .into_iter()
+                    .map(|placed| {
+                        let across = Across {
+                            view: view.clone(),
+                            flow,
+                            plane,
+                            points: placed.points,
+                        };
+                        (placed.target, Layout::Across(Arc::new(across)))
+                    })
+                    .collect();
+                let result = self.apply_batch(targets, &effect).await;
+                if let Ok((report, instance)) = &result {
+                    self.record_applied(before, report, instance, mode);
                 }
                 self.answer(reply, result.map(|(report, _)| report));
             }
@@ -136,12 +170,36 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
     }
 
+    /// Records the batch's applied targets as the user's own, each with `mode`.
+    fn record_applied(
+        &mut self,
+        before: Option<Vec<(Slot, Held)>>,
+        report: &BatchReport,
+        instance: &EffectInstance,
+        mode: ApplyMode,
+    ) {
+        let own = report
+            .results
+            .iter()
+            .filter(|result| result.outcome == TargetOutcome::Applied)
+            .map(|result| {
+                let applied = Intent::Applied {
+                    effect: instance.clone(),
+                    mode: mode.clone(),
+                };
+                (Slot::Effect(result.target.clone()), applied)
+            })
+            .collect();
+        self.record_user(before, own);
+    }
+
     /// The same effect on the same target keeps its start time; anything else starts now.
     async fn apply(&mut self, assignment: Assignment) -> Result<EffectInstance, OutputError> {
         let effect = prismforge_effects::prepare(&assignment.effect)?;
         let complete = effect.instance().clone();
         let started = self.kept_start(&assignment.target, &complete.effect);
-        self.run_effect(assignment.target, effect, started).await?;
+        self.run_effect(assignment.target, effect, Layout::Strip, started)
+            .await?;
         Ok(complete)
     }
 
@@ -160,6 +218,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         &mut self,
         target: OutputTarget,
         effect: Effect,
+        layout: Layout,
         started: Option<Instant>,
     ) -> Result<Instant, OutputError> {
         let device = target.device.clone();
@@ -188,14 +247,15 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 return Err(error.into());
             }
             let started = started.unwrap_or_else(Instant::now);
-            let output = EffectOutput::new(previous, shown, running(target, effect, started));
+            let output =
+                EffectOutput::new(previous, shown, running(target, effect, layout, started));
             self.output.remembered.remove(&device);
             self.output.claims.insert(device, Claim::Effect(output));
             return Ok(started);
         }
         let started = started.unwrap_or_else(Instant::now);
         if let Some(output) = self.output.effect_mut(&device) {
-            output.assign(running(target, effect, started));
+            output.assign(running(target, effect, layout, started));
         }
         Ok(started)
     }
@@ -360,10 +420,11 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
     }
 }
 
-fn running(target: OutputTarget, effect: Effect, started: Instant) -> Running {
+fn running(target: OutputTarget, effect: Effect, layout: Layout, started: Instant) -> Running {
     Running {
         target,
         effect,
+        layout,
         started,
         written: false,
     }

@@ -80,4 +80,18 @@ impl MovingHighlight {
         let half_width = (self.width * ring / 2.0).max(1.0);
         mix(self.background, self.color, 1.0 - distance / half_width)
     }
+
+    /// The band crosses the plane and leaves it before it enters again, so both ends never light together.
+    /// For each LED it is at least that LED's spacing wide on each side, so it never falls between two LEDs of one component.
+    pub fn color_along(&self, seconds: f64, position: f64, spacing: f64) -> Rgb {
+        let travel = self.width / 2.0;
+        let place = self.direction.orient(position);
+        let centre = phase(seconds, self.speed) * (1.0 + 2.0 * travel) - travel;
+        let half_width = travel.max(spacing);
+        mix(
+            self.background,
+            self.color,
+            1.0 - (place - centre).abs() / half_width,
+        )
+    }
 }

@@ -921,7 +921,8 @@ export const viewApplying: ShellView = {
                   "Number": 20
                 }
               }
-            }
+            },
+            "mode": "EachDevice"
           },
           {
             "target": {
@@ -942,7 +943,8 @@ export const viewApplying: ShellView = {
                   }
                 }
               }
-            }
+            },
+            "mode": "EachDevice"
           }
         ]
       },
@@ -1969,7 +1971,8 @@ export const viewConnectApplied: ShellView = {
                   "Number": 20
                 }
               }
-            }
+            },
+            "mode": "EachDevice"
           },
           {
             "target": {
@@ -1990,7 +1993,8 @@ export const viewConnectApplied: ShellView = {
                   }
                 }
               }
-            }
+            },
+            "mode": "EachDevice"
           }
         ]
       },
@@ -2481,7 +2485,8 @@ export const viewFiredRetrying: ShellView = {
                   "Number": 1
                 }
               }
-            }
+            },
+            "mode": "EachDevice"
           }
         ]
       },

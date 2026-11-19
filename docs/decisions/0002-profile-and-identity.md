@@ -6,7 +6,7 @@
 
 ## Current state
 
-The Rust core has a durable local store, profile schema version 1, capture, apply, export and import (Task 3a). The desktop app uses it through fifteen profile commands and a Profiles screen (Task 3b). **Nothing here has run against a real OpenRGB server or real hardware.** The evidence comes from tests on real files in temporary folders, the demo backend, the scripted fake server, and a hand check of the built macOS app in demo mode.
+The Rust core has a durable local store, profile schema version 1, capture, apply, export and import (Task 3a). Task 10 moved profiles to schema version 2 and added the setup file. The desktop app uses it through fifteen profile commands and a Profiles screen (Task 3b). **Nothing here has run against a real OpenRGB server or real hardware.** The evidence comes from tests on real files in temporary folders, the demo backend, the scripted fake server, and a hand check of the built macOS app in demo mode.
 
 The code is in `crates/prismforge-core/src/profile` (the model, capture, matching and apply) and `crates/prismforge-core/src/store` (files, recovery, registry, export and import, and `Profiles` for async callers).
 
@@ -27,6 +27,7 @@ The caller gives the store one folder. The desktop app uses two folders below it
 | `devices.json` | The known-device registry: each `DeviceRef` with its identifying fields, and the user's names for the device and its zones |
 | `settings.json` | The profile to apply on connect, or none |
 | `groups.json` | The user's groups of targets (Task 9) |
+| `setup.json` | The setup: components, outputs and views (Task 10, `0006-setup-model.md`) |
 | `profiles/<id>.json` | One profile |
 
 Each file has a backup next to it with `.bak` added to the name. A write uses a temporary file with `.tmp` added to the name.
@@ -124,16 +125,22 @@ Every file starts with a format marker and a schema version:
 { "format": "prismforge.profile", "schema_version": { "major": 1, "minor": 0 }, "id": "p-…", "name": "Evening", … }
 ```
 
-The markers are `prismforge.profile`, `prismforge.profile-export`, `prismforge.devices`, `prismforge.settings` and `prismforge.groups`.
+The markers are `prismforge.profile`, `prismforge.profile-export`, `prismforge.devices`, `prismforge.settings`, `prismforge.groups` and `prismforge.setup`.
 
-1. **This build writes version 1.0.** It reads every file with major version 1.
+1. **Each format has its own version.** This build writes profiles and exports as version 2.0 (Task 10) and every other file as version 1.0. It reads profiles and exports with major version 1 or 2, and every other file with major version 1.
 2. **A minor version only adds fields.** An older build keeps the fields it does not know and writes them back unchanged. It writes its own version number.
 3. **Any other change is a new major version.** That includes a new value for a closed field (device kind, zone kind), a renamed field and a removed field.
 4. **A file with a newer major version is refused.** The store reports `FileProblem::NewerVersion` and leaves the file exactly as it is. It never writes, renames or "repairs" that file. Operations on it return `StoreError::NewerFile`. Other files still load.
-5. **Older major versions.** Version 1 is the first. When a version 2 exists, a version 1 file is migrated forward in memory, the original is copied to a backup before the first rewrite, and the store writes only version 2. A major version below 1 is refused as `UnknownOldVersion`.
-6. **Golden samples pin the stored form.** `crates/prismforge-core/tests/profiles/golden/profile-v1.json` and `export-v1.json` fail the tests if a field name or tag changes.
+5. **Older major versions.** A version 1 profile or export is migrated forward in memory when it is read: every stored effect gets the mode "each device", which is all version 1 could mean, and nothing else changes, unknown fields included. Loading writes nothing. The first rewrite copies the version 1 file to the backup, as every write does, and the store writes only version 2. A major version below 1 is refused as `UnknownOldVersion`.
+6. **Golden samples pin the stored form.** `crates/prismforge-core/tests/profiles/golden/profile-v2.json` and `export-v2.json` fail the tests if a field name or tag changes. `profile-v1.json`, `profile-v1.1-newer-writer.json` and `export-v1.json` are version 1 inputs: the test `migrates_profile_v1_to_v2_without_loss` loads them, compares them with the expected profile and checks the version 2 file written from them.
 
-### Profile v1
+### Why the mode is a major version
+
+A version 1 build would keep an unknown `mode` field and write it back, as the minor-version rule says, but it would run every effect on each device. A profile saved across the setup would then light differently with no warning. That is a change of meaning, so profiles moved to version 2, and a version 1 build refuses a version 2 profile as needing a newer PrismForge.
+
+### Profile v2
+
+Version 2 is version 1 with one more field per stored effect. Version 1 is the same table without `mode`.
 
 | Field | Content |
 |---|---|
@@ -141,7 +148,7 @@ The markers are `prismforge.profile`, `prismforge.profile-export`, `prismforge.d
 | `name` | 1 to 60 characters, trimmed, no control characters. Names are unique in the store. |
 | `frame_rate` | 1 to 60 |
 | `devices` | Every device the profile uses: `reference`, `label`, `kind`, `vendor`, `model`, `serial`, `location`, `zones` (name, kind, LED minimum, LED maximum) |
-| `assignments` | `device`, `zone` (index or `null` for the whole device), `effect` |
+| `assignments` | `device`, `zone` (index or `null` for the whole device), `effect`, `mode`: `"EachDevice"` or `{ "AcrossSetup": { "view": "v-…", "flow": { "Along": { "angle": 90 } } } }` (or `{ "FromCentre": { "x": 50, "y": 50 } }`); an angle of 360 or more or a centre above 100 makes the profile not valid |
 | `modes` | Hardware modes selected through PrismForge: `device`, `index`, `name` |
 | `external` | The user's statements that another program controls a device: `device`, `label` |
 
@@ -154,7 +161,7 @@ What is stored by id and what by index:
 - **Device and zone kinds use the Rust variant names** (`"Gpu"`, `{ "Other": 9 }`). The golden sample pins them.
 - **One owner per device.** A device has effects, or one mode, or one external statement. Effects on one device do not overlap. A file that breaks this is not valid.
 
-The layout and component model of a later task will be new fields in a later version.
+- **An effect across the setup is stored by view id and flow, not by LED places.** Applying the profile plans the view of the setup in the store at that time. An effect whose view is gone, or whose target the view no longer places, is skipped with `SetupChanged`. An export keeps the view id; on another computer the setup is not there, so those effects are skipped with that reason.
 
 ## The local store keeps more than an export
 
@@ -181,8 +188,8 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 ## Apply
 
-1. **Order:** frame rate, external statements, hardware modes, effects.
-2. **Each setting gets a result:** applied, or skipped with a reason: missing, ambiguous, unavailable, declared external, no Direct Mode, mode list changed, not available in this version, or refused by the session.
+1. **Order:** frame rate, external statements, hardware modes, effects on each device, then effects across the setup. The effects across one view with one flow and one effect run as one batch, so they share one start time. For an effect, apply and the profile details check the reasons to skip in one order: the device, the effect, the setup (`NewerSetup`, then `SetupChanged`), then the session's reasons (declared external, no Direct Mode).
+2. **Each setting gets a result:** applied, or skipped with a reason: missing, ambiguous, unavailable, declared external, no Direct Mode, mode list changed, not available in this version, setup changed or setup needs a newer PrismForge (Task 10), or refused by the session.
 3. **Partial application is normal.** Nothing is rolled back. Output changes are not transactional.
 4. **A device the user declared external gets nothing.** The session refuses with its conflict, and the report says "declared external" with the program name.
 5. **Apply changes only what the profile names.** Other devices keep their owner.
@@ -199,7 +206,7 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 | User command | Its own record |
 |---|---|
-| Apply an effect | the target: the complete validated instance |
+| Apply an effect | the target: the complete validated instance and its mode (each device, or across a view with a flow) |
 | Stop an effect | the target: stopped |
 | Select a hardware mode | the mode: index and name |
 | Declare another program | the external owner: the label |
@@ -208,7 +215,7 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 An ended effect is recorded as stopped, an ended mode as ended, an ended declaration as handed back.
 
-A batch (Task 9) records like one command: every target it applied or stopped gets its own record, and every side effect its record, all under one sequence number. A target it covered or skipped gets none. Stop all PrismForge effects records a stop for each device. Because the side effects come from the comparison of the ownership state before and after, a target the command did not name as its own would still be recorded; the own records keep a re-apply with unchanged values in the log.
+A batch (Task 9) records like one command: every target it applied or stopped gets its own record, and every side effect its record, all under one sequence number. A target it covered or skipped gets none. An apply across the setup (Task 10) records the same way, each applied target with the mode "across the setup". The session compares the mode as part of a running effect, so applying the same effect to the same target in the other mode is a change of that slot. Stop all PrismForge effects records a stop for each device. Because the side effects come from the comparison of the ownership state before and after, a target the command did not name as its own would still be recorded; the own records keep a re-apply with unchanged values in the log.
 
 3. **Nothing else creates a record.** Disconnect, reconnect, a device that becomes unavailable, a refused or paused write, identify and its restore, the release at disconnect or shutdown, and the scheduler change no record. A command that fails creates no record.
 4. **A profile apply is not a user edit.** Its commands carry the profile origin and create no record. When the apply ends, the session loop returns its current sequence number in command order. That number is the profile's baseline.
@@ -220,18 +227,22 @@ A batch (Task 9) records like one command: every target it applied or stopped ge
 
 1. **The active profile.** The profile last applied, created or updated in a session is that session's active profile. `StoreSummary::active` names it. `StoreSummary::unsaved_changes` is the number of settings an update would change now (frame rate included), so it is 0 exactly when an update would report no change. A new session has none.
 2. **Update needs the active profile.** `update_from_session` refuses any other profile with `StoreError::NotActive`, which names the active one. Saving the session under a new name is `create_from_session`.
-3. **An update is the stored profile plus the user's records after the baseline, applied in order.** An applied effect replaces the stored effect on that target, or is added, with the complete instance. A stop removes the effect on that target; a stop of the whole device removes every effect on the device, as in the session. A selected mode replaces the device's effects and external owner. A declaration replaces the device's effects and mode. A hand-back removes the declaration. A frame-rate record sets the frame rate.
+3. **An update is the stored profile plus the user's records after the baseline, applied in order.** An applied effect replaces the stored effect on that target, or is added, with the complete instance and its mode. A change of mode alone is a replaced setting. A stop removes the effect on that target; a stop of the whole device removes every effect on the device, as in the session. A selected mode replaces the device's effects and external owner. A declaration replaces the device's effects and mode. A hand-back removes the declaration. A frame-rate record sets the frame rate.
 4. **Nothing else changes.** Every other setting, every unresolved or absent device, every skipped setting, and all unknown fields stay as loaded. The device and zone entries of a replaced setting stay as stored. A setting replaced on the same target keeps its own unknown fields; its effect keeps its unknown fields only when the effect id is the same.
 5. **The baseline moves only after a successful update.** An update whose report is empty writes no file and keeps the backup as it was. A second update with no new user command changes nothing.
 6. **The report comes from the same computation.** `Saved { id, changes, frame_rate }` lists each setting the update adds, replaces (with what it was) or removes. Everything not listed is unchanged. `preview_update` runs the same computation without writing, so the interface can show it before the save.
 7. **Records are linked to stored devices with the matching rules.** A record for a device that resolves to a stored device changes that device's settings. A record for a device the profile does not have adds a device entry from the current inventory.
-8. **Invariant.** After an update, the stored profile equals the stored profile before it, with the session's own state for every device the user changed since the last save. A seeded random test checks this over many command sequences (apply to a zone or a whole device, stop, hardware mode, declaration, hand-back, frame rate, and since Task 9 batch apply, batch stop and stop all, with overlapping and repeated targets) with updates at random points, together with the rule for `unsaved_changes`.
+8. **Invariant.** After an update, the stored profile equals the stored profile before it, with the session's own state for every device the user changed since the last save. A seeded random test checks this over many command sequences (apply to a zone or a whole device, stop, hardware mode, declaration, hand-back, frame rate, since Task 9 batch apply, batch stop and stop all, with overlapping and repeated targets, and since Task 10 an apply across a random part of a setup view with a random flow and a stop of such targets, on a setup with a daisy chain, a mirrored pair and a device without Direct Mode) with updates at random points, together with the rule for `unsaved_changes`. It fails if too few runs ever save an effect across the setup.
 
 ### Create from the session
 
 - **With an active profile:** the new profile is the active profile plus the pending user records, under the new name and id. Skipped and unresolved settings move into it.
 - **Without an active profile:** the new profile is what runs now: the scene, the hardware modes, the external statements and the frame rate. A device label is the user's name from the registry, or the model.
 - The new profile becomes the active profile, with the sequence number read before the save as its baseline.
+
+## The setup
+
+The setup (Task 10) is one file per store, `setup.json`, written durably like every store file, with the same recovery, the same refusal of a newer major version and unknown fields kept at every level. `ProfileStore` holds it beside the profiles, because applying a profile needs it, and `Profiles::setup` and `Profiles::save_setup` reach it at the store's place in the lock order. It stays on this computer: it is not part of a profile, an export or a diagnostics copy. Its outputs are matched to devices by stored reference only, with the groups' states. While the file needs a newer PrismForge, `Profiles::setup` refuses with `NewerFile`, and effects across the setup in a profile are skipped with `NewerSetup`, not "setup changed". See `0006-setup-model.md`.
 
 ## Groups
 
@@ -278,7 +289,7 @@ The session task does no file I/O. `Profiles` runs every store operation with `t
 
 The files are in the folder `io.github.kloppers-labs.prismforge` of your user configuration folder: under `%APPDATA%` on Windows, `~/Library/Application Support` on macOS and `~/.config` on Linux. Your profiles are in its `store` folder. Demo mode keeps its own in `demo-store`. Diagnostics in PrismForge shows the folder in use. PrismForge shows each repair below on the Profiles screen until you dismiss it.
 
-- **`devices.json`** remembers your devices and the names you gave them. **`settings.json`** remembers the profile to apply on connect. **`profiles`** holds one file per profile.
+- **`devices.json`** remembers your devices and the names you gave them. **`settings.json`** remembers the profile to apply on connect. **`setup.json`** remembers where your lights are. **`profiles`** holds one file per profile.
 - **A `.bak` file** is the version before the last change. PrismForge uses it by itself when the main file is missing or damaged.
 - **After a "restored from backup" notice:** your last change to that file may be missing. Check the profile or the device names. The damaged file is still there with `.unreadable-1` (or a higher number) at the end of its name.
 - **After a "could not read the file or its backup" notice:** PrismForge started that part empty. Both damaged files are still there with `.unreadable-…` at the end. Close PrismForge before you touch them. If you have a copy of the file from elsewhere, put it back under the original name. You can also send the damaged files to the project in an issue, but first remove serial numbers and locations from them.

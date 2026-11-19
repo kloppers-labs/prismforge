@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use crate::builtin::Program;
 use crate::builtin::controls::BRIGHTNESS;
-use crate::color::{Rgb, dimmed};
+use crate::color::{BLACK, Rgb, dimmed};
 use crate::instance::EffectInstance;
+use crate::plane::{Flow, Plane, Projection, ScenePoint};
 use crate::position::linear_positions;
 
 const STRIP_SEED: u64 = 0;
@@ -59,5 +60,36 @@ impl Effect {
                 )
             })
             .collect()
+    }
+
+    /// Colours for LEDs placed across a setup, one picture for every target; an LED without a place stays black.
+    pub fn render_across(
+        &self,
+        time: Duration,
+        flow: Flow,
+        plane: Plane,
+        points: &[Option<ScenePoint>],
+    ) -> Vec<Rgb> {
+        let seconds = time.as_secs_f64();
+        let projection = Projection::new(flow, plane);
+        points
+            .iter()
+            .map(|point| match point {
+                Some(point) => dimmed(
+                    self.program.color_along(
+                        seconds,
+                        projection.position(*point),
+                        projection.share(point.spacing),
+                    ),
+                    self.brightness,
+                ),
+                None => BLACK,
+            })
+            .collect()
+    }
+
+    /// True when the colour depends on where the LED is, so a flow across a setup changes the picture.
+    pub fn follows_position(&self) -> bool {
+        self.program.follows_position()
     }
 }

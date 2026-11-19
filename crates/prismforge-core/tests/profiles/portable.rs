@@ -5,7 +5,7 @@ use prismforge_core::store::{
     ApplyOutcome, FileProblem, IMPORT_LIMIT, ImportError, ProfileStore, Profiles, StdFileOps,
     UnsupportedEffect,
 };
-use prismforge_core::{DeviceRef, Rgb};
+use prismforge_core::{ApplyMode, DeviceRef, Rgb};
 use prismforge_effects::{ControlValue, EffectInstance};
 use prismforge_testkit::{FakeServer, FixtureDevice};
 use tokio::time::sleep;
@@ -56,7 +56,7 @@ fn export_pins_the_portable_format() {
     assert_eq!(report.omitted_fields, 7);
     assert_eq!(
         String::from_utf8(dir.read("Evening.prismforge.json")).expect("utf-8"),
-        String::from_utf8(golden("export-v1.json")).expect("utf-8")
+        String::from_utf8(golden("export-v2.json")).expect("utf-8")
     );
 }
 
@@ -174,6 +174,30 @@ async fn import_matches_by_model_and_never_picks_one_of_two_identical_devices() 
 }
 
 #[test]
+fn imports_a_version_1_export_with_every_effect_on_each_device() {
+    let dir = TempDir::new("import-v1");
+    let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
+
+    let old = store
+        .import(&golden("export-v1.json"), None)
+        .expect("version 1 import");
+    let new = store
+        .import(&golden("export-v2.json"), None)
+        .expect("version 2 import");
+
+    let old = store.profile(&old.details.id).expect("stored").clone();
+    let new = store.profile(&new.details.id).expect("stored").clone();
+    assert_eq!(old.assignments.len(), 5);
+    assert!(
+        old.assignments
+            .iter()
+            .all(|assignment| assignment.mode == ApplyMode::EachDevice)
+    );
+    assert_eq!(old.assignments, new.assignments);
+    assert_eq!(old.devices, new.devices);
+}
+
+#[test]
 fn import_keeps_and_reports_what_this_version_cannot_run_and_never_overwrites() {
     let source = TempDir::new("import-unknown");
     source.write("profiles/p-golden.json", &golden("profile-v1.json"));
@@ -265,7 +289,7 @@ fn import_refuses_damaged_foreign_oversized_and_future_files_before_storing_anyt
             future.as_bytes(),
             FileProblem::NewerVersion {
                 found: 3,
-                supported: 1,
+                supported: 2,
             },
         ),
         (

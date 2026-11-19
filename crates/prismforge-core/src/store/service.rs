@@ -12,6 +12,7 @@ use crate::profile::{
     all_added, apply, is_live, update,
 };
 use crate::session::{IntentLog, SessionDevice, SessionEventKind, SessionHandle, SessionSnapshot};
+use crate::setup::Setup;
 use crate::store::notice::{NoticeEvent, StoreNotice};
 use crate::store::summary::{
     ExportReport, ImportError, ImportReport, ProfileDetails, StoreSummary,
@@ -238,16 +239,17 @@ impl Profiles {
         id: &ProfileId,
     ) -> Result<ApplyOutcome, ApplyError> {
         let key = id.clone();
-        let (profile, marked) = self
+        let (profile, marked, setup) = self
             .with(move |store| {
                 let profile = store.profile(&key)?.clone();
-                Ok::<_, StoreError>((profile, store.apply_on_connect() == Some(&key)))
+                let marked = store.apply_on_connect() == Some(&key);
+                Ok::<_, StoreError>((profile, marked, store.setup().ok().cloned()))
             })
             .await?;
         if marked && !is_live(&handle.snapshot().connection) {
             return Ok(ApplyOutcome::WaitingForConnection);
         }
-        let report = apply(handle, &profile).await?;
+        let report = apply(handle, &profile, setup.as_ref()).await?;
         *self.lock_active() = intents(handle, u64::MAX).await.ok().map(|log| Active {
             session: handle.session_id(),
             profile: id.clone(),
@@ -328,6 +330,22 @@ impl Profiles {
     ) -> Result<(), StoreError> {
         let device = device.clone();
         self.with(move |store| store.set_zone_name(&device, zone, name.as_deref()))
+            .await
+    }
+
+    /// The stored setup; refused with `NewerFile` while its file needs a newer PrismForge.
+    pub async fn setup(&self) -> Result<Setup, StoreError> {
+        self.with(|store| store.setup().cloned()).await
+    }
+
+    /// Stores `setup`; outputs that are new or changed must fit the devices the session reports now.
+    pub async fn save_setup(
+        &self,
+        setup: Setup,
+        handle: Option<&SessionHandle>,
+    ) -> Result<(), StoreError> {
+        let devices = handle.map_or_else(Vec::new, |handle| handle.snapshot().devices);
+        self.with(move |store| store.save_setup(setup, &devices))
             .await
     }
 

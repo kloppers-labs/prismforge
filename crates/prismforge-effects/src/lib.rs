@@ -6,6 +6,7 @@ mod control;
 mod definition;
 mod effect;
 mod instance;
+mod plane;
 mod position;
 mod preview;
 mod registry;
@@ -18,6 +19,7 @@ pub use control::{
 pub use definition::EffectDefinition;
 pub use effect::Effect;
 pub use instance::{EffectInstance, InstanceError, ValueError};
+pub use plane::{Flow, Plane, ScenePoint};
 pub use position::linear_positions;
 pub use preview::{PREVIEW_LIMITS, PreviewBatch, PreviewLimits, PreviewRequest, preview};
 pub use registry::{definitions, prepare};

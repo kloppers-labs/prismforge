@@ -82,6 +82,23 @@ impl Program {
     }
 }
 
+impl Program {
+    pub fn follows_position(&self) -> bool {
+        matches!(
+            self,
+            Self::Gradient(_) | Self::RainbowWave(_) | Self::MovingHighlight(_)
+        )
+    }
+
+    /// The colour at `position` across a plane; `spacing` is the gap between the LED's neighbours on the same scale.
+    pub fn color_along(&self, seconds: f64, position: f64, spacing: f64) -> Rgb {
+        match self {
+            Self::MovingHighlight(effect) => effect.color_along(seconds, position, spacing),
+            other => other.color_at(seconds, position, 0),
+        }
+    }
+}
+
 /// Fraction of the current cycle at `per_minute` cycles per minute.
 fn phase(seconds: f64, per_minute: u32) -> f64 {
     (seconds * f64::from(per_minute) / 60.0).rem_euclid(1.0)

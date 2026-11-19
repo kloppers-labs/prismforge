@@ -60,7 +60,7 @@ export function withOwner(session: SessionSnapshot, device: string, owner: Outpu
 
 export function withEffect(session: SessionSnapshot, target: OutputTarget, effect: EffectInstance, condition: OutputCondition): SessionSnapshot {
   const next = withoutEffectsOn(session, target.device);
-  next.output.scene.assignments.push({ target, effect });
+  next.output.scene.assignments.push({ target, effect, mode: "EachDevice" });
   next.output.devices.push({ device: target.device, owner: "Effect", condition });
   return next;
 }

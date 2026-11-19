@@ -10,6 +10,7 @@ use crate::profile::model::{
     StoredIdentity,
 };
 use crate::profile::resolve::resolve;
+use crate::scene::ApplyMode;
 use crate::session::{Intent, IntentRecord, SessionDevice, Slot};
 
 /// A profile after an update, with every setting the update changed.
@@ -92,7 +93,10 @@ pub(crate) fn all_added(profile: &Profile) -> Vec<SettingChange> {
 fn perform(profile: &mut Profile, key: &DeviceRef, zone: Option<usize>, intent: &Intent) {
     let on_device = |device: &DeviceRef| device == key;
     match intent {
-        Intent::Applied(instance) => {
+        Intent::Applied {
+            effect: instance,
+            mode,
+        } => {
             profile.modes.retain(|mode| !on_device(&mode.device));
             profile
                 .external
@@ -110,6 +114,7 @@ fn perform(profile: &mut Profile, key: &DeviceRef, zone: Option<usize>, intent: 
                     Extra::new()
                 };
                 assignment.effect = StoredEffect { extra, ..effect };
+                assignment.mode = mode.clone();
                 let kept = assignment.clone();
                 profile.assignments.retain(|other| {
                     other == &kept || !(on_device(&other.device) && overlaps(other.zone, zone))
@@ -122,6 +127,7 @@ fn perform(profile: &mut Profile, key: &DeviceRef, zone: Option<usize>, intent: 
                     device: key.clone(),
                     zone,
                     effect,
+                    mode: mode.clone(),
                     extra: Extra::new(),
                 });
             }
@@ -206,7 +212,8 @@ fn list_new(
     Some(key)
 }
 
-type Values = BTreeMap<String, Value>;
+/// What an update compares for an effect: its values and how it uses the LEDs.
+type Content = (BTreeMap<String, Value>, ApplyMode);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SettingKey {
@@ -224,7 +231,7 @@ impl SettingKey {
 }
 
 /// Each setting with its key and the content an update compares; unknown fields are not content.
-fn settings_of(profile: &Profile) -> Vec<(SettingKey, ProfileItem, Option<Values>)> {
+fn settings_of(profile: &Profile) -> Vec<(SettingKey, ProfileItem, Option<Content>)> {
     let effects = profile.assignments.iter().map(|assignment| {
         (
             SettingKey::Effect(assignment.device.clone(), assignment.zone),
@@ -232,7 +239,7 @@ fn settings_of(profile: &Profile) -> Vec<(SettingKey, ProfileItem, Option<Values
                 zone: assignment.zone,
                 effect: assignment.effect.effect.clone(),
             },
-            Some(assignment.effect.values.clone()),
+            Some((assignment.effect.values.clone(), assignment.mode.clone())),
         )
     });
     let modes = profile.modes.iter().map(|mode| {

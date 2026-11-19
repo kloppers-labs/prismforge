@@ -5,9 +5,14 @@ use prismforge_core::profile::{
     StoredEffect, StoredIdentity,
 };
 use prismforge_core::session::{BatchReport, SessionHandle, SessionSnapshot, TargetOutcome};
+use prismforge_core::setup::{
+    Component, ComponentId, FirstLed, Geometry, OutputId, Placement, Ring, Setup, SetupOutput,
+    Strip, Turn, View, ViewId, plan_across,
+};
 use prismforge_core::store::{ApplyOutcome, Profiles, StdFileOps};
-use prismforge_core::{DeviceRef, OutputOwner, OutputTarget, Rgb};
-use prismforge_effects::{ControlValue, EffectInstance};
+use prismforge_core::{ApplyMode, DeviceRef, OutputOwner, OutputTarget, Rgb};
+use prismforge_effects::{ControlValue, EffectInstance, Flow};
+use serde_json::Map;
 
 use crate::session::demo;
 use crate::support::TempDir;
@@ -39,6 +44,144 @@ fn solid(rng: &mut Rng) -> EffectInstance {
         effect: "solid".into(),
         values: [("color".to_owned(), ControlValue::Color(color))].into(),
     }
+}
+
+fn strip(leds: u32) -> Geometry {
+    Geometry::Strip(Strip {
+        leds,
+        first: FirstLed::AtStart,
+        extra: Map::new(),
+    })
+}
+
+fn ring(leds: u32) -> Geometry {
+    Geometry::Ring(Ring {
+        leds,
+        first_angle: 0,
+        turn: Turn::Clockwise,
+        extra: Map::new(),
+    })
+}
+
+/// An output id, its device, its zone and its branches of component ids.
+type Wiring = (
+    &'static str,
+    &'static str,
+    Option<usize>,
+    &'static [&'static [&'static str]],
+);
+
+/// The demo devices as a setup: a chain on header 1, a mirrored pair on header 2, and two views.
+fn setup() -> Setup {
+    let components = [
+        ("c-onboard", strip(6)),
+        ("c-fan-1", ring(12)),
+        ("c-fan-2", ring(12)),
+        ("c-fan-3", ring(8)),
+        ("c-fan-4", ring(8)),
+        ("c-card", ring(12)),
+        ("c-ram", strip(8)),
+        ("c-bar", strip(10)),
+    ];
+    let wiring: [Wiring; 6] = [
+        ("o-onboard", "demo-motherboard", Some(0), &[&["c-onboard"]]),
+        (
+            "o-chain",
+            "demo-motherboard",
+            Some(1),
+            &[&["c-fan-1", "c-fan-2"]],
+        ),
+        (
+            "o-hub",
+            "demo-motherboard",
+            Some(2),
+            &[&["c-fan-3"], &["c-fan-4"]],
+        ),
+        ("o-card", "demo-graphics-card", None, &[&["c-card"]]),
+        ("o-ram", "demo-memory-1", None, &[&["c-ram"]]),
+        ("o-bar", "demo-light-bar", None, &[&["c-bar"]]),
+    ];
+    let zone_names = ["Onboard", "Addressable Header 1", "Addressable Header 2"];
+    let id = |value: &str| ComponentId::parse(value).expect("component id");
+    let placements = |ids: &[&str]| -> Vec<Placement> {
+        ids.iter()
+            .enumerate()
+            .map(|(index, component)| Placement {
+                component: id(component),
+                x: 30 * i32::try_from(index).expect("small"),
+                y: 10 * i32::try_from(index % 3).expect("small"),
+                size: 24,
+                rotation: u16::try_from(index * 45 % 360).expect("small"),
+                flipped: index % 2 == 1,
+                extra: Map::new(),
+            })
+            .collect()
+    };
+    let all: Vec<&str> = components.iter().map(|(name, _)| *name).collect();
+    Setup {
+        components: components
+            .into_iter()
+            .map(|(name, geometry)| Component {
+                id: id(name),
+                name: name.trim_start_matches("c-").into(),
+                geometry,
+                extra: Map::new(),
+            })
+            .collect(),
+        outputs: wiring
+            .into_iter()
+            .map(|(output, device, zone, branches)| SetupOutput {
+                id: OutputId::parse(output).expect("output id"),
+                device: DeviceRef::new(device),
+                zone,
+                label: device.into(),
+                zone_name: zone.map(|zone| zone_names[zone].to_owned()),
+                first_led: 0,
+                branches: branches
+                    .iter()
+                    .map(|branch| branch.iter().map(|component| id(component)).collect())
+                    .collect(),
+                extra: Map::new(),
+            })
+            .collect(),
+        views: vec![
+            View {
+                id: ViewId::parse("v-pc").expect("view id"),
+                name: "PC".into(),
+                placements: placements(&all),
+                extra: Map::new(),
+            },
+            View {
+                id: ViewId::parse("v-desk").expect("view id"),
+                name: "Desk".into(),
+                placements: placements(&["c-card", "c-ram", "c-bar", "c-fan-1"]),
+                extra: Map::new(),
+            },
+        ],
+        extra: Map::new(),
+    }
+}
+
+/// Some of the targets of a random view, as the setup places them now.
+fn across_targets(handle: &SessionHandle, rng: &mut Rng) -> prismforge_core::setup::AcrossPlan {
+    let view = ViewId::parse(["v-pc", "v-desk"][rng.below(2)]).expect("view id");
+    let flow = match rng.below(3) {
+        0 => Flow::FromCentre {
+            x: rng.below(101) as u8,
+            y: rng.below(101) as u8,
+        },
+        _ => Flow::Along {
+            angle: 45 * rng.below(8) as u16,
+        },
+    };
+    let plan = plan_across(&setup(), &view, flow, &handle.snapshot().devices).expect("view");
+    let mut targets = Vec::new();
+    for placed in &plan.targets {
+        if rng.below(3) != 0 {
+            targets.push(placed.target.clone());
+        }
+    }
+    plan.only(&targets)
 }
 
 enum Touched {
@@ -81,7 +224,7 @@ async fn random_command(handle: &SessionHandle, rng: &mut Rng) -> Vec<Touched> {
         let count = 1 + rng.below(4);
         (0..count).map(|_| random_target(rng)).collect::<Vec<_>>()
     };
-    let done = match rng.below(17) {
+    let done = match rng.below(20) {
         0..=2 => {
             let target = target(rng, false);
             handle.apply_effect(target, solid(rng)).await.is_ok()
@@ -113,6 +256,21 @@ async fn random_command(handle: &SessionHandle, rng: &mut Rng) -> Vec<Touched> {
         }
         15 => {
             let report = handle.stop_all_effects().await.expect("stop all");
+            return changed(&report);
+        }
+        17 | 18 => {
+            let plan = across_targets(handle, rng);
+            let effect = solid(rng);
+            let report = handle.apply_across(plan, effect).await.expect("across");
+            return changed(&report);
+        }
+        19 => {
+            let targets = across_targets(handle, rng)
+                .targets
+                .into_iter()
+                .map(|placed| placed.target)
+                .collect();
+            let report = handle.stop_batch(targets).await.expect("stop across");
             return changed(&report);
         }
         _ => {
@@ -166,6 +324,7 @@ fn expected(
                     device: device.clone(),
                     zone: assignment.target.zone,
                     effect: StoredEffect::from_instance(&assignment.effect),
+                    mode: assignment.mode.clone(),
                     extra: Extra::new(),
                 });
             }
@@ -255,6 +414,7 @@ async fn check_update(
 
 #[tokio::test(start_paused = true)]
 async fn an_update_holds_exactly_what_the_session_holds_for_every_touched_device() {
+    let mut across_saved = 0;
     for seed in 1..=SEEDS {
         let mut rng = Rng(0x9e37_79b9_7f4a_7c15 ^ seed);
         let dir = TempDir::new("property");
@@ -262,6 +422,10 @@ async fn an_update_holds_exactly_what_the_session_holds_for_every_touched_device
             .await
             .expect("open");
         let (handle, _) = demo().await;
+        profiles
+            .save_setup(setup(), Some(&handle))
+            .await
+            .expect("setup");
         for _ in 0..6 {
             random_command(&handle, &mut rng).await;
         }
@@ -295,6 +459,17 @@ async fn an_update_holds_exactly_what_the_session_holds_for_every_touched_device
             }
         }
         let at = format!("seed {seed} end");
-        check_update(&profiles, &handle, &id, &stored, &touched, rate, &at).await;
+        let last = check_update(&profiles, &handle, &id, &stored, &touched, rate, &at).await;
+        if last
+            .assignments
+            .iter()
+            .any(|assignment| assignment.mode != ApplyMode::EachDevice)
+        {
+            across_saved += 1;
+        }
     }
+    assert!(
+        across_saved >= SEEDS / 4,
+        "effects across the setup reach a saved profile in {across_saved} of {SEEDS} runs"
+    );
 }

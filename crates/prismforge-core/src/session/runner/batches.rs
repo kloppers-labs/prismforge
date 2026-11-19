@@ -6,15 +6,17 @@ use crate::session::OutputError;
 use crate::session::batch::{
     BatchReport, MAX_BATCH_TARGETS, TargetOutcome, TargetResult, coverage,
 };
+use crate::session::output::Layout;
 use crate::session::runner::Session;
 
 impl<B: RgbBackend + Send + 'static> Session<B> {
     /// Targets that run this effect keep running and the others join at their earliest start; without one, the clock starts with the first target.
     pub(super) async fn apply_batch(
         &mut self,
-        targets: Vec<OutputTarget>,
+        targets: Vec<(OutputTarget, Layout)>,
         instance: &EffectInstance,
     ) -> Result<(BatchReport, EffectInstance), OutputError> {
+        let (targets, layouts): (Vec<OutputTarget>, Vec<Layout>) = targets.into_iter().unzip();
         bounded(&targets)?;
         let effect = prismforge_effects::prepare(instance)?;
         let complete = effect.instance().clone();
@@ -26,11 +28,11 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             .filter_map(|(target, _)| self.kept_start(target, &complete.effect))
             .min();
         let mut results = Vec::with_capacity(targets.len());
-        for (target, cover) in targets.into_iter().zip(covered) {
+        for ((target, layout), cover) in targets.into_iter().zip(layouts).zip(covered) {
             let outcome = match cover {
                 Some(by) => TargetOutcome::Covered { by },
                 None => match self
-                    .run_effect(target.clone(), effect.clone(), started)
+                    .run_effect(target.clone(), effect.clone(), layout, started)
                     .await
                 {
                     Ok(start) => {

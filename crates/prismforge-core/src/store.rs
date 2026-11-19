@@ -8,6 +8,7 @@ mod portable;
 mod registry;
 mod service;
 mod settings;
+mod setup;
 mod summary;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,6 +26,7 @@ use crate::profile::{
     encode_export, encode_local,
 };
 use crate::session::{SessionDevice, SessionError, SessionSnapshot};
+use crate::setup::{Setup, SetupProblem};
 use crate::store::durable::{Loaded, StoreFile, Unwritten};
 
 pub use app_settings::{
@@ -32,8 +34,8 @@ pub use app_settings::{
 };
 pub use durable::{STORE_FILE_LIMIT, WriteFailure, WriteStep};
 pub use envelope::{
-    EXPORT_FORMAT, FileProblem, PROFILE_FORMAT, REGISTRY_FORMAT, SCHEMA_VERSION, SETTINGS_FORMAT,
-    SchemaVersion,
+    EXPORT_FORMAT, FileProblem, PROFILE_FORMAT, PROFILE_SCHEMA_VERSION, REGISTRY_FORMAT,
+    SCHEMA_VERSION, SETTINGS_FORMAT, SchemaVersion,
 };
 pub use files::{FileOps, StdFileOps};
 pub use groups::{
@@ -44,6 +46,7 @@ pub use notice::{NoticeEvent, StoreNotice};
 pub use registry::{DeviceNames, Registry, RegistryDevice, ZoneLabel, ZoneName};
 pub use service::{ApplyOutcome, ConnectTrigger, Profiles, Saved};
 pub use settings::Settings;
+pub use setup::{SETUP_FORMAT, SetupFile};
 pub use summary::{
     ExportReport, ExportedProfile, ImportError, ImportReport, ProfileDetails, ProfileSummary,
     Readiness, ResolutionCounts, StoreSummary, StoredSetting, UnreadableProfile, UnsupportedEffect,
@@ -89,6 +92,8 @@ pub enum StoreError {
     TooManyMembers { limit: usize },
     #[error("the groups are not valid: {problem}")]
     InvalidGroups { problem: FileProblem },
+    #[error("the setup is not valid: {problem}")]
+    InvalidSetup { problem: SetupProblem },
     /// An update needs the profile applied or saved in this session; `active` is the one that is.
     #[error("profile {id} was not applied in this session")]
     NotActive {
@@ -136,6 +141,7 @@ pub struct ProfileStore {
     profiles: BTreeMap<ProfileId, Profile>,
     locked: BTreeMap<ProfileId, FileProblem>,
     notices: Vec<StoreNotice>,
+    setup: SetupFile,
 }
 
 impl ProfileStore {
@@ -146,6 +152,7 @@ impl ProfileStore {
             .map_err(|error| StoreError::Folder {
                 detail: error.to_string(),
             })?;
+        let setup = SetupFile::open(&root, &ops);
         let mut store = Self {
             root,
             ops: Box::new(ops),
@@ -156,12 +163,14 @@ impl ProfileStore {
             profiles: BTreeMap::new(),
             locked: BTreeMap::new(),
             notices: Vec::new(),
+            setup,
         };
         let file = store.registry_file();
         (store.registry, store.registry_lock) = store.load_or_default(&file, &decode_registry);
         let file = store.settings_file();
         (store.settings, store.settings_lock) = store.load_or_default(&file, &decode_settings);
         store.load_profiles()?;
+        store.notices.extend_from_slice(store.setup.notices());
         Ok(store)
     }
 
@@ -273,6 +282,20 @@ impl ProfileStore {
 
     pub fn known_devices(&self) -> Vec<KnownDevice> {
         self.registry.known_devices()
+    }
+
+    /// Refused with `NewerFile` while the setup file needs a newer PrismForge.
+    pub fn setup(&self) -> Result<&Setup, StoreError> {
+        self.setup.setup()
+    }
+
+    /// Stores `setup`; outputs that are new or changed must fit what `devices` report for them now.
+    pub fn save_setup(
+        &mut self,
+        setup: Setup,
+        devices: &[SessionDevice],
+    ) -> Result<(), StoreError> {
+        self.setup.save(self.ops.as_ref(), setup, devices)
     }
 
     /// Stores what the backend reports; writes only when something changed.
@@ -392,7 +415,13 @@ impl ProfileStore {
         let profile = self.profile(&id)?;
         Ok(ImportReport {
             renamed_from: (profile.name != requested).then_some(requested),
-            details: ProfileDetails::of(&id, profile, now, self.apply_on_connect()),
+            details: ProfileDetails::of(
+                &id,
+                profile,
+                now,
+                self.apply_on_connect(),
+                self.setup().ok(),
+            ),
         })
     }
 
@@ -406,6 +435,7 @@ impl ProfileStore {
             self.profile(id)?,
             now,
             self.apply_on_connect(),
+            self.setup().ok(),
         ))
     }
 

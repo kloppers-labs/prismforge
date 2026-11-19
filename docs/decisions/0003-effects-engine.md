@@ -13,13 +13,23 @@ PrismForge has its own effect engine. `crates/prismforge-effects` holds six buil
 1. **An effect is a pure function.** Its colour depends only on the validated values, the effect time, the LED position and a seed. It keeps no state between frames. Any frame can be computed for any time, so frames can be skipped freely.
 2. **The effects crate does no input or output.** It has no async runtime and reads no clock. The caller passes the time and the seed.
 3. **The six built-in effects are original PrismForge code.** They are solid colour, breathing, gradient, rainbow wave, colour cycle and moving highlight. They were written from general lighting behaviour. No code from another lighting program was read for them. See `docs/provenance.md`.
-4. **LED positions are linear for now.** Position 0.0 is the first LED of the device or zone, and 1.0 is the last. A single LED sits at 0.0. Positions outside 0.0 to 1.0 are clamped. A later layout task can pass other positions; `Effect::render` takes them as a list.
+4. **LED positions are linear in the mode "each device".** Position 0.0 is the first LED of the device or zone, and 1.0 is the last. A single LED sits at 0.0. Positions outside 0.0 to 1.0 are clamped. `Effect::render` takes them as a list. Across a setup (Task 10) the position is a point on a plane; see "Effects across a setup" below.
 5. **The seed is part of the contract.** No built-in effect uses it yet. The session passes 0. Random effects can use it later and stay reproducible.
 6. **Brightness works the same way for every effect.** It is a percent from 0 to 100, applied last with integer rounding. 0 gives black. 100 leaves the colours unchanged.
 7. **An effect reports when it is static.** Solid colour and gradient are always static. The others are static at speed 0. Every effect is static at brightness 0.
 8. **Speed is in cycles per minute.** Each effect says what one cycle is: one breath, one pass of the colour wheel, one round of the palette, or one round of the highlight.
 9. **The moving highlight runs round the target as a ring.** Its centre moves over the LEDs of the target and wraps from the last LED to the first without a jump. Its band is at least two LEDs wide, so at least one LED is always at least half lit, also on a target with one, two or three LEDs. The effect gets the LED count from the list of positions that `Effect::render` receives.
 10. **One renderer turns an effect into a device or zone frame.** `Effect::render_strip` renders the LEDs of a target in a line with seed 0. The session writes its output. The preview shows its output.
+
+## Effects across a setup
+
+Plan 2, Task 10. See `0006-setup-model.md` for the setup model and the planner.
+
+1. **A point on a plane.** `Effect::render_across(time, flow, plane, points)` takes, per LED, a point on a plane whose longer side is 1 and whose middle is (0, 0), or no point. An LED without a point is black. Each point also carries the spacing of its own component's LEDs on the same scale. No built-in effect uses a seed across a plane, so this renderer takes none.
+2. **The flow is part of the apply mode, not an effect control.** `Flow::is_valid` accepts an angle below 360 and a centre of 0 to 100 percent; the planner and the profile check refuse anything else, and the projection does not fold or clamp it. `Flow::Along { angle }` (degrees clockwise from left to right) or `Flow::FromCentre { x, y }` (percent of the plane) maps each point to a position from 0.0 to 1.0 over the whole plane. That position feeds the same colour code as a line of LEDs, so each effect stays a pure function of its values, the time and the position, and resolution independent: scaling a whole view leaves the colours the same.
+3. **Which effects follow the position.** Gradient, rainbow wave and moving highlight change along the flow; their Forward or Backward reverses it. Solid colour, breathing and colour cycle are the same everywhere. `Effect::follows_position` says which.
+4. **The moving highlight across a plane** runs along the flow, leaves the plane and enters it again, so both ends never light together. For each LED its band is at least that LED's spacing wide on each side of its centre, so the band never falls between two LEDs of one component, and a sparse component does not widen the band on a dense one.
+5. **The mode "each device" does not change.** Its renderer is `render_strip` as before; the effect definitions and their stored values are unchanged. `tests/strip_output.rs` pins the strip output of every effect at several LED counts and times.
 
 ## Stored form of an effect instance
 
@@ -64,6 +74,16 @@ Plan 2, Task 9. The owner chose "in sync": each selected device or zone runs the
 5. **Stop.** `stop_batch(targets)` stops each target with the single-stop rules and the same report form. `stop_all_effects()` stops every device PrismForge runs effects on, one whole-device result per device; the tray's "Stop all PrismForge effects" now uses it, and the Effects screen has the same control.
 6. **Bounded.** A batch takes at most 256 targets (`MAX_BATCH_TARGETS`); more is refused with `TooManyTargets` before anything is sent. A batch is one command, so the output of other devices waits for its backend calls, as it waits for a restore; it never waits longer than the calls the batch makes.
 7. **User intent.** A batch records one record per target it changed, and every side effect, under one sequence number (`0002-profile-and-identity.md`).
+
+## The second apply mode: across the setup
+
+Plan 2, Task 10. "In sync" stays the meaning of several targets; "across the setup" is a second, explicit command.
+
+1. **One picture, the batch rules.** `SessionHandle::apply_across(plan, effect)` takes an `AcrossPlan` (the places of each LED of each target on the plane of one setup view) and goes through the batch path: one validation, the take-over, ownership, external-device and ambiguity checks of each target, one shared start time with the start-time rule, at most 256 targets, and a `BatchReport` per target. An external or ambiguous device is skipped with its reason and gets nothing.
+2. **A running effect has a layout.** Along the LEDs of its target (each device), or at each LED's place on the plane. Each frame is still one full write per device or zone, rendered for the moment it starts; an LED beyond the places is black.
+3. **The start-time rule ignores the mode.** The same effect id on the same target keeps its start when it moves between the modes, so a target joins a running picture in phase.
+4. **The scene shows the mode.** Each `Assignment` has `mode`: `EachDevice` or `AcrossSetup { view, flow }`. The user-intent record of an applied effect holds it.
+5. **Stop** uses `stop_batch` with the plan's targets; nothing else changes.
 
 ## Live output
 
@@ -119,3 +139,4 @@ Plan 2, Task 9. The owner chose "in sync": each selected device or zone runs the
 - The effects screen on Windows. It was run by hand on macOS in demo mode only, through the accessibility tree, without screenshots.
 - Whether a real device shows what the preview shows.
 - The live view against a real OpenRGB server and real devices, the batch timing on Windows, and the live event rate in WebView2. The preview shows the pattern for LEDs in a line; the device layout is unknown.
+- Whether a picture across the setup looks continuous on real devices, and the skew between controllers. Sampling cost was measured only in a debug test build on the development Mac.
