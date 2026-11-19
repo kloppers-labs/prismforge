@@ -12,8 +12,8 @@ use prismforge_core::profile::ProfileId;
 use prismforge_core::store::{CloseAction, NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_desktop::{
-    AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores, TrayState, preview_effect,
-    stop_then_exit,
+    AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores, TrayState, marks,
+    preview_effect, stop_then_exit,
 };
 use prismforge_effects::{EffectInstance, PreviewRequest};
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
@@ -115,13 +115,21 @@ fn cases() -> Vec<Case> {
                 .lifecycle
                 .remember_address(&f.shell, "127.0.0.1", 6742)
                 .await;
-            f.shell.start(openrgb(&f.server)).await
+            let started = f.shell.start(openrgb(&f.server)).await;
+            f.lifecycle.publish(&f.shell).await;
+            started
         }),
-        case!("start_demo", "demo", |f| f
-            .shell
-            .start(DemoBackend::new())
-            .await),
-        case!("disconnect", "stop", |f| f.shell.stop().await),
+        case!("start_demo", "demo", |f| marks::start(
+            &f.shell,
+            &f.lifecycle,
+            DemoBackend::new()
+        )
+        .await),
+        case!("disconnect", "stop", |f| marks::stop(
+            &f.shell,
+            &f.lifecycle
+        )
+        .await),
         case!("refresh", "session", |f| f.shell.refresh().await),
         case!("identify", "device", |f| f
             .shell
@@ -201,14 +209,20 @@ fn cases() -> Vec<Case> {
             .shell
             .update_profile(&f.unknown)
             .await),
-        case!("rename_profile", "profile", |f| f
-            .shell
-            .rename_profile(&f.id, "Renamed")
-            .await),
-        case!("rename_profile", "unknown", |f| f
-            .shell
-            .rename_profile(&f.unknown, "Renamed")
-            .await),
+        case!("rename_profile", "profile", |f| marks::rename_profile(
+            &f.shell,
+            &f.lifecycle,
+            &f.id,
+            "Renamed"
+        )
+        .await),
+        case!("rename_profile", "unknown", |f| marks::rename_profile(
+            &f.shell,
+            &f.lifecycle,
+            &f.unknown,
+            "Renamed"
+        )
+        .await),
         case!("duplicate_profile", "profile", |f| f
             .shell
             .duplicate_profile(&f.id)
@@ -217,14 +231,18 @@ fn cases() -> Vec<Case> {
             .shell
             .duplicate_profile(&f.unknown)
             .await),
-        case!("delete_profile", "profile", |f| f
-            .shell
-            .delete_profile(&f.id)
-            .await),
-        case!("delete_profile", "unknown", |f| f
-            .shell
-            .delete_profile(&f.unknown)
-            .await),
+        case!("delete_profile", "profile", |f| marks::delete_profile(
+            &f.shell,
+            &f.lifecycle,
+            &f.id
+        )
+        .await),
+        case!("delete_profile", "unknown", |f| marks::delete_profile(
+            &f.shell,
+            &f.lifecycle,
+            &f.unknown
+        )
+        .await),
         case!("apply_profile", "profile", |f| f
             .shell
             .apply_profile(&f.id)
@@ -237,10 +255,9 @@ fn cases() -> Vec<Case> {
             .shell
             .set_apply_on_connect(Some(f.id.clone()))
             .await),
-        case!("set_apply_on_connect", "unmark", |f| f
-            .shell
-            .set_apply_on_connect(None)
-            .await),
+        case!("set_apply_on_connect", "unmark", |f| {
+            marks::set_apply_on_connect(&f.shell, &f.lifecycle, None).await
+        }),
         case!("set_apply_on_connect", "unknown", |f| f
             .shell
             .set_apply_on_connect(Some(f.unknown.clone()))
@@ -253,14 +270,18 @@ fn cases() -> Vec<Case> {
             .shell
             .export_profile(&f.id, PathBuf::from("glow.json"))
             .await),
-        case!("import_profile", "file", |f| f
-            .shell
-            .import_profile(f.exported.clone())
-            .await),
-        case!("import_profile", "missing file", |f| f
-            .shell
-            .import_profile(f.outside.path().join("missing.json"))
-            .await),
+        case!("import_profile", "file", |f| marks::import_profile(
+            &f.shell,
+            &f.lifecycle,
+            f.exported.clone()
+        )
+        .await),
+        case!("import_profile", "missing file", |f| marks::import_profile(
+            &f.shell,
+            &f.lifecycle,
+            f.outside.path().join("missing.json")
+        )
+        .await),
         case!("set_device_name", "name", |f| f
             .shell
             .set_device_name(DeviceRef::new(GPU), Some("Card".into()))

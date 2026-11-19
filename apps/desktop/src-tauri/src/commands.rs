@@ -7,7 +7,7 @@ use tauri::State;
 
 use crate::effects::EffectCatalog;
 use crate::view::{CommandError, ShellView};
-use crate::{DesktopLifecycle, DesktopShell};
+use crate::{DesktopLifecycle, DesktopShell, marks};
 
 #[tauri::command]
 pub fn view(shell: State<'_, DesktopShell>) -> ShellView {
@@ -27,7 +27,9 @@ pub async fn connect_openrgb(
         return Err(CommandError::EmptyHost);
     }
     let _ = lifecycle.remember_address(&shell, host, port).await;
-    connect(&shell, host, port).await
+    let connected = connect(&shell, host, port).await;
+    lifecycle.publish(&shell).await;
+    connected
 }
 
 /// The one connect path, for the Connect button and for connect at start.
@@ -43,13 +45,19 @@ pub async fn connect(
 }
 
 #[tauri::command]
-pub async fn start_demo(shell: State<'_, DesktopShell>) -> Result<ShellView, CommandError> {
-    shell.start(DemoBackend::new()).await
+pub async fn start_demo(
+    shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
+) -> Result<ShellView, CommandError> {
+    marks::start(&shell, &lifecycle, DemoBackend::new()).await
 }
 
 #[tauri::command]
-pub async fn disconnect(shell: State<'_, DesktopShell>) -> Result<ShellView, CommandError> {
-    Ok(shell.stop().await)
+pub async fn disconnect(
+    shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
+) -> Result<ShellView, CommandError> {
+    Ok(marks::stop(&shell, &lifecycle).await)
 }
 
 #[tauri::command]
