@@ -413,7 +413,15 @@
     }
 
     [role="radio"][aria-checked="true"] {
-      outline: 2px solid Highlight;
+      forced-color-adjust: none;
+      border: 2px solid Highlight;
+      background: Canvas;
+      color: CanvasText;
+    }
+
+    [role="radio"]:focus-visible {
+      outline: 3px solid CanvasText;
+      outline-offset: 3px;
     }
   }
 
