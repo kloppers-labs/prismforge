@@ -43,7 +43,7 @@
 <style>
   .import {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
   }
 
   .import:empty {

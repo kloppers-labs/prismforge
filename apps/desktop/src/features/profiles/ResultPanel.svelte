@@ -62,7 +62,7 @@
 <style>
   .result {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .result:empty {
@@ -71,7 +71,7 @@
 
   .headline {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: flex-start;
     color: var(--text);
     font-weight: var(--weight-strong);
@@ -79,7 +79,7 @@
 
   .headline :global(svg) {
     flex: none;
-    margin-top: 4px;
+    margin-top: var(--space-1);
   }
 
   .problem .headline {

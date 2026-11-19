@@ -55,7 +55,7 @@
 <style>
   .color {
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   label {
@@ -65,7 +65,7 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2);
   }
 
   .swatch {

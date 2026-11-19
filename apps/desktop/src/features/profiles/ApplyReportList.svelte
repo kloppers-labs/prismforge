@@ -25,12 +25,12 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   li {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: flex-start;
   }
 

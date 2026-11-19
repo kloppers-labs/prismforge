@@ -46,24 +46,24 @@
     padding: 0;
     margin: 0;
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   legend {
     font-weight: var(--weight-strong);
     padding: 0;
-    margin-bottom: 4px;
+    margin-bottom: var(--space-1);
   }
 
   .options {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 20px;
+    gap: var(--space-2) var(--space-4);
   }
 
   label {
     display: flex;
-    gap: 6px;
+    gap: var(--space-2);
     align-items: baseline;
   }
 
@@ -74,7 +74,7 @@
 
   .detail,
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
   }
 </style>

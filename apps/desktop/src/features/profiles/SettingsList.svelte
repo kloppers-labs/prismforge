@@ -48,7 +48,7 @@
 <style>
   .settings {
     display: grid;
-    gap: 10px;
+    gap: var(--space-2);
   }
 
   ul {
@@ -62,8 +62,8 @@
   li {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 4px 20px;
-    padding: 9px 0;
+    gap: var(--space-1) var(--space-4);
+    padding: var(--space-2) 0;
     border-bottom: 1px solid var(--surface-3);
   }
 
@@ -77,14 +77,14 @@
 
   .today {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: flex-start;
     color: var(--text-dim);
   }
 
   .today :global(svg) {
     flex: none;
-    margin-top: 4px;
+    margin-top: var(--space-1);
   }
 
   .skipped {
@@ -92,7 +92,7 @@
   }
 
   .hint {
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: var(--font-s);
   }
 </style>
