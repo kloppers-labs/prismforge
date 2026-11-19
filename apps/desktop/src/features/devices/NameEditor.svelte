@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { flushSync } from "svelte";
+  import { flushSync, tick, untrack } from "svelte";
   import type { Failure } from "../../lib/api/client";
   import { failureText } from "../../lib/errors";
 
@@ -9,12 +9,16 @@
     given,
     limit,
     onsave,
+    requested = null,
+    onrequested = () => {},
   }: {
     kind: "device" | "zone";
     subject: string;
     given: string | null;
     limit: number;
     onsave: (name: string | null) => Promise<Failure | null>;
+    requested?: "rename" | "clear" | null;
+    onrequested?: () => void;
   } = $props();
 
   const id = `name-${Math.random().toString(36).slice(2)}`;
@@ -30,6 +34,14 @@
   let renameText = $derived(kind === "device" ? "Rename device" : "Rename");
   let fieldLabel = $derived(kind === "device" ? "Device name" : `Name for zone ${subject}`);
   let clearLabel = $derived(kind === "device" ? "Use the reported name" : `Use the reported name for zone ${subject}`);
+
+  $effect(() => {
+    const action = requested;
+    if (action) {
+      untrack(onrequested);
+      void tick().then(() => (action === "rename" ? open() : clear()));
+    }
+  });
 
   function open() {
     text = given ?? "";
@@ -123,9 +135,9 @@
   </form>
 {:else}
   <span class="actions">
-    <button type="button" class="small" bind:this={renameButton} aria-label={renameLabel} onclick={open}>{renameText}</button>
+    <button type="button" class="small" data-mirror="{kind}.rename" bind:this={renameButton} aria-label={renameLabel} onclick={open}>{renameText}</button>
     {#if given !== null}
-      <button type="button" class="small quiet" disabled={saving} aria-label={clearLabel} onclick={clear}>
+      <button type="button" class="small quiet" data-mirror="{kind}.reported-name" disabled={saving} aria-label={clearLabel} onclick={clear}>
         {kind === "device" ? clearLabel : "Reported name"}
       </button>
     {/if}

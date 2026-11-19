@@ -1,14 +1,16 @@
 <script lang="ts">
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+  import { contextMenu } from "../../lib/shell/menu.svelte";
   import type { AppState } from "../../lib/state/app.svelte";
   import { serverName } from "../connection/wording";
-  import { applyingText, controlSummary } from "../effects/present";
+  import { controlSummary } from "../effects/present";
   import HardwareModeList from "./HardwareModeList.svelte";
   import IdentifyPanel from "./IdentifyPanel.svelte";
   import LedStrip from "./LedStrip.svelte";
+  import { identifyReason, zoneMenu } from "./menu";
   import NameEditor from "./NameEditor.svelte";
-  import { hasDirectMode, identifyBlocked, isAmbiguous, isLive, kindLabel, ledCount, reference, zoneShape, zoneSize } from "./present";
+  import { hasDirectMode, isAmbiguous, isLive, kindLabel, ledCount, reference, zoneShape, zoneSize } from "./present";
 
   let { app, session, device }: { app: AppState; session: SessionSnapshot; device: SessionDevice } = $props();
 
@@ -18,7 +20,7 @@
   let given = $derived(ref === null ? null : app.names.given(ref));
   let limit = $derived(ref === null ? null : (app.profiles.store?.name_limit ?? null));
   let naming = $derived(ref !== null && limit !== null);
-  let blocked = $derived(applyingText(app.view) ?? identifyBlocked(session, device, app.identify?.kind === "running"));
+  let blocked = $derived(identifyReason(app, session, device));
   let control = $derived(
     controlSummary(session, device, (id) => app.effects.catalog?.effects.find((effect) => effect.id === id)?.label ?? null),
   );
@@ -41,6 +43,11 @@
     return (name: string | null) => (ref === null ? Promise.resolve(null) : app.profiles.setZoneName(ref, zone, name));
   }
 
+  function requested(zone: number | null): "rename" | "clear" | null {
+    const asked = app.naming;
+    return asked !== null && asked.device === ref && asked.zone === zone ? asked.action : null;
+  }
+
   function identify(zone: number | null) {
     if (ref !== null && blocked === null) {
       app.identifyTarget({ device: ref, zone });
@@ -60,10 +67,11 @@
       <div class="actions">
         {#if ref !== null}
           {@const device = ref}
-          <button type="button" class="primary" onclick={() => app.setLighting(device)}>Set lighting</button>
+          <button type="button" class="primary" data-mirror="device.set-lighting" onclick={() => app.setLighting(device)}>Set lighting</button>
         {/if}
         <button
           type="button"
+          data-mirror="device.identify"
           disabled={blocked !== null}
           aria-describedby={blocked ? "identify-blocked" : undefined}
           onclick={() => identify(null)}
@@ -71,7 +79,15 @@
           Identify device
         </button>
         {#if naming && limit !== null}
-          <NameEditor kind="device" subject={app.names.device(device)} {given} {limit} onsave={nameDevice} />
+          <NameEditor
+            kind="device"
+            subject={app.names.device(device)}
+            {given}
+            {limit}
+            onsave={nameDevice}
+            requested={requested(null)}
+            onrequested={() => (app.naming = null)}
+          />
         {/if}
       </div>
       <IdentifyPanel {app} {session} {device} {blocked} />
@@ -109,7 +125,7 @@
             </thead>
             <tbody>
               {#each descriptor.zones as zone, index (index)}
-                <tr>
+                <tr use:contextMenu={() => zoneMenu(app, session, device, index)}>
                   <th scope="row">
                     {app.names.zone(device, index)}
                     {#if ref !== null && app.names.givenZone(ref, index) !== null}
@@ -122,6 +138,7 @@
                     <button
                       type="button"
                       class="small"
+                      data-mirror="zone.identify"
                       disabled={blocked !== null}
                       aria-label="Identify zone {app.names.zone(device, index)}"
                       aria-describedby={blocked ? "identify-blocked" : undefined}
@@ -130,7 +147,15 @@
                       Identify
                     </button>
                     {#if ref !== null && limit !== null}
-                      <NameEditor kind="zone" subject={app.names.zone(device, index)} given={app.names.givenZone(ref, index)} {limit} onsave={nameZone(index)} />
+                      <NameEditor
+                        kind="zone"
+                        subject={app.names.zone(device, index)}
+                        given={app.names.givenZone(ref, index)}
+                        {limit}
+                        onsave={nameZone(index)}
+                        requested={requested(index)}
+                        onrequested={() => (app.naming = null)}
+                      />
                     {/if}
                   </div></td>
                 </tr>
