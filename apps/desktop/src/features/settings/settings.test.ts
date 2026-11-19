@@ -245,6 +245,7 @@ test("the_tray_stop_report_lists_each_device_when_the_window_is_shown", async ()
 
   const report = await screen.findByRole("status", { name: /^Stop all PrismForge effects, from the tray/ });
   expect(within(report).getByText("Stop all PrismForge effects, from the tray: every effect was stopped.")).toBeTruthy();
+  await fireEvent.click(within(report).getByRole("button", { name: "Details" }));
   expect(within(report).getByText("Demo Graphics Card")).toBeTruthy();
   expect(within(report).getByText("Demo Motherboard")).toBeTruthy();
   await fireEvent.click(within(report).getByRole("button", { name: "Dismiss" }));

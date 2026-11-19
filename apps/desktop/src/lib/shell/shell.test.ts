@@ -450,3 +450,21 @@ test("effects_keep_their_paused_screen_when_the_demo_connection_drops", async ()
   expect(await screen.findByRole("navigation", { name: "Targets" })).toBeTruthy();
   expect(within(strip()).getByText("Demo mode")).toBeTruthy();
 });
+
+test("below_1100_px_diagnostics_covers_an_inert_page_until_an_area_is_chosen", async () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} }));
+  fakeShell(demoConnected, withStore(storeEmpty));
+  render(App);
+  await findStrip();
+
+  await go("Diagnostics");
+
+  expect(screen.getByRole("complementary", { name: "Diagnostics" })).toBeTruthy();
+  expect(screen.getByRole("main").inert).toBe(true);
+  expect(within(strip()).getByText("Demo mode")).toBeTruthy();
+  await fireEvent.keyDown(document.body, { key: "2", ctrlKey: true });
+  expect(screen.queryByRole("complementary", { name: "Diagnostics" })).toBeNull();
+  expect(current()).toEqual(["Effects"]);
+  expect(screen.getByRole("main").inert).toBe(false);
+  vi.unstubAllGlobals();
+});

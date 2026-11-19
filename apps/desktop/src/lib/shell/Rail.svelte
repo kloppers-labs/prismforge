@@ -73,7 +73,9 @@
     gap: var(--space-2);
     width: var(--rail-w);
     min-height: 0;
+    overflow-x: hidden;
     overflow-y: auto;
+    scrollbar-width: thin;
     padding: var(--space-3) var(--space-2);
     background: var(--surface-1);
     border-right: 1px solid var(--line-subtle);
@@ -131,8 +133,11 @@
   .item[aria-expanded="true"] {
     background: var(--surface-3);
     color: var(--text);
-    font-weight: var(--weight-heading);
     --icon-knob: var(--surface-3);
+  }
+
+  .item[aria-current="page"] {
+    font-weight: var(--weight-heading);
   }
 
   .item[aria-current="page"]::before {

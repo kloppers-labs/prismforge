@@ -29,8 +29,15 @@
   {/if}
 {/snippet}
 
+{#snippet trayReport()}
+  {#if app.lifecycle.trayStop}
+    <TrayStopReport report={app.lifecycle.trayStop} session={app.session} label={(device, reported) => app.names.given(device) ?? reported} />
+  {/if}
+{/snippet}
+
 {#if kinds.length > 0}
   <section class="slot" aria-label="Notices" bind:this={region}>
+    <div class="list">
     {#each shown as kind (kind)}
       {#if kind === "problem" && app.problem}
         <Notice tone="problem" role="alert" title={failureText(app.problem)} ondismiss={() => (app.problem = null)} />
@@ -57,14 +64,20 @@
       {:else if kind === "trayStop" && app.lifecycle.trayStop}
         {@const report = app.lifecycle.trayStop}
         {@const title = trayStopTitle(report)}
-        <Notice
-          tone={report.stops.some((stop) => "Failed" in stop.result) ? "warning" : "ok"}
-          label={title}
-          {title}
-          ondismiss={() => app.lifecycle.dismissStop()}
-        >
-          <TrayStopReport {report} session={app.session} label={(device, reported) => app.names.given(device) ?? reported} />
-        </Notice>
+        {@const failed = report.stops.some((stop) => "Failed" in stop.result)}
+        {#if failed}
+          <Notice tone="warning" label={title} {title} ondismiss={() => app.lifecycle.dismissStop()}>
+            {@render trayReport()}
+          </Notice>
+        {:else}
+          <Notice
+            tone="ok"
+            label={title}
+            {title}
+            details={report.stops.length > 0 ? trayReport : undefined}
+            ondismiss={() => app.lifecycle.dismissStop()}
+          />
+        {/if}
       {:else if kind === "connectApply" && app.view.connect_apply}
         {@const applied = app.view.connect_apply}
         {@const outcome = applied.outcome}
@@ -77,6 +90,7 @@
         />
       {/if}
     {/each}
+    </div>
     {#if kinds.length > 1}
       <button type="button" class="small quiet toggle" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
         {expanded ? "Show fewer notices" : `Show all ${kinds.length} notices`}
@@ -88,11 +102,15 @@
 <style>
   .slot {
     display: grid;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+
+  .list {
+    display: grid;
     gap: 1px;
     max-height: 40vh;
     overflow-y: auto;
     background: var(--line-subtle);
-    border-bottom: 1px solid var(--line-subtle);
   }
 
   .line {
@@ -101,6 +119,7 @@
 
   .toggle {
     justify-self: stretch;
+    border-top: 1px solid var(--line-subtle);
     border-radius: 0;
     background: var(--surface-1);
     text-align: left;

@@ -35,6 +35,19 @@
   let drawer: HTMLElement | undefined = $state();
   let diagnosticsButton: HTMLButtonElement | undefined = $state();
   let lastPageFocus: HTMLElement | null = null;
+  let narrow = $state(false);
+  let covered = $derived(app.diagnosticsOpen && narrow);
+
+  $effect(() => {
+    const query = window.matchMedia?.("(max-width: 1099px)");
+    if (!query) {
+      return;
+    }
+    narrow = query.matches;
+    const change = (event: MediaQueryListEvent) => (narrow = event.matches);
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  });
 
   onMount(() => {
     let unlisten: (() => void) | undefined;
@@ -54,7 +67,7 @@
     }
     if (event.key === "F6" && !event.ctrlKey && !event.altKey && !event.metaKey) {
       event.preventDefault();
-      cycleRegion([rail, strip, notices, main, drawer], event.shiftKey);
+      cycleRegion(covered ? [rail, strip, drawer] : [rail, strip, notices, main, drawer], event.shiftKey);
       return;
     }
     const area = areaFor(event);
@@ -64,8 +77,15 @@
     }
   }
 
+  function navigate(screen: Screen) {
+    if (covered) {
+      app.diagnosticsOpen = false;
+    }
+    return app.go(screen);
+  }
+
   async function goAndFocus(screen: Screen) {
-    void app.go(screen);
+    void navigate(screen);
     await tick();
     main?.focus();
   }
@@ -95,6 +115,9 @@
   }
 
   function skipToContent() {
+    if (covered) {
+      closeDiagnostics();
+    }
     main?.focus();
   }
 
@@ -112,7 +135,7 @@
   <Rail
     screen={app.screen}
     diagnosticsOpen={app.diagnosticsOpen}
-    ongo={(screen) => app.go(screen)}
+    ongo={navigate}
     ondiagnostics={toggleDiagnostics}
     bind:region={rail}
     bind:diagnosticsButton
@@ -120,11 +143,11 @@
 
   <div class="content">
     <StatusStrip {app} onconnect={connectForm} bind:region={strip} />
-    <div class="notices">
+    <div class="notices" inert={covered}>
       <NoticeSlot {app} {labels} bind:region={notices} />
     </div>
 
-    <main id="content" tabindex="-1" bind:this={main} onfocusin={trackPageFocus}>
+    <main id="content" tabindex="-1" inert={covered} bind:this={main} onfocusin={trackPageFocus}>
       {#if app.screen === "settings"}
         <SettingsScreen lifecycle={app.lifecycle} onprofiles={() => app.openProfiles()} />
       {:else if app.screen === "profiles"}
@@ -212,6 +235,14 @@
     grid-row: 2 / 4;
     min-height: 0;
     display: flex;
-    width: clamp(300px, 34vw, 440px);
+    width: clamp(320px, 34vw, 440px);
+  }
+
+  @media (max-width: 1099px) {
+    .drawer {
+      grid-column: 1 / -1;
+      width: auto;
+      z-index: var(--z-drawer);
+    }
   }
 </style>
