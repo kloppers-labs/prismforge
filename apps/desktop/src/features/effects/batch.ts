@@ -5,6 +5,7 @@ import type { TargetResult } from "../../lib/api/bindings/TargetResult";
 import { failureText } from "../../lib/errors";
 import type { Names } from "../../lib/names";
 import { distinction } from "../devices/present";
+import { retryable } from "./retry";
 import { deviceOf, runningOn, stopText, targetName } from "./present";
 import type { BatchFeedback } from "./state.svelte";
 
@@ -75,7 +76,9 @@ export function summarize(batch: BatchFeedback, session: SessionSnapshot, names:
   const rows = batch.report.results.map((result) => row(session, names, result, server));
   const sent = rows.filter((each) => each.state !== "Covered");
   const done = sent.filter((each) => each.state === "Applied" || each.state === "Stopped").length;
-  const retry = rows.filter((each) => each.state === "Skipped" || each.state === "Failed").length;
+  const retry = batch.report.results.filter(
+    (result) => typeof result.outcome === "object" && "Skipped" in result.outcome && retryable(result.outcome.Skipped.error),
+  ).length;
   const settled = rows.every((each) => each.settled);
   if (batch.kind === "applied") {
     const what = `${batch.label}: ${done} of ${sent.length} ${sent.length === 1 ? "target" : "targets"} accepted.`;
@@ -96,8 +99,17 @@ export function replaced(session: SessionSnapshot, targets: OutputTarget[], chos
   }).length;
 }
 
+/** Names the targets, a whole device as "(whole device)" and zones of one device as "3 zones of …". */
 export function namesLine(session: SessionSnapshot, names: Names, targets: OutputTarget[]): string {
-  const labels = targets.map((target) => labelOf(session, names, target));
+  const devices = [...new Set(targets.map((target) => target.device))];
+  const labels = devices.map((device) => {
+    const zones = targets.filter((target) => target.device === device && target.zone !== null);
+    const whole = labelOf(session, names, { device, zone: null });
+    if (zones.length === 0) {
+      return `${whole} (whole device)`;
+    }
+    return zones.length === 1 ? labelOf(session, names, zones[0]!) : `${zones.length} zones of ${whole}`;
+  });
   if (labels.length <= 3) {
     return labels.join(", ");
   }

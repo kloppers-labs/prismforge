@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
 import { demoConnected, demoEffectsRunning } from "../../test/fixtures/sessions";
 import { withOwner } from "../../test/effects";
-import { addRange, choosable, effective, isMixed, isSelected, options, selectAll, toggle } from "./selection";
+import { addRange, allZones, choosable, effective, isMixed, isSelected, options, selectAll, toggle } from "./selection";
 
 const BOARD = "demo-motherboard";
 const GPU = "demo-graphics-card";
@@ -32,10 +32,13 @@ test("unchecking_one_zone_of_a_selected_device_leaves_the_other_zones_and_a_mixe
   expect(isSelected(selection, whole(BOARD))).toBe(false);
 });
 
-test("checking_the_last_zone_of_a_device_selects_the_whole_device", () => {
+test("checking_every_zone_keeps_each_zone_as_its_own_target", () => {
   const selection = toggle([zone(BOARD, 0), zone(BOARD, 2)], zone(BOARD, 1), demoConnected);
 
-  expect(selection).toEqual([whole(BOARD)]);
+  expect(selection).toEqual([zone(BOARD, 0), zone(BOARD, 2), zone(BOARD, 1)]);
+  expect(allZones(selection, BOARD, demoConnected)).toBe(true);
+  expect(isSelected(selection, whole(BOARD))).toBe(false);
+  expect(toggle(selection, whole(BOARD), demoConnected)).toEqual([whole(BOARD)]);
 });
 
 test("a_mixed_device_becomes_whole_when_checked_and_empty_when_checked_again", () => {
@@ -75,8 +78,7 @@ test("a_range_adds_every_choosable_target_between_two_rows", () => {
 
   const selection = addRange([], order[from] ?? whole(BOARD), order[to] ?? whole(GPU), demoConnected);
 
-  expect(selection).toContainEqual(whole(BOARD));
-  expect(selection).toContainEqual(whole(GPU));
+  expect(selection).toEqual([zone(BOARD, 0), zone(BOARD, 1), zone(BOARD, 2), whole(GPU)]);
   expect(selection.some((target) => target.device === BAR)).toBe(false);
 });
 

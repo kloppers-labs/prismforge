@@ -9,6 +9,7 @@
     min,
     max,
     problem = null,
+    also = null,
     onchange,
   }: {
     id: string;
@@ -18,6 +19,7 @@
     min: number;
     max: number;
     problem?: string | null;
+    also?: string | null;
     onchange: (texts: string[]) => void;
   } = $props();
 
@@ -41,7 +43,7 @@
   }
 </script>
 
-<fieldset class="palette" aria-describedby="{id}-hint{problem ? ` ${id}-problem` : ''}">
+<fieldset class="palette" aria-describedby="{also ? `${also} ` : ''}{id}-hint{problem ? ` ${id}-problem` : ''}">
   <legend>{label}</legend>
   <p id="{id}-hint" class="hint">{description} Use {min} to {max} colours, in order.</p>
   <ol>

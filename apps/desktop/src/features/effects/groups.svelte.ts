@@ -99,12 +99,21 @@ export class GroupsState {
 
   /** Selects the members that can take an effect and says which members were left out. */
   select(group: GroupView | typeof EVERYTHING, session: SessionSnapshot, effects: EffectsState) {
+    effects.selectOnly(this.picked(group, session));
+  }
+
+  /** Sends the effect and values chosen now to the members, whatever they run. */
+  applyTo(group: GroupView | typeof EVERYTHING, session: SessionSnapshot, effects: EffectsState): Promise<void> {
+    return effects.applyTo(this.picked(group, session));
+  }
+
+  private picked(group: GroupView | typeof EVERYTHING, session: SessionSnapshot): OutputTarget[] {
     const picked = this.pick(group, session);
-    effects.selectOnly(picked.targets);
     const title = group === EVERYTHING ? "Everything" : group.name;
     const count = picked.targets.length === 1 ? "1 target" : `${picked.targets.length} targets`;
     const left = picked.left.map((member) => `${storedLabel(member)} (${member.state === "Resolved" ? "cannot take an effect now" : stateText(member)})`);
     this.note = `Selected ${title}: ${count}.${left.length === 0 ? "" : ` Left out: ${left.join(", ")}.`}`;
+    return picked.targets;
   }
 
   create(name: string, targets: OutputTarget[]): Promise<boolean> {

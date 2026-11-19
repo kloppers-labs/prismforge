@@ -2,9 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/sve
 import { expect, test, vi } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell, type Call } from "../../test/backend";
-import { button, effectHandlers, openEffects } from "../../test/effects";
-import { batchAppliedWithSkips, batchStopped, stopAllReport } from "../../test/fixtures/batches";
-import { demoBatchRunning, demoConnected } from "../../test/fixtures/sessions";
+import { button, effectHandlers, openEffects, withEffect } from "../../test/effects";
+import { batchAppliedWithSkips, batchDuringIdentify, batchStopped, stopAllReport } from "../../test/fixtures/batches";
+import { demoBatchRunning, demoConnected, demoIdentifyingGpu } from "../../test/fixtures/sessions";
 import { viewApplying } from "../../test/fixtures/views";
 
 function option(device: string, part = "Whole device", index = 0): HTMLElement {
@@ -73,7 +73,7 @@ test("a_device_with_some_zones_selected_shows_a_mixed_state", async () => {
 
   const whole = option("Demo Motherboard");
   expect(whole.getAttribute("aria-selected")).toBe("false");
-  expect(whole.getAttribute("aria-describedby")).toMatch(/^mixed-/);
+  expect(whole.getAttribute("aria-describedby")).toMatch(/^state-/);
   expect(document.getElementById(whole.getAttribute("aria-describedby")!)?.textContent).toBe("Some zones selected");
   expect(option("Demo Motherboard", "Addressable Header 1").getAttribute("aria-selected")).toBe("true");
   expect(option("Demo Motherboard", "Onboard").getAttribute("aria-selected")).toBe("false");
@@ -102,7 +102,7 @@ test("a_target_that_cannot_take_an_effect_says_why_and_stays_out_of_the_selectio
   expect(screen.getByText("1 target selected")).toBeTruthy();
 });
 
-test("apply_sends_one_batch_and_lists_each_target_with_retry_for_the_failed_ones", async () => {
+test("apply_sends_one_batch_and_lists_each_target", async () => {
   Element.prototype.scrollIntoView ??= () => {};
   const shell = fakeShell(demoConnected, effectHandlers({ apply_effect_batch: () => batchAppliedWithSkips }));
   render(App);
@@ -125,17 +125,6 @@ test("apply_sends_one_batch_and_lists_each_target_with_retry_for_the_failed_ones
   expect(within(results).getByText(/Demo Light Bar: skipped\./)).toBeTruthy();
   expect(within(results).getByText(/Addressable Header 1 on Demo Motherboard: sent once, because the whole device is also selected\./)).toBeTruthy();
   expect(results.querySelector(".report")?.classList.contains("unsettled")).toBe(true);
-
-  await fireEvent.click(within(results).getByRole("button", { name: "Retry failed (2)" }));
-
-  await waitFor(() => expect(args(shell.calls, "apply_effect_batch")).toHaveLength(2));
-  expect(args(shell.calls, "apply_effect_batch")[1]).toEqual({
-    targets: [
-      { device: "demo-memory-1", zone: null },
-      { device: "demo-light-bar", zone: null },
-    ],
-    effect: first.effect,
-  });
 });
 
 test("stop_on_the_selection_and_stop_all_report_in_the_same_form", async () => {
@@ -204,4 +193,106 @@ test("several_targets_cannot_be_applied_while_a_profile_applies", async () => {
 
   await waitFor(() => expect(button("Apply to 2 targets").disabled).toBe(true));
   expect(screen.getByText(/^Effects are off\. PrismForge is applying the profile/)).toBeTruthy();
+});
+
+test("live_edits_stay_off_while_the_targets_hold_different_values_and_apply_says_all_get_the_shown_values", async () => {
+  const fast = { effect: "rainbow-wave", values: { speed: { Number: 60 } } };
+  const slow = { effect: "rainbow-wave", values: {} };
+  const running = withEffect(withEffect(demoConnected, { device: "demo-graphics-card", zone: null }, slow, "Running"), { device: "demo-memory-2", zone: null }, fast, "Running");
+  const shell = fakeShell(running, effectHandlers({ apply_effect_batch: (call) => ({ results: (call.targets as object[]).map((target) => ({ target, outcome: "Applied" })) }) }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(option("Demo Graphics Card"), { ctrlKey: true });
+  await fireEvent.click(option("Demo Memory Module", "Whole device", 1), { ctrlKey: true });
+
+  const speed = screen.getByRole("spinbutton", { name: "Speed" });
+  expect(document.getElementById(speed.getAttribute("aria-describedby")?.split(" ").find((id) => id.startsWith("mixed-")) ?? "")?.textContent).toMatch(/^Mixed\./);
+  expect(screen.getByText(/^Some settings differ between the targets, marked Mixed\. Apply sends the values shown to all 2 targets\./)).toBeTruthy();
+  expect(screen.queryByText(/Changes go to all 2 targets/)).toBeNull();
+
+  await fireEvent.input(screen.getByRole("spinbutton", { name: "Brightness" }), { target: { value: "40" } });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  expect(args(shell.calls, "apply_effect_batch")).toEqual([]);
+
+  await fireEvent.click(button("Apply to 2 targets"));
+  await waitFor(() => expect(args(shell.calls, "apply_effect_batch")).toHaveLength(1));
+  const effect = args(shell.calls, "apply_effect_batch")[0]!.effect as { values: Record<string, unknown> };
+  expect(effect.values.speed).toEqual({ Number: 20 });
+  expect(effect.values.brightness).toEqual({ Number: 40 });
+});
+
+test("every_zone_checked_stays_zone_by_zone_until_the_device_row_itself_is_checked", async () => {
+  const shell = fakeShell(demoConnected, effectHandlers({ apply_effect_batch: () => ({ results: [] }) }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(option("Demo Graphics Card"), { ctrlKey: true });
+  for (const zone of ["Onboard", "Addressable Header 1", "Addressable Header 2"]) {
+    await fireEvent.click(option("Demo Motherboard", zone), { ctrlKey: true });
+  }
+
+  const whole = option("Demo Motherboard");
+  expect(whole.getAttribute("aria-selected")).toBe("false");
+  expect(document.getElementById(whole.getAttribute("aria-describedby")!)?.textContent).toBe("Every zone selected on its own");
+  expect(whole.querySelector(".box")?.textContent?.trim()).toBe("✓");
+  expect(screen.getByText("4 targets selected")).toBeTruthy();
+  expect(screen.getByText("Demo Graphics Card (whole device), 3 zones of Demo Motherboard")).toBeTruthy();
+
+  await fireEvent.click(whole, { ctrlKey: true });
+
+  expect(option("Demo Motherboard").getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByText("Demo Graphics Card (whole device), Demo Motherboard (whole device)")).toBeTruthy();
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+  await fireEvent.click(button("Apply to 2 targets"));
+  await waitFor(() => expect(args(shell.calls, "apply_effect_batch")[0]?.targets).toEqual([
+    { device: "demo-graphics-card", zone: null },
+    { device: "demo-motherboard", zone: null },
+  ]));
+});
+
+test("a_blocked_zone_states_its_own_reason", async () => {
+  const empty = structuredClone(demoConnected);
+  const board = empty.devices.find((device) => device.descriptor.name === "Demo Motherboard")!;
+  board.descriptor.zones[1]!.led_count = 0;
+  fakeShell(empty, effectHandlers());
+  render(App);
+  await openEffects();
+
+  const header = option("Demo Motherboard", "Addressable Header 1");
+
+  expect(header.getAttribute("aria-disabled")).toBe("true");
+  const reason = document.getElementById(header.getAttribute("aria-describedby")!);
+  expect(reason?.textContent).toBe("This zone has no LEDs.");
+  expect(reason?.classList.contains("visually-hidden")).toBe(false);
+});
+
+test("retry_resends_only_the_targets_that_can_work_later_and_counts_them", async () => {
+  Element.prototype.scrollIntoView ??= () => {};
+  const shell = fakeShell(demoIdentifyingGpu, effectHandlers({ apply_effect_batch: () => batchDuringIdentify }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+
+  await fireEvent.click(button("Apply to 4 targets"));
+  const results = await screen.findByRole("status", { name: "Results for each target" });
+  await fireEvent.click(within(results).getByRole("button", { name: "Retry 1 target" }));
+
+  await waitFor(() => expect(args(shell.calls, "apply_effect_batch")).toHaveLength(2));
+  expect(args(shell.calls, "apply_effect_batch")[1]?.targets).toEqual([{ device: "demo-graphics-card", zone: null }]);
+});
+
+test("retry_is_not_offered_for_targets_that_would_be_refused_again", async () => {
+  Element.prototype.scrollIntoView ??= () => {};
+  fakeShell(demoConnected, effectHandlers({ apply_effect_batch: () => batchAppliedWithSkips }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(option("Demo Graphics Card"), { ctrlKey: true });
+  await fireEvent.click(option("Demo Memory Module"), { ctrlKey: true });
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+
+  await fireEvent.click(button("Apply to 2 targets"));
+
+  const results = await screen.findByRole("status", { name: "Results for each target" });
+  expect(within(results).getByText(/Demo Light Bar: skipped\./)).toBeTruthy();
+  expect(within(results).queryByRole("button", { name: /^Retry/ })).toBeNull();
 });

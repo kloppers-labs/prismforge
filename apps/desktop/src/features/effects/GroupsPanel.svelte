@@ -132,7 +132,7 @@
                 class="small"
                 data-mirror="group.apply"
                 disabled={!effects.checked?.instance || effects.working !== null || groups.pick(group, session).targets.length === 0}
-                onclick={() => (groups.select(group, session, effects), effects.apply())}
+                onclick={() => groups.applyTo(group, session, effects)}
               >
                 Apply {effects.definition.label} to this group
               </button>

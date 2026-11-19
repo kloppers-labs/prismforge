@@ -17,6 +17,7 @@ import type { BatchReport } from "../../lib/api/bindings/BatchReport";
 import type { EffectInstance } from "../../lib/api/bindings/EffectInstance";
 import { isLive } from "../devices/present";
 import { applyBlocked, applyingText, deviceOf, runningOn, sameTarget, targetName } from "./present";
+import { retryable } from "./retry";
 import { addRange, effective, selectAll, toggle } from "./selection";
 import { check, initialFields, parseHex, problemText, START_COLOR, toHex, type Field, type Fields } from "./values";
 
@@ -59,6 +60,8 @@ export class EffectsState {
   /** The last Apply or Stop press and the targets it went to; live edits never set it. */
   pressed = $state<{ count: number; key: string } | null>(null);
   batch = $state<BatchFeedback | null>(null);
+  /** Controls whose values differ between the targets that run the chosen effect; Live stays off while any is left. */
+  mixed = $state<string[]>([]);
   private lastColor = START_COLOR;
   externalProblem = $state<Failure | null>(null);
   private effectResult = $state<EffectFeedback | null>(null);
@@ -98,7 +101,9 @@ export class EffectsState {
     );
   });
   /** True only while a changed setting may be sent to every target without the user pressing Apply. */
-  canAutoApply = $derived(this.allRun && this.blocked === null && this.targets.every((target) => !this.isHeld(target)));
+  canAutoApply = $derived(
+    this.allRun && this.mixed.length === 0 && this.blocked === null && this.targets.every((target) => !this.isHeld(target)),
+  );
 
   private reapplyTimer: ReturnType<typeof setTimeout> | undefined;
   private reapplyAfterCall = false;
@@ -150,6 +155,7 @@ export class EffectsState {
   /** Selects only `target`, so its own page shows; this is the single-target flow. */
   select(target: OutputTarget) {
     this.leave();
+    this.mixed = [];
     this.selection = [target];
     this.anchor = target;
     this.effect = null;
@@ -188,12 +194,18 @@ export class EffectsState {
     this.change(targets);
   }
 
+  /** Selects `targets` and sends them the effect and values chosen now, not what they run. */
+  async applyTo(targets: OutputTarget[]) {
+    this.change(targets, false);
+    await this.apply();
+  }
+
   clear() {
     this.change([]);
   }
 
   /** A changed selection keeps the chosen effect; when every target runs one effect, its settings show. */
-  private change(selection: OutputTarget[]) {
+  private change(selection: OutputTarget[], adopt = true) {
     this.cancelReapply();
     const before = this.targets;
     this.selection = selection;
@@ -204,10 +216,26 @@ export class EffectsState {
     const session = this.view().session;
     const running = session ? this.targets.map((target) => runningOn(session, target)) : [];
     const first = running[0];
-    if (first && running.every((each) => each?.effect.effect === first.effect.effect)) {
+    if (adopt && first && running.every((each) => each?.effect.effect === first.effect.effect)) {
       this.effect = first.effect.effect;
       this.fields = this.definition ? initialFields(this.definition, first.effect.values) : {};
     }
+    this.mixed = adopt && this.effect !== null ? this.differing(this.effect) : [];
+  }
+
+  private differing(effect: string): string[] {
+    const session = this.view().session;
+    const definition = this.catalog?.effects.find((each) => each.id === effect);
+    if (!session || !definition || this.targets.length < 2) {
+      return [];
+    }
+    const values = this.targets
+      .map((target) => runningOn(session, target))
+      .filter((running) => running?.effect.effect === effect)
+      .map((running) => initialFields(definition, running?.effect.values ?? {}));
+    return definition.controls
+      .map((control) => control.id)
+      .filter((id) => new Set(values.map((fields) => JSON.stringify(fields[id]))).size > 1);
   }
 
   choose(effect: string) {
@@ -218,10 +246,12 @@ export class EffectsState {
     const running = this.running ?? (session && this.targets[0] ? runningOn(session, this.targets[0]) : null);
     const values = running?.effect.effect === effect ? running.effect.values : {};
     this.fields = this.definition ? initialFields(this.definition, values, this.lastColor) : {};
+    this.mixed = this.differing(effect);
   }
 
   setField(id: string, field: Field) {
     this.fields = { ...this.fields, [id]: field };
+    this.mixed = this.mixed.filter((each) => each !== id);
     const color = field.kind === "color" ? parseHex(field.text) : null;
     if (color) {
       this.lastColor = toHex(color);
@@ -303,7 +333,9 @@ export class EffectsState {
     if (batch === null || batch.kind === "failed") {
       return;
     }
-    const skipped = batch.report.results.filter((result) => typeof result.outcome === "object" && "Skipped" in result.outcome).map((result) => result.target);
+    const skipped = batch.report.results
+      .filter((result) => typeof result.outcome === "object" && "Skipped" in result.outcome && retryable(result.outcome.Skipped.error))
+      .map((result) => result.target);
     if (skipped.length === 0) {
       return;
     }
@@ -415,6 +447,7 @@ export class EffectsState {
       );
     } else if (answer.ok) {
       this.rustProblems = {};
+      this.mixed = [];
     }
     this.afterBatch(answer, (report) => ({ kind: "applied", label: definition.label, instance, report }));
   }

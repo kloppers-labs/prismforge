@@ -59,26 +59,19 @@ export function isMixed(selection: OutputTarget[], device: string): boolean {
   return selection.some((each) => each.device === device && each.zone !== null);
 }
 
-/** A whole device covers its zones, and a device with every zone selected becomes the whole device. */
-function normalize(selection: OutputTarget[], session: SessionSnapshot): OutputTarget[] {
-  const kept: OutputTarget[] = [];
-  for (const target of selection) {
-    if (kept.some((each) => sameTarget(each, target))) {
-      continue;
-    }
-    if (target.zone !== null && selection.some((each) => each.device === target.device && each.zone === null)) {
-      continue;
-    }
-    kept.push(target);
-  }
-  const whole = [...new Set(kept.map((target) => target.device))].filter((device) => {
-    const zones = zonesOf(session, device);
-    return zones.length > 0 && zones.every((zone) => kept.some((each) => each.device === device && each.zone === zone));
-  });
-  return [
-    ...kept.filter((target) => !whole.includes(target.device)),
-    ...whole.map((device) => ({ device, zone: null })),
-  ];
+/** A whole device covers its zones; zones checked one by one stay zone targets, also when every zone is checked. */
+function normalize(selection: OutputTarget[]): OutputTarget[] {
+  return selection.filter(
+    (target, index) =>
+      !selection.slice(0, index).some((each) => sameTarget(each, target)) &&
+      !(target.zone !== null && selection.some((each) => each.device === target.device && each.zone === null)),
+  );
+}
+
+/** Every zone of a device with several zones is checked as its own target. */
+export function allZones(selection: OutputTarget[], device: string, session: SessionSnapshot): boolean {
+  const zones = zonesOf(session, device);
+  return zones.length > 0 && zones.every((zone) => selection.some((each) => each.device === device && each.zone === zone));
 }
 
 export function toggle(selection: OutputTarget[], target: OutputTarget, session: SessionSnapshot): OutputTarget[] {
@@ -98,7 +91,7 @@ export function toggle(selection: OutputTarget[], target: OutputTarget, session:
   if (isSelected(selection, target)) {
     return selection.filter((each) => !sameTarget(each, target));
   }
-  return normalize([...selection, target], session);
+  return normalize([...selection, target]);
 }
 
 export function selectAll(session: SessionSnapshot): OutputTarget[] {
@@ -116,7 +109,7 @@ export function addRange(selection: OutputTarget[], from: OutputTarget, to: Outp
   }
   const [low, high] = start <= end ? [start, end] : [end, start];
   const added = order.slice(low, high + 1).filter((option) => option.reason === null).map((option) => option.target);
-  return normalize([...selection, ...added], session);
+  return normalize([...selection, ...added]);
 }
 
 /** The targets a command goes to: blocked targets drop out of a selection of several; a single one stays so its page can say why. */

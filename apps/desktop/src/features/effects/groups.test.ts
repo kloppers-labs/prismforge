@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/sve
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell, type Call } from "../../test/backend";
-import { button, effectHandlers, openEffects } from "../../test/effects";
+import { button, effectHandlers, openEffects, withEffect } from "../../test/effects";
 import { groupsDemo, groupsEmpty, groupsRealMissing } from "../../test/fixtures/groups";
 import { demoConnected, openRgbShelfGone } from "../../test/fixtures/sessions";
 import { openMenu, pick } from "../../test/menus";
@@ -170,4 +170,28 @@ test("a_recovered_groups_file_says_so_outside_any_disclosure", async () => {
 
   const text = await screen.findByText("groups.json was missing. It used the backup, so your last change to a group may be missing.");
   expect(text.closest("details")).toBeNull();
+});
+
+test("apply_to_a_group_sends_the_chosen_effect_and_values_even_when_the_members_run_another_effect", async () => {
+  const breathing = { effect: "breathing", values: {} };
+  const running = withEffect(withEffect(demoConnected, { device: "demo-graphics-card", zone: null }, breathing, "Running"), { device: "demo-motherboard", zone: 1 }, breathing, "Running");
+  const shell = fakeShell(running, effectHandlers({ groups: () => groupsDemo, apply_effect_batch: () => ({ results: [] }) }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(option("Demo Light Bar"));
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+  await fireEvent.input(screen.getByRole("spinbutton", { name: "Speed" }), { target: { value: "50" } });
+
+  await pick(await waitFor(() => groupRow("Desk")), "Actions for Desk", "Apply Rainbow wave to group");
+  await waitFor(() => expect(args(shell.calls, "apply_effect_batch")).toHaveLength(1));
+  const row = groupRow("Desk");
+  await fireEvent.click(within(row).getByText("Members and actions"));
+  await fireEvent.click(within(row).getByRole("button", { name: "Apply Rainbow wave to this group" }));
+  await waitFor(() => expect(args(shell.calls, "apply_effect_batch")).toHaveLength(2));
+
+  for (const sent of args(shell.calls, "apply_effect_batch")) {
+    const effect = sent.effect as { effect: string; values: Record<string, unknown> };
+    expect(effect.effect).toBe("rainbow-wave");
+    expect(effect.values.speed).toEqual({ Number: 50 });
+  }
 });

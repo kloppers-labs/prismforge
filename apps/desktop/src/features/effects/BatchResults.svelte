@@ -41,7 +41,7 @@
         </ul>
         {#if summary.retry > 0}
           <button type="button" class="small" disabled={effects.working !== null || effects.blocked !== null} onclick={() => effects.retry()}>
-            Retry failed ({summary.retry})
+            Retry {summary.retry === 1 ? "1 target" : `${summary.retry} targets`}
           </button>
         {/if}
       </section>

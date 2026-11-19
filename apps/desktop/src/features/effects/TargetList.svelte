@@ -7,7 +7,7 @@
   import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
   import { deviceKey, distinction, hasDirectMode, ledCount, reference } from "../devices/present";
   import { sameTarget, targetMark } from "./present";
-  import { choiceBlocked, countText, isMixed, isSelected, options, type TargetOption } from "./selection";
+  import { allZones, choiceBlocked, countText, isMixed, isSelected, options, type TargetOption } from "./selection";
 
   let {
     session,
@@ -125,8 +125,12 @@
   {@const row = rowOf(device, zone)}
   {#if row}
     {@const selected = isSelected(selection, row.target)}
-    {@const mixed = zone === null && isMixed(selection, row.target.device)}
+    {@const zoned = zone === null && !selected && allZones(selection, row.target.device, session)}
+    {@const mixed = zone === null && !selected && !zoned && isMixed(selection, row.target.device)}
     {@const current = shown !== null && sameTarget(shown, row.target)}
+    {@const deviceReason = choiceBlocked(session, device, null)}
+    {@const own = row.reason !== null && (zone !== null && row.reason !== deviceReason)}
+    {@const described = zoned || mixed ? `state-${key(row.target)}` : own ? `why-${key(row.target)}` : row.reason !== null ? `why-${row.target.device}` : undefined}
     <div
       class="pick option"
       role="option"
@@ -134,7 +138,7 @@
       aria-selected={selected}
       aria-disabled={row.reason !== null ? "true" : undefined}
       aria-current={current ? "true" : undefined}
-      aria-describedby={mixed ? `mixed-${key(row.target)}` : row.reason !== null ? `why-${row.target.device}` : undefined}
+      aria-describedby={described}
       aria-keyshortcuts="Shift+F10"
       data-target={key(row.target)}
       data-mirror="target.choose"
@@ -143,12 +147,13 @@
       onfocus={() => (focused = row.target)}
       use:contextMenu={() => menu(device, row.target)}
     >
-      <span class="box" class:checked={selected} class:mixed={mixed && !selected} class:off={row.reason !== null} aria-hidden="true">
-        {selected ? "✓" : mixed ? "–" : ""}
+      <span class="box" class:checked={selected || zoned} class:mixed class:off={row.reason !== null} aria-hidden="true">
+        {selected || zoned ? "✓" : mixed ? "–" : ""}
       </span>
       <span class="row"><span>{label}</span><span class="pick-meta">{ledCount(leds)}</span></span>
-      {#if mixed && !selected}<span id="mixed-{key(row.target)}" class="visually-hidden">Some zones selected</span>{/if}
+      {#if zoned || mixed}<span id="state-{key(row.target)}" class="visually-hidden">{zoned ? "Every zone selected on its own" : "Some zones selected"}</span>{/if}
     </div>
+    {#if own}<p id="why-{key(row.target)}" class="reason zone-reason">{row.reason}</p>{/if}
   {/if}
 {/snippet}
 

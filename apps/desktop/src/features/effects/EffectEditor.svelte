@@ -50,6 +50,7 @@
             {control}
             {field}
             problem={checked.problems[control.id] ?? effects.rustProblems[control.id] ?? null}
+            mixed={effects.mixed.includes(control.id)}
             onchange={(next) => effects.setField(control.id, next)}
           />
         {/if}

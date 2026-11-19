@@ -103,7 +103,7 @@ export function groupMenu(context: EffectsMenuContext, group: GroupView | typeof
       id: "group.apply",
       label: `Apply ${definition.label} to group`,
       reason: context.held ?? (effects.working === null ? null : WORKING) ?? unfinished ?? empty,
-      run: () => (select(), effects.apply()),
+      run: () => groups.applyTo(group, session, effects),
     });
   }
   if (group !== EVERYTHING) {
