@@ -93,6 +93,7 @@ The trigger reads the mark when it comes due, so marking or unmarking a profile 
 The shell has five locks, taken in this order: the session slot (`active`), the apply slot, the output gate (permits and the apply's write side), the on-connect report, and the store (the `Stores` slots, the folder lock and the mutexes inside `Profiles`). The comment above `Shell::active` names the same five in the same order. The lifecycle of `0004-lifecycle.md` adds its publish lock, taken before the store and never while a store lock is held; its state mutex is never held across an await.
 
 - No task waits for an earlier lock while it holds a later one.
+- The shell's live request (Task 9) is a plain mutex, taken only to copy the request and never across an await.
 - A task that holds a session handle never waits for the session slot. Disconnect, a mode switch and exit hold that slot while they wait for every handle to go.
 - A command takes its permit while it holds the session slot, and releases the slot with no await in between.
 - Publishing the on-connect state takes the report lock only after the session slot is released. The one exception is `start`, which publishes the new session's state while it holds the slot.
