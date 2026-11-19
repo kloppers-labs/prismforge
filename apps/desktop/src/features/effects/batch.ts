@@ -1,0 +1,102 @@
+import type { OutputError } from "../../lib/api/bindings/OutputError";
+import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
+import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+import type { TargetResult } from "../../lib/api/bindings/TargetResult";
+import { failureText } from "../../lib/errors";
+import type { Names } from "../../lib/names";
+import { deviceOf, runningOn, stopText, targetName } from "./present";
+import type { BatchFeedback } from "./state.svelte";
+
+export type RowState = "Applied" | "Stopped" | "Skipped" | "Failed" | "Covered";
+
+export type BatchRow = { key: string; label: string; state: RowState; text: string; settled: boolean };
+
+export type BatchSummary = { headline: string; settled: boolean; rows: BatchRow[]; retry: number };
+
+const SKIPPED_BACKEND = ["DirectModeUnavailable", "UnknownDevice", "AmbiguousDevice", "DeviceMissing", "ZoneOutOfRange"];
+
+/** A target nothing was sent to because of what it is now is skipped; a refused or lost request failed. */
+function skipped(error: OutputError): boolean {
+  if ("NoEffect" in error || "TooManyTargets" in error) {
+    return true;
+  }
+  if (!("Session" in error)) {
+    return false;
+  }
+  const session = error.Session;
+  if (typeof session !== "object") {
+    return false;
+  }
+  if ("OutputConflict" in session || "IdentifyInProgress" in session) {
+    return true;
+  }
+  if (!("Backend" in session)) {
+    return false;
+  }
+  const backend: unknown = session.Backend;
+  return typeof backend === "object" && backend !== null && SKIPPED_BACKEND.some((kind) => kind in backend);
+}
+
+export function labelOf(session: SessionSnapshot, names: Names, target: OutputTarget): string {
+  const device = deviceOf(session, target);
+  if (!device) {
+    return target.device;
+  }
+  return target.zone === null ? names.device(device) : `${names.device(device)}, ${targetName(names, device, target.zone)}`;
+}
+
+function row(session: SessionSnapshot, names: Names, result: TargetResult, server: string): BatchRow {
+  const label = labelOf(session, names, result.target);
+  const key = `${result.target.device}|${result.target.zone ?? "all"}`;
+  const outcome = result.outcome;
+  if (outcome === "Applied") {
+    return { key, label, state: "Applied", text: `${label}: accepted.`, settled: true };
+  }
+  if ("Stopped" in outcome) {
+    const text = stopText(outcome.Stopped.restore, server);
+    return { key, label, state: "Stopped", text: `${label}: ${text.headline}${text.details.length ? ` ${text.details.join(" ")}` : ""}`, settled: text.settled };
+  }
+  if ("Covered" in outcome) {
+    const by = outcome.Covered.by;
+    const why = by.zone === null && result.target.zone !== null ? "the whole device is also selected" : "it is listed twice";
+    return { key, label, state: "Covered", text: `${label}: sent once, because ${why}.`, settled: true };
+  }
+  const state: RowState = skipped(outcome.Skipped.error) ? "Skipped" : "Failed";
+  return { key, label, state, text: `${label}: ${state.toLowerCase()}. ${failureText(outcome.Skipped.error)}`, settled: false };
+}
+
+export function summarize(batch: BatchFeedback, session: SessionSnapshot, names: Names, server: string): BatchSummary | null {
+  if (batch.kind === "failed") {
+    return null;
+  }
+  const rows = batch.report.results.map((result) => row(session, names, result, server));
+  const sent = rows.filter((each) => each.state !== "Covered");
+  const done = sent.filter((each) => each.state === "Applied" || each.state === "Stopped").length;
+  const retry = rows.filter((each) => each.state === "Skipped" || each.state === "Failed").length;
+  const settled = rows.every((each) => each.settled);
+  if (batch.kind === "applied") {
+    const what = `${batch.label}: ${done} of ${sent.length} ${sent.length === 1 ? "target" : "targets"} accepted.`;
+    return { headline: what, settled, rows, retry };
+  }
+  if (batch.all) {
+    const headline = sent.length === 0 ? "No PrismForge effect was running." : `Stop all: ${done} of ${sent.length} ${sent.length === 1 ? "device" : "devices"} stopped.`;
+    return { headline, settled, rows, retry };
+  }
+  return { headline: `${done} of ${sent.length} ${sent.length === 1 ? "target" : "targets"} stopped.`, settled, rows, retry };
+}
+
+/** Effects other than the chosen one that Apply would replace, counted by target. */
+export function replaced(session: SessionSnapshot, targets: OutputTarget[], chosen: string | null): number {
+  return targets.filter((target) => {
+    const running = runningOn(session, target);
+    return running !== null && running.effect.effect !== chosen;
+  }).length;
+}
+
+export function namesLine(session: SessionSnapshot, names: Names, targets: OutputTarget[]): string {
+  const labels = targets.map((target) => labelOf(session, names, target));
+  if (labels.length <= 3) {
+    return labels.join(", ");
+  }
+  return `${labels.slice(0, 3).join(", ")} and ${labels.length - 3} more`;
+}

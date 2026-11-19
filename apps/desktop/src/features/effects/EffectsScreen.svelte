@@ -15,7 +15,9 @@
   import HandBack from "./HandBack.svelte";
   import HardwareModes from "./HardwareModes.svelte";
   import { effectMenu, targetMenu, type EffectsMenuContext, type Reveal } from "./menu";
-  import { applyBlocked, applyingText, declaredBy, deviceOf } from "./present";
+  import BatchBar from "./BatchBar.svelte";
+  import BatchResults from "./BatchResults.svelte";
+  import { applyBlocked, applyingText, declaredBy, deviceOf, targetLeds } from "./present";
   import TargetList from "./TargetList.svelte";
   import TargetStatus from "./TargetStatus.svelte";
 
@@ -36,6 +38,12 @@
   let held = $derived(applyingText(app.view));
   let blocked = $derived(device && target ? (held ?? applyBlocked(session, device, target.zone)) : null);
   let left = $derived(ref === null ? null : declaredBy(session, ref));
+  let running = $derived(session.output.scene.assignments.length > 0);
+  let firstLeds = $derived.by(() => {
+    const first = effects.targets[0];
+    const owner = first ? deviceOf(session, first) : null;
+    return owner && first ? targetLeds(owner, first.zone) : 0;
+  });
   let modesOpen = $state(false);
   let externalOpen = $state(false);
   let menus: EffectsMenuContext = $derived({ effects, session, names: app.names, held, reveal });
@@ -62,11 +70,25 @@
 <div class="two-pane">
   <TargetList
     {session}
-    selected={target}
+    selection={effects.targets}
+    shown={target}
     names={app.names}
     onselect={(next) => effects.select(next)}
+    ontoggle={(next) => effects.toggle(next)}
+    onrange={(next) => effects.extendTo(next)}
+    onall={() => effects.selectAll()}
+    onclear={() => effects.clear()}
     menu={(each, next) => targetMenu(menus, each, next)}
-  />
+  >
+    {#snippet foot()}
+      <div class="stop-all">
+        <button type="button" class="small" disabled={!running || held !== null || effects.working !== null} onclick={() => effects.stopAll()}>
+          Stop all PrismForge effects
+        </button>
+        <p class="hint">{running ? "Stops every PrismForge effect, also on targets that are not selected." : "No PrismForge effect runs now."}</p>
+      </div>
+    {/snippet}
+  </TargetList>
   <div class="workspace">
     <h1 class="visually-hidden">Effects</h1>
     {#if !catalog}
@@ -82,11 +104,28 @@
           <p class="empty" role="status">Loading the effect list.</p>
         {/if}
       </div>
+    {:else if effects.several}
+      <BatchBar {effects} {session} names={app.names} />
+      <div class="scroll">
+        <div class="inner">
+          <BatchResults {effects} {session} names={app.names} />
+          <EffectEditor {effects} {catalog} leds={firstLeds} locked={false} menu={(definition) => effectMenu(menus, definition, null, effects.blocked)} />
+          <div class="how">
+            <p>Runs while PrismForge runs and is connected. Every target runs the whole effect on its own LEDs, and all of them start together.</p>
+            <Details summary="How effects run">
+              <p>A PrismForge effect is computed by PrismForge, not by the device.</p>
+              <p>{closing} When you stop an effect or quit, PrismForge asks {serverName(session)} to put back the earlier lighting.</p>
+              <p>A target that cannot take the effect is left out, and the result says why. The other targets keep what they got.</p>
+            </Details>
+          </div>
+        </div>
+      </div>
     {:else if target && device}
       {#key `${target.device}-${target.zone}`}
         <EffectBar {effects} {session} {device} zone={target.zone} names={app.names} {blocked} {held} />
         <div class="scroll">
           <div class="inner">
+            <BatchResults {effects} {session} names={app.names} />
             <EffectResults {effects} {session} {blocked} {held} />
             {#if left !== null && ref !== null}
               <HandBack {effects} device={ref} label={left} {held} />
@@ -96,8 +135,7 @@
             <EffectEditor
               {effects}
               {catalog}
-              {device}
-              zone={target.zone}
+              leds={targetLeds(device, target.zone)}
               locked={left !== null}
               menu={(definition) => effectMenu(menus, definition, device, blocked)}
             />
@@ -129,7 +167,8 @@
     {:else}
       <div class="inner empty">
         <h2>Choose what to light</h2>
-        <p>Choose a device or one of its zones on the left. Then choose an effect and apply it. Nothing changes on your devices until you apply.</p>
+        <p>Choose a device or one of its zones on the left, or check several to light them together. Then choose an effect and apply it. Nothing changes on your devices until you apply.</p>
+        <BatchResults {effects} {session} names={app.names} />
       </div>
     {/if}
   </div>
@@ -167,6 +206,20 @@
 
   .empty h2 {
     color: var(--text);
+  }
+
+  .stop-all {
+    display: grid;
+    gap: var(--space-1);
+    justify-items: start;
+    margin-top: auto;
+    padding: var(--space-3) var(--space-2) 0;
+    border-top: 1px solid var(--line-subtle);
+  }
+
+  .hint {
+    color: var(--text-dim);
+    font-size: var(--font-s);
   }
 
   .how {

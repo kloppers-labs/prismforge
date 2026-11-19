@@ -88,7 +88,7 @@ test("every_effects_menu_item_has_a_visible_counterpart_on_the_effects_screen", 
   fakeShell(demoEffectsRunning, effectHandlers());
   render(App);
   const targets = await openEffects();
-  const row = (device: string, index = 0) => within(within(targets).getAllByRole("group", { name: device })[index]!).getByRole("button", { name: /^Whole device/ });
+  const row = (device: string, index = 0) => within(within(targets).getAllByRole("group", { name: device })[index]!).getByRole("option", { name: /^Whole device/ });
 
   await fireEvent.click(row("Demo Memory Module", 1));
   await expectMirrored(await itemIds(row("Demo Memory Module", 1)));

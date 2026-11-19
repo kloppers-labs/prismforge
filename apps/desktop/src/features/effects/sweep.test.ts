@@ -151,7 +151,7 @@ test("the_target_list_keeps_one_tab_stop_when_the_chosen_target_is_gone", async 
 
   await screen.findByText(/not in the device list any more/);
   const targets = screen.getByRole("navigation", { name: "Targets" });
-  expect(within(targets).getAllByRole("button").filter((row) => row.tabIndex === 0)).toHaveLength(1);
+  expect(within(targets).getAllByRole("option").filter((row) => row.tabIndex === 0)).toHaveLength(1);
 });
 
 test("while_an_effect_runs_the_page_says_once_that_it_runs_while_prismforge_runs", async () => {

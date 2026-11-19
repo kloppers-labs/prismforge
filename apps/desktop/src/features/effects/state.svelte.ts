@@ -13,7 +13,11 @@ import {
   type FrameRateFeedback,
   type ModeFeedback,
 } from "./feedback";
-import { applyBlocked, applyingText, deviceOf, runningOn, targetName } from "./present";
+import type { BatchReport } from "../../lib/api/bindings/BatchReport";
+import type { EffectInstance } from "../../lib/api/bindings/EffectInstance";
+import { isLive } from "../devices/present";
+import { applyBlocked, applyingText, deviceOf, runningOn, sameTarget, targetName } from "./present";
+import { addRange, effective, selectAll, toggle } from "./selection";
 import { check, initialFields, parseHex, problemText, START_COLOR, toHex, type Field, type Fields } from "./values";
 
 const REAPPLY_DELAY_MS = 300;
@@ -26,16 +30,35 @@ function targetHold(target: OutputTarget): string {
   return `target|${target.device}|${target.zone ?? "all"}`;
 }
 
+export function targetsKey(targets: OutputTarget[]): string {
+  return targets.map((target) => `${target.device}|${target.zone ?? "all"}`).join(",");
+}
+
+/** The result of the last command sent to several targets, or of Stop all. */
+export type BatchFeedback =
+  | { kind: "applied"; label: string; instance: EffectInstance; report: BatchReport }
+  | { kind: "stopped"; all: boolean; report: BatchReport }
+  | { kind: "failed"; error: Failure };
+
 export class EffectsState {
   catalog = $state<EffectCatalog | null>(null);
   catalogProblem = $state<Failure | null>(null);
-  target = $state<OutputTarget | null>(null);
+  /** The targets the user checked; `targets` is the part a command goes to. */
+  selection = $state<OutputTarget[]>([]);
+  private anchor: OutputTarget | null = null;
+  targets = $derived.by(() => {
+    const session = this.view().session;
+    return session ? effective(this.selection, session) : this.selection;
+  });
+  target = $derived<OutputTarget | null>(this.targets.length === 1 ? (this.targets[0] ?? null) : null);
+  several = $derived(this.targets.length > 1);
   effect = $state<string | null>(null);
   fields = $state<Fields>({});
   rustProblems = $state<Record<string, string>>({});
   working = $state<"apply" | "stop" | null>(null);
-  /** The result of the last Apply or Stop press and its target; live edits never set it. */
-  pressed = $state<{ count: number; target: OutputTarget } | null>(null);
+  /** The last Apply or Stop press and the targets it went to; live edits never set it. */
+  pressed = $state<{ count: number; key: string } | null>(null);
+  batch = $state<BatchFeedback | null>(null);
   private lastColor = START_COLOR;
   externalProblem = $state<Failure | null>(null);
   private effectResult = $state<EffectFeedback | null>(null);
@@ -56,20 +79,27 @@ export class EffectsState {
   });
   blocked = $derived.by(() => {
     const session = this.view().session;
+    if (this.several) {
+      return applyingText(this.view()) ?? (session && isLive(session) ? null : "PrismForge is not connected. Effects can start again after it reconnects.");
+    }
     const device = session && this.target ? deviceOf(session, this.target) : null;
     if (!session || !this.target || !device) {
       return "This device is not in the device list.";
     }
     return applyingText(this.view()) ?? applyBlocked(session, device, this.target.zone);
   });
-  /** True only while a changed setting may be sent without the user pressing Apply. */
-  canAutoApply = $derived(
-    this.target !== null &&
-      this.running !== null &&
-      this.running.effect.effect === this.effect &&
-      this.blocked === null &&
-      !this.isHeld(this.target),
-  );
+  /** Every target runs the chosen effect now. */
+  allRun = $derived.by(() => {
+    const session = this.view().session;
+    return (
+      session !== null &&
+      this.effect !== null &&
+      this.targets.length > 0 &&
+      this.targets.every((target) => runningOn(session, target)?.effect.effect === this.effect)
+    );
+  });
+  /** True only while a changed setting may be sent to every target without the user pressing Apply. */
+  canAutoApply = $derived(this.allRun && this.blocked === null && this.targets.every((target) => !this.isHeld(target)));
 
   private reapplyTimer: ReturnType<typeof setTimeout> | undefined;
   private reapplyAfterCall = false;
@@ -103,7 +133,8 @@ export class EffectsState {
   reset() {
     this.cancelReapply();
     this.held = [];
-    this.target = null;
+    this.selection = [];
+    this.anchor = null;
     this.effect = null;
     this.fields = {};
     this.clearResults();
@@ -112,14 +143,16 @@ export class EffectsState {
   /** The user left the screen or the session; a pending change is dropped and the target waits for Apply. */
   leave() {
     this.cancelReapply();
-    if (this.target) {
-      this.hold(targetHold(this.target));
+    for (const target of this.targets) {
+      this.hold(targetHold(target));
     }
   }
 
+  /** Selects only `target`, so its own page shows; this is the single-target flow. */
   select(target: OutputTarget) {
     this.leave();
-    this.target = target;
+    this.selection = [target];
+    this.anchor = target;
     this.effect = null;
     this.fields = {};
     this.clearResults();
@@ -130,11 +163,61 @@ export class EffectsState {
     }
   }
 
+  toggle(target: OutputTarget) {
+    const session = this.view().session;
+    if (session) {
+      this.anchor = target;
+      this.change(toggle(this.targets, target, session));
+    }
+  }
+
+  extendTo(target: OutputTarget) {
+    const session = this.view().session;
+    if (session) {
+      this.change(addRange(this.targets, this.anchor ?? target, target, session));
+    }
+  }
+
+  selectAll() {
+    const session = this.view().session;
+    if (session) {
+      this.change(selectAll(session));
+    }
+  }
+
+  /** Selects exactly `targets`, as a group does. */
+  selectOnly(targets: OutputTarget[]) {
+    this.change(targets);
+  }
+
+  clear() {
+    this.change([]);
+  }
+
+  /** A changed selection keeps the chosen effect; when every target runs one effect, its settings show. */
+  private change(selection: OutputTarget[]) {
+    this.cancelReapply();
+    const before = this.targets;
+    this.selection = selection;
+    for (const target of before.filter((old) => !this.targets.some((now) => sameTarget(now, old)))) {
+      this.hold(targetHold(target));
+    }
+    this.clearResults();
+    const session = this.view().session;
+    const running = session ? this.targets.map((target) => runningOn(session, target)) : [];
+    const first = running[0];
+    if (first && running.every((each) => each?.effect.effect === first.effect.effect)) {
+      this.effect = first.effect.effect;
+      this.fields = this.definition ? initialFields(this.definition, first.effect.values) : {};
+    }
+  }
+
   choose(effect: string) {
     this.cancelReapply();
     this.effect = effect;
     this.rustProblems = {};
-    const running = this.running;
+    const session = this.view().session;
+    const running = this.running ?? (session && this.targets[0] ? runningOn(session, this.targets[0]) : null);
     const values = running?.effect.effect === effect ? running.effect.values : {};
     this.fields = this.definition ? initialFields(this.definition, values, this.lastColor) : {};
   }
@@ -154,22 +237,28 @@ export class EffectsState {
 
   async apply() {
     this.cancelReapply();
-    const target = this.target;
-    if (target) {
-      this.held = this.held.filter((key) => key !== deviceHold(target.device) && key !== targetHold(target));
+    const targets = this.targets;
+    this.held = this.held.filter((key) => !targets.some((target) => key === deviceHold(target.device) || key === targetHold(target)));
+    if (this.several) {
+      await this.sendBatch(targets);
+    } else {
+      await this.send();
     }
-    await this.send();
-    this.press(target);
+    this.press(targets);
   }
 
   async stop() {
+    if (this.several) {
+      await this.stopBatch(this.targets);
+      return;
+    }
     const target = this.target;
     if (!target) {
       return;
     }
     this.holdDevice(target.device);
     this.working = "stop";
-    const answer = await this.call(target.device, () => api.stopEffect(target));
+    const answer = await this.call([target.device], () => api.stopEffect(target));
     this.working = null;
     if (answer.ok) {
       this.changed();
@@ -178,12 +267,65 @@ export class EffectsState {
     } else {
       this.effectResult = { kind: "failed", error: answer.error };
     }
-    this.press(target);
+    this.press([target]);
+  }
+
+  private async stopBatch(targets: OutputTarget[]) {
+    for (const target of targets) {
+      this.holdDevice(target.device);
+    }
+    this.working = "stop";
+    const answer = await this.call(
+      targets.map((target) => target.device),
+      () => api.stopEffectBatch(targets),
+    );
+    this.working = null;
+    this.afterBatch(answer, (report) => ({ kind: "stopped", all: false, report }));
+    this.press(targets);
+  }
+
+  /** Stops every PrismForge effect, also on targets that are not selected. */
+  async stopAll() {
+    const session = this.view().session;
+    const devices = session ? [...new Set(session.output.scene.assignments.map((assignment) => assignment.target.device))] : [];
+    for (const device of devices) {
+      this.holdDevice(device);
+    }
+    this.working = "stop";
+    const answer = await this.call(devices, () => api.stopAllEffects());
+    this.working = null;
+    this.afterBatch(answer, (report) => ({ kind: "stopped", all: true, report }));
+    this.effectResult = null;
+    this.press(this.targets);
+  }
+
+  /** Sends the last batch again to the targets it skipped, with the same effect. */
+  async retry() {
+    const batch = this.batch;
+    if (batch === null || batch.kind === "failed") {
+      return;
+    }
+    const skipped = batch.report.results.filter((result) => typeof result.outcome === "object" && "Skipped" in result.outcome).map((result) => result.target);
+    if (skipped.length === 0) {
+      return;
+    }
+    if (batch.kind === "stopped") {
+      await this.stopBatch(skipped);
+      return;
+    }
+    this.working = "apply";
+    const answer = await this.call(
+      skipped.map((target) => target.device),
+      () => api.applyEffectBatch(skipped, batch.instance),
+    );
+    this.working = null;
+    this.afterBatch(answer, (report) => ({ kind: "applied", label: batch.label, instance: batch.instance, report }));
+    this.press(this.targets);
   }
 
   async selectMode(device: DeviceRef, mode: number, name: string) {
     this.holdDevice(device);
-    const answer = await this.call(device, () => api.selectMode(device, mode));
+    const answer = await this.call([device], () => api.selectMode(device, mode));
     if (answer.ok) {
       this.changed();
       this.effectResult = null;
@@ -203,13 +345,13 @@ export class EffectsState {
 
   async declareExternal(device: DeviceRef, label: string) {
     this.holdDevice(device);
-    const answer = await this.call(device, () => api.declareExternal(device, label));
+    const answer = await this.call([device], () => api.declareExternal(device, label));
     this.afterOwnership(answer);
   }
 
   async clearExternal(device: DeviceRef) {
     this.holdDevice(device);
-    const answer = await this.call(device, () => api.clearExternal(device));
+    const answer = await this.call([device], () => api.clearExternal(device));
     this.afterOwnership(answer);
   }
 
@@ -231,7 +373,7 @@ export class EffectsState {
       return;
     }
     this.working = "apply";
-    const answer = await this.call(target.device, () => api.applyEffect(target, instance));
+    const answer = await this.call([target.device], () => api.applyEffect(target, instance));
     this.working = null;
     if (answer.ok) {
       this.changed();
@@ -256,25 +398,64 @@ export class EffectsState {
     this.effectResult = { kind: "failed", error };
   }
 
-  private autoApply() {
-    this.reapplyTimer = undefined;
-    if (!this.canAutoApply || !this.target) {
+  /** One batch for every target, with the shared start time the session gives it. */
+  private async sendBatch(targets: OutputTarget[]) {
+    const instance = this.checked?.instance;
+    const definition = this.definition;
+    if (targets.length === 0 || !instance || !definition) {
       return;
     }
-    if ((this.inFlight[this.target.device] ?? 0) > 0) {
+    this.working = "apply";
+    const answer = await this.call(
+      targets.map((target) => target.device),
+      () => api.applyEffectBatch(targets, instance),
+    );
+    this.working = null;
+    if (!answer.ok && typeof answer.error === "object" && "InvalidEffect" in answer.error && "InvalidValues" in answer.error.InvalidEffect) {
+      this.rustProblems = Object.fromEntries(
+        answer.error.InvalidEffect.InvalidValues.errors.map((value) => [value.control, problemText(value.problem)]),
+      );
+    } else if (answer.ok) {
+      this.rustProblems = {};
+    }
+    this.afterBatch(answer, (report) => ({ kind: "applied", label: definition.label, instance, report }));
+  }
+
+  private afterBatch(answer: Answer<BatchReport>, feedback: (report: BatchReport) => BatchFeedback) {
+    if (answer.ok) {
+      this.changed();
+      this.modeResult = null;
+      this.batch = feedback(answer.value);
+    } else {
+      this.batch = { kind: "failed", error: answer.error };
+    }
+  }
+
+  private autoApply() {
+    this.reapplyTimer = undefined;
+    const targets = this.targets;
+    if (!this.canAutoApply || targets.length === 0) {
+      return;
+    }
+    if (targets.some((target) => (this.inFlight[target.device] ?? 0) > 0)) {
       this.reapplyAfterCall = true;
       return;
     }
-    this.send();
+    if (this.several) {
+      this.sendBatch(targets);
+    } else {
+      this.send();
+    }
   }
 
-  private async call<T>(device: DeviceRef, command: () => Promise<Answer<T>>): Promise<Answer<T>> {
-    this.inFlight = { ...this.inFlight, [device]: (this.inFlight[device] ?? 0) + 1 };
+  private async call<T>(devices: DeviceRef[], command: () => Promise<Answer<T>>): Promise<Answer<T>> {
+    const count = (device: DeviceRef, step: number) => (this.inFlight = { ...this.inFlight, [device]: (this.inFlight[device] ?? 0) + step });
+    devices.forEach((device) => count(device, 1));
     try {
       return await command();
     } finally {
-      this.inFlight = { ...this.inFlight, [device]: (this.inFlight[device] ?? 1) - 1 };
-      if (this.reapplyAfterCall && this.inFlight[device] === 0) {
+      devices.forEach((device) => count(device, -1));
+      if (this.reapplyAfterCall && devices.every((device) => this.inFlight[device] === 0)) {
         this.reapplyAfterCall = false;
         if (this.canAutoApply) {
           this.scheduleReapply();
@@ -317,14 +498,15 @@ export class EffectsState {
 
   private clearResults() {
     this.rustProblems = {};
+    this.batch = null;
     this.effectResult = null;
     this.modeResult = null;
     this.externalProblem = null;
   }
 
-  private press(target: OutputTarget | null) {
-    if (target) {
-      this.pressed = { count: (this.pressed?.count ?? 0) + 1, target };
+  private press(targets: OutputTarget[]) {
+    if (targets.length > 0) {
+      this.pressed = { count: (this.pressed?.count ?? 0) + 1, key: targetsKey(targets) };
     }
   }
 

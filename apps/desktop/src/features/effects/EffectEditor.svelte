@@ -2,25 +2,21 @@
   import type { EffectCatalog } from "../../lib/api/bindings/EffectCatalog";
   import type { EffectDefinition } from "../../lib/api/bindings/EffectDefinition";
   import type { Menu } from "../../lib/shell/menu.svelte";
-  import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import ControlField from "./controls/ControlField.svelte";
   import EffectPicker from "./EffectPicker.svelte";
-  import { targetLeds } from "./present";
   import PreviewPanel from "./PreviewPanel.svelte";
   import type { EffectsState } from "./state.svelte";
 
   let {
     effects,
     catalog,
-    device,
-    zone,
+    leds,
     locked,
     menu,
   }: {
     effects: EffectsState;
     catalog: EffectCatalog;
-    device: SessionDevice;
-    zone: number | null;
+    leds: number;
     locked: boolean;
     menu: (effect: EffectDefinition) => Menu | null;
   } = $props();
@@ -33,7 +29,7 @@
   <EffectPicker
     effects={catalog.effects}
     chosen={effects.effect}
-    running={effects.running?.effect.effect ?? null}
+    running={effects.allRun ? effects.effect : (effects.running?.effect.effect ?? null)}
     disabled={locked}
     onchoose={(id) => effects.choose(id)}
     {menu}
@@ -54,7 +50,7 @@
         {/if}
       {/each}
     </div>
-    <PreviewPanel instance={checked.instance} leds={targetLeds(device, zone)} limits={catalog.preview} />
+    <PreviewPanel instance={checked.instance} {leds} limits={catalog.preview} />
   {/if}
 </section>
 

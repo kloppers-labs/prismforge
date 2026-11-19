@@ -27,7 +27,7 @@ export function targetMenu(context: EffectsMenuContext, device: SessionDevice, t
   const { effects, session, held } = context;
   const show = () => onScreen(effects, target) || effects.select(target);
   const left = declaredBy(session, target.device);
-  const items: MenuItem[] = [{ id: "target.choose", label: "Choose this target", run: () => effects.select(target) }];
+  const items: MenuItem[] = [{ id: "target.choose", label: "Select only this target", run: () => effects.select(target) }];
   if (canStop(session, target)) {
     items.push({
       id: "target.stop",
@@ -51,12 +51,13 @@ export function targetMenu(context: EffectsMenuContext, device: SessionDevice, t
   return { label: `Actions for ${targetName(context.names, device, target.zone)}`, items };
 }
 
-export function effectMenu(context: EffectsMenuContext, definition: EffectDefinition, device: SessionDevice, blocked: string | null): Menu | null {
+export function effectMenu(context: EffectsMenuContext, definition: EffectDefinition, device: SessionDevice | null, blocked: string | null): Menu | null {
   const { effects } = context;
   const target = effects.target;
-  if (target === null || declaredBy(context.session, target.device) !== null) {
+  if (effects.targets.length === 0 || (target !== null && declaredBy(context.session, target.device) !== null)) {
     return null;
   }
+  const where = target !== null && device !== null ? targetName(context.names, device, target.zone) : `${effects.targets.length} targets`;
   const chosen = effects.effect === definition.id;
   const choose = () => chosen || effects.choose(definition.id);
   const unfinished = chosen && !effects.checked?.instance ? "Some settings need a fix first." : null;
@@ -66,7 +67,7 @@ export function effectMenu(context: EffectsMenuContext, definition: EffectDefini
       { id: "effect.choose", label: "Choose this effect", run: choose },
       {
         id: "effect.apply",
-        label: `Apply to ${targetName(context.names, device, target.zone)}`,
+        label: `Apply to ${where}`,
         reason: blocked ?? (effects.working === null ? null : WORKING) ?? unfinished,
         run: () => (choose(), effects.apply()),
       },

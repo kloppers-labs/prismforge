@@ -1,122 +1,194 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
+  import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { Names } from "../../lib/names";
   import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
-  import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import { deviceKey, hasDirectMode, ledCount, reference } from "../devices/present";
-  import { targetMark } from "./present";
+  import { sameTarget, targetMark } from "./present";
+  import { choiceBlocked, countText, isMixed, isSelected, options, type TargetOption } from "./selection";
 
   let {
     session,
-    selected,
+    selection,
+    shown,
     names,
     onselect,
+    ontoggle,
+    onrange,
+    onall,
+    onclear,
     menu,
+    groups,
+    foot,
   }: {
     session: SessionSnapshot;
-    selected: OutputTarget | null;
+    selection: OutputTarget[];
+    shown: OutputTarget | null;
     names: Names;
     onselect: (target: OutputTarget) => void;
+    ontoggle: (target: OutputTarget) => void;
+    onrange: (target: OutputTarget) => void;
+    onall: () => void;
+    onclear: () => void;
     menu: (device: SessionDevice, target: OutputTarget) => Menu | null;
+    groups?: Snippet;
+    foot?: Snippet;
   } = $props();
 
-  function menuFor(device: SessionDevice, ref: string | null, zone: number | null): Menu | null {
-    return ref === null ? null : menu(device, { device: ref, zone });
-  }
-
   let list: HTMLElement | undefined = $state();
+  let focused = $state<OutputTarget | null>(null);
   let entries = $derived(
     session.devices.map((device, index) => ({ key: deviceKey(device, index), ref: reference(device), device, mark: targetMark(session, device) })),
   );
-  let firstRef = $derived(entries.find((entry) => entry.ref !== null)?.ref ?? null);
-
-  function current(ref: string | null, zone: number | null): "true" | undefined {
-    return selected !== null && ref === selected.device && zone === selected.zone ? "true" : undefined;
-  }
-
-  let listed = $derived(
-    selected !== null &&
-      entries.some(
-        (entry) => entry.ref === selected.device && (selected.zone === null || selected.zone < entry.device.descriptor.zones.length),
-      ),
+  let rows = $derived(options(session));
+  let count = $derived(selection.length);
+  let stop = $derived(
+    rows.find((row) => focused !== null && sameTarget(row.target, focused))?.target ??
+      rows.find((row) => isSelected(selection, row.target))?.target ??
+      rows[0]?.target ??
+      null,
   );
 
-  function stop(ref: string | null, zone: number | null): number {
-    const anchor = listed ? selected : firstRef === null ? null : { device: firstRef, zone: null };
-    return anchor !== null && ref === anchor.device && zone === anchor.zone ? 0 : -1;
+  function key(target: OutputTarget): string {
+    return `${target.device}|${target.zone ?? "all"}`;
   }
 
-  function move(event: KeyboardEvent) {
-    const rows = list ? [...list.querySelectorAll<HTMLButtonElement>("button.pick:not(:disabled)")] : [];
-    const at = rows.indexOf(event.currentTarget as HTMLButtonElement);
-    const next = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: rows.length - 1 }[event.key];
-    const row = next === undefined ? undefined : rows[Math.min(Math.max(next, 0), rows.length - 1)];
-    if (row) {
+  function rowOf(device: SessionDevice, zone: number | null): TargetOption | undefined {
+    const ref = reference(device);
+    return rows.find((row) => row.target.device === ref && row.target.zone === zone);
+  }
+
+  function focusRow(target: OutputTarget) {
+    focused = target;
+    list?.querySelector<HTMLElement>(`[data-target="${CSS.escape(key(target))}"]`)?.focus();
+  }
+
+  function onkey(event: KeyboardEvent, row: TargetOption) {
+    const at = rows.findIndex((each) => sameTarget(each.target, row.target));
+    const command = event.ctrlKey || event.metaKey;
+    const moves: Record<string, number> = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: rows.length - 1 };
+    if (event.key in moves) {
+      const next = rows[Math.min(Math.max(moves[event.key] ?? at, 0), rows.length - 1)];
+      if (!next) {
+        return;
+      }
       event.preventDefault();
-      row.click();
-      row.focus();
+      if (event.shiftKey && (event.key === "Home" || event.key === "End") && command) {
+        onrange(next.target);
+      } else if (event.shiftKey && !isSelected(selection, next.target)) {
+        ontoggle(next.target);
+      }
+      focusRow(next.target);
+      return;
+    }
+    if (event.key === " ") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        onrange(row.target);
+      } else {
+        ontoggle(row.target);
+      }
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      onselect(row.target);
+    } else if (command && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      onall();
     }
   }
+
+  function onclick(event: MouseEvent, row: TargetOption) {
+    focused = row.target;
+    if (event.target instanceof Element && event.target.closest(".box")) {
+      ontoggle(row.target);
+    } else if (event.shiftKey) {
+      onrange(row.target);
+    } else if (event.ctrlKey || event.metaKey) {
+      ontoggle(row.target);
+    } else {
+      onselect(row.target);
+    }
+  }
+
 </script>
 
-<nav class="targets" aria-labelledby="targets-title" bind:this={list}>
-  <h2 id="targets-title" class="title">Targets</h2>
-  <ul>
-    {#each entries as { key, ref, device, mark } (key)}
-      <li>
-        <div class="device" role="group" aria-labelledby="target-{key}" aria-describedby={ref === null ? `target-${key}-why` : undefined}>
-          <p id="target-{key}" class="name">{names.device(device)}</p>
-          {#if mark || !device.available || !hasDirectMode(device)}
-            <p class="tags">
-              {#if mark}<span class="tag {mark.tone}">{mark.text}</span>{/if}
-              {#if !device.available}<span class="tag">Unavailable</span>{/if}
-              {#if !hasDirectMode(device)}<span class="tag">No Direct Mode</span>{/if}
-            </p>
+{#snippet option(device: SessionDevice, zone: number | null, label: string, leds: number)}
+  {@const row = rowOf(device, zone)}
+  {#if row}
+    {@const selected = isSelected(selection, row.target)}
+    {@const mixed = zone === null && isMixed(selection, row.target.device)}
+    {@const current = shown !== null && sameTarget(shown, row.target)}
+    <div
+      class="pick option"
+      role="option"
+      tabindex={stop !== null && sameTarget(stop, row.target) ? 0 : -1}
+      aria-selected={selected}
+      aria-disabled={row.reason !== null ? "true" : undefined}
+      aria-current={current ? "true" : undefined}
+      aria-describedby={mixed ? `mixed-${key(row.target)}` : row.reason !== null ? `why-${row.target.device}` : undefined}
+      aria-keyshortcuts="Shift+F10"
+      data-target={key(row.target)}
+      data-mirror="target.choose"
+      onclick={(event) => onclick(event, row)}
+      onkeydown={(event) => onkey(event, row)}
+      onfocus={() => (focused = row.target)}
+      use:contextMenu={() => menu(device, row.target)}
+    >
+      <span class="box" class:checked={selected} class:mixed={mixed && !selected} class:off={row.reason !== null} aria-hidden="true">
+        {selected ? "✓" : mixed ? "–" : ""}
+      </span>
+      <span class="row"><span>{label}</span><span class="pick-meta">{ledCount(leds)}</span></span>
+      {#if mixed && !selected}<span id="mixed-{key(row.target)}" class="visually-hidden">Some zones selected</span>{/if}
+    </div>
+  {/if}
+{/snippet}
+
+<nav class="targets" aria-labelledby="targets-title">
+  {@render groups?.()}
+  <div class="head">
+    <h2 id="targets-title" class="title">Targets</h2>
+    <div class="tools">
+      <button type="button" class="small quiet" onclick={onall}>Select all</button>
+      <button type="button" class="small quiet" disabled={count === 0} onclick={onclear}>Clear</button>
+    </div>
+  </div>
+  <p id="targets-count" class="count" role="status">{countText(count)}</p>
+  <div class="list" role="listbox" aria-multiselectable="true" aria-labelledby="targets-title" aria-describedby="targets-count targets-keys" bind:this={list}>
+    {#each entries as { key: entryKey, ref, device, mark } (entryKey)}
+      {@const reason = choiceBlocked(session, device, null)}
+      <div class="device" role="group" aria-labelledby="target-{entryKey}">
+        <p id="target-{entryKey}" class="name">{names.device(device)}</p>
+        {#if mark || !device.available || !hasDirectMode(device)}
+          <p class="tags">
+            {#if mark}<span class="tag {mark.tone}">{mark.text}</span>{/if}
+            {#if !device.available}<span class="tag">Unavailable</span>{/if}
+            {#if !hasDirectMode(device)}<span class="tag">No Direct Mode</span>{/if}
+          </p>
+        {/if}
+        {#if ref === null}
+          <p class="reason">PrismForge cannot tell this device apart from an identical one, so it cannot be a target.</p>
+        {:else}
+          {#if reason !== null}
+            <p id="why-{ref}" class="reason">{reason}</p>
           {/if}
-          {#if ref === null}
-            <p id="target-{key}-why" class="reason">PrismForge cannot tell this device apart from an identical one, so it cannot be a target.</p>
-          {/if}
-          <ul class="parts">
-            <li>
-              <button
-                type="button"
-                class="pick"
-                disabled={ref === null}
-                tabindex={stop(ref, null)}
-                aria-current={current(ref, null)}
-                data-mirror="target.choose"
-                onclick={() => ref !== null && onselect({ device: ref, zone: null })}
-                onkeydown={move}
-                use:contextMenu={() => menuFor(device, ref, null)}
-              >
-                <span class="row"><span>Whole device</span><span class="pick-meta">{ledCount(device.descriptor.led_count)}</span></span>
-              </button>
-            </li>
+          <div class="parts">
+            {@render option(device, null, "Whole device", device.descriptor.led_count)}
             {#if device.descriptor.zones.length > 1}
               {#each device.descriptor.zones as zone, index (index)}
-                <li>
-                  <button
-                    type="button"
-                    class="pick"
-                    disabled={ref === null}
-                    tabindex={stop(ref, index)}
-                    aria-current={current(ref, index)}
-                    data-mirror="target.choose"
-                    onclick={() => ref !== null && onselect({ device: ref, zone: index })}
-                    onkeydown={move}
-                    use:contextMenu={() => menuFor(device, ref, index)}
-                  >
-                    <span class="row"><span>{names.zone(device, index)}</span><span class="pick-meta">{ledCount(zone.led_count)}</span></span>
-                  </button>
-                </li>
+                {@render option(device, index, names.zone(device, index), zone.led_count)}
               {/each}
             {/if}
-          </ul>
-        </div>
-      </li>
+          </div>
+        {/if}
+      </div>
     {/each}
-  </ul>
+  </div>
+  <p id="targets-keys" class="keys">
+    Click a target to light it alone. Space or Ctrl-click adds or removes it; Shift selects a range.
+  </p>
+  {@render foot?.()}
 </nav>
 
 <style>
@@ -125,22 +197,42 @@
     background: var(--surface-1);
     overflow-y: auto;
     padding: var(--space-4) var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0 var(--space-2);
+  }
+
+  .tools {
+    display: flex;
+    gap: var(--space-1);
   }
 
   .title {
     font-size: var(--font-s);
     font-weight: var(--weight-strong);
     color: var(--text-dim);
-    padding: 0 var(--space-2) var(--space-3);
   }
 
-  ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  .count,
+  .keys {
+    padding: 0 var(--space-2);
+    font-size: var(--font-s);
+    color: var(--text-dim);
   }
 
-  .targets > ul {
+  .count {
+    color: var(--text);
+  }
+
+  .list {
     display: grid;
     gap: var(--space-4);
   }
@@ -174,14 +266,54 @@
     margin-top: var(--space-1);
   }
 
-  .parts .pick {
+  .option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     min-height: var(--control-h-s);
     padding-block: var(--space-1);
+    cursor: pointer;
+  }
+
+  .option[aria-disabled="true"] {
+    color: var(--text-dim);
+  }
+
+  .box {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: var(--space-4);
+    height: var(--space-4);
+    border: 1px solid var(--line-control);
+    border-radius: var(--radius-xs);
+    font-size: var(--font-xs);
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .box.checked,
+  .box.mixed {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .box.off {
+    border-style: dashed;
   }
 
   .row {
+    flex: 1;
     display: flex;
     justify-content: space-between;
     gap: var(--space-2);
+  }
+
+  @media (forced-colors: active) {
+    .box.checked,
+    .box.mixed {
+      border-color: Highlight;
+      color: CanvasText;
+    }
   }
 </style>
