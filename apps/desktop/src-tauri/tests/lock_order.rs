@@ -1,6 +1,7 @@
 mod support;
 
 use std::future::Future;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -131,6 +132,66 @@ async fn closing_the_window_during_an_apply_and_an_output_command_exits() {
             shell.apply_profile(&id),
             stop_then_exit(&shell, || exited.store(true, Ordering::SeqCst)),
             shell.apply_effect(gpu(), rainbow())
+        )
+    })
+    .await;
+
+    assert!(exited.load(Ordering::SeqCst));
+}
+
+async fn exported(shell: &Shell<Recorder>, id: &ProfileId, outside: &TempDir) -> PathBuf {
+    let file = outside.path().join("glow.json");
+    shell
+        .export_profile(id, file.clone())
+        .await
+        .expect("export");
+    file
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_import_and_a_disconnect_both_finish() {
+    let dir = TempDir::new("order-import");
+    let outside = TempDir::new("order-import-out");
+    let (shell, id) = ready(&dir).await;
+    let file = exported(&shell, &id, &outside).await;
+
+    finishes("import, stop", async {
+        tokio::join!(shell.import_profile(file), shell.stop())
+    })
+    .await;
+    still_responds(&shell).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_apply_an_import_and_a_disconnect_all_finish() {
+    let dir = TempDir::new("order-apply-import");
+    let outside = TempDir::new("order-apply-import-out");
+    let (shell, id) = ready(&dir).await;
+    let file = exported(&shell, &id, &outside).await;
+
+    finishes("apply, import, stop", async {
+        tokio::join!(
+            shell.apply_profile(&id),
+            shell.import_profile(file),
+            shell.stop()
+        )
+    })
+    .await;
+    still_responds(&shell).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn closing_the_window_during_an_import_exits() {
+    let dir = TempDir::new("order-import-exit");
+    let outside = TempDir::new("order-import-exit-out");
+    let (shell, id) = ready(&dir).await;
+    let file = exported(&shell, &id, &outside).await;
+    let exited = AtomicBool::new(false);
+
+    finishes("import, window close", async {
+        tokio::join!(
+            shell.import_profile(file),
+            stop_then_exit(&shell, || exited.store(true, Ordering::SeqCst))
         )
     })
     .await;

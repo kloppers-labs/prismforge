@@ -118,9 +118,7 @@ impl<S: ViewSink> Shell<S> {
     pub async fn import_profile(&self, source: PathBuf) -> Result<ImportReport, CommandError> {
         self.check_source(&source)?;
         let (handle, profiles) = self.store().await?;
-        let imported = profiles.import_from(source, handle.as_ref()).await;
-        self.report_on_connect().await;
-        Ok(imported?)
+        Ok(profiles.import_from(source, handle.as_ref()).await?)
     }
 
     pub async fn set_device_name(
