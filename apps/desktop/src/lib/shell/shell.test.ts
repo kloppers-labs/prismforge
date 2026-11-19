@@ -19,7 +19,7 @@ import {
   openRgbOldServer,
   openRgbRefused,
 } from "../../test/fixtures/sessions";
-import { storeEmpty, storeSaved, storeUnsaved } from "../../test/fixtures/stores";
+import { storeEmpty, storeRecovered, storeSaved, storeUnsaved } from "../../test/fixtures/stores";
 import { viewApplying, viewArmedRetrying, viewConnectApplied, viewStoppedArmed } from "../../test/fixtures/views";
 import {
   connectionChip,
@@ -351,21 +351,28 @@ test("a_connection_problem_stays_in_the_slot_without_a_dismiss", async () => {
   expect(within(notice).queryByRole("button", { name: "Dismiss" })).toBeNull();
 });
 
-test("area_shortcuts_move_between_areas", async () => {
+test("area_shortcuts_follow_the_final_rail_order", async () => {
   fakeShell(demoConnected, withStore(storeEmpty));
   render(App);
   await findRail();
 
-  await fireEvent.keyDown(document.body, { key: "2", ctrlKey: true });
+  await fireEvent.keyDown(document.body, { key: "2", code: "Digit2", ctrlKey: true });
   expect(current()).toEqual(["Effects"]);
   expect(document.activeElement).toBe(screen.getByRole("main"));
-  await fireEvent.keyDown(document.body, { key: "3", ctrlKey: true });
+  await fireEvent.keyDown(document.body, { key: "4", code: "Digit4", ctrlKey: true });
   expect(current()).toEqual(["Profiles"]);
-  await fireEvent.keyDown(document.body, { key: ",", ctrlKey: true });
+  await fireEvent.keyDown(document.body, { key: "3", code: "Digit3", ctrlKey: true });
+  expect(current()).toEqual(["Profiles"]);
+  await fireEvent.keyDown(document.body, { key: "5", code: "Digit5", ctrlKey: true });
+  expect(current()).toEqual(["Profiles"]);
+  await fireEvent.keyDown(document.body, { key: ",", code: "Comma", ctrlKey: true });
   expect(current()).toEqual(["Settings"]);
-  await fireEvent.keyDown(document.body, { key: "1", ctrlKey: true });
+  await fireEvent.keyDown(document.body, { key: "&", code: "Digit1", ctrlKey: true });
   expect(current()).toEqual(["Devices"]);
+  await fireEvent.keyDown(document.body, { key: "4" , ctrlKey: true });
+  expect(current()).toEqual(["Profiles"]);
   expect(railItem("Effects").getAttribute("aria-keyshortcuts")).toBe("Control+2");
+  expect(railItem("Profiles").getAttribute("aria-keyshortcuts")).toBe("Control+4");
 });
 
 test("area_shortcuts_do_not_fire_while_typing", async () => {
@@ -374,7 +381,7 @@ test("area_shortcuts_do_not_fire_while_typing", async () => {
   const host = await screen.findByRole("textbox", { name: "Host" });
   host.focus();
 
-  await fireEvent.keyDown(host, { key: "2", ctrlKey: true });
+  await fireEvent.keyDown(host, { key: "2", code: "Digit2", ctrlKey: true });
 
   expect(current()).toEqual(["Devices"]);
 });
@@ -462,9 +469,193 @@ test("below_1100_px_diagnostics_covers_an_inert_page_until_an_area_is_chosen", a
   expect(screen.getByRole("complementary", { name: "Diagnostics" })).toBeTruthy();
   expect(screen.getByRole("main").inert).toBe(true);
   expect(within(strip()).getByText("Demo mode")).toBeTruthy();
-  await fireEvent.keyDown(document.body, { key: "2", ctrlKey: true });
+  await fireEvent.keyDown(document.body, { key: "2", code: "Digit2", ctrlKey: true });
   expect(screen.queryByRole("complementary", { name: "Diagnostics" })).toBeNull();
   expect(current()).toEqual(["Effects"]);
   expect(screen.getByRole("main").inert).toBe(false);
   vi.unstubAllGlobals();
+});
+
+function narrowLayout() {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("max-width"), media: query, addEventListener() {}, removeEventListener() {} }));
+}
+
+async function coveredBy(session: SessionSnapshot | null, handlers: Record<string, (args: Record<string, unknown>) => unknown> = {}, store: StoreView = storeEmpty) {
+  narrowLayout();
+  const shell = fakeShell(session, { ...withStore(store), ...handlers });
+  render(App);
+  await findStrip();
+  if (session) {
+    await waitFor(() => expect(connectionChip().getAttribute("aria-label")).not.toBe("Connection: Not connected"));
+  }
+  await go("Diagnostics");
+  expect(screen.getByRole("main").inert).toBe(true);
+  return shell;
+}
+
+function uncovered() {
+  expect(screen.queryByRole("complementary", { name: "Diagnostics" })).toBeNull();
+  expect(screen.getByRole("main").inert).toBe(false);
+}
+
+test.each([
+  ["Connect to OpenRGB", null],
+  ["Start demo mode", null],
+  ["Rescan devices", openRgbConnected],
+  ["Disconnect", openRgbConnected],
+  ["Stop retrying", openRgbRefused],
+] as const)("below_the_docking_width_%s_from_the_strip_closes_the_covering_drawer", async (action, session) => {
+  const shell = await coveredBy(session, {
+    refresh: () => null,
+    start_demo: () => shell.view(demoConnected),
+    disconnect: () => shell.view(null),
+  });
+
+  await connectionAction(action);
+
+  uncovered();
+  if (action === "Connect to OpenRGB") {
+    expect(current()).toEqual(["Devices"]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Host" })));
+  }
+  vi.unstubAllGlobals();
+});
+
+test("below_the_docking_width_save_changes_opens_a_live_dialog_outside_any_inert_layer", async () => {
+  await coveredBy(demoConnected, { profile_details: () => detailsEvening, preview_profile_update: () => previewChanges }, storeUnsaved);
+  await within(strip()).findByRole("button", { name: /^Profile: Evening/ });
+
+  const panel = await openProfileChip();
+  await fireEvent.click(within(panel).getByRole("button", { name: "Save changes…" }));
+
+  const dialog = await screen.findByRole("dialog");
+  uncovered();
+  expect(dialog.closest("[inert]")).toBeNull();
+  let layer: HTMLElement | null = dialog;
+  while (layer) {
+    expect(layer.inert).not.toBe(true);
+    layer = layer.parentElement;
+  }
+  expect(current()).toEqual(["Profiles"]);
+  vi.unstubAllGlobals();
+});
+
+test("below_the_docking_width_open_profiles_from_the_strip_closes_the_covering_drawer", async () => {
+  await coveredBy(demoConnected, {}, storeUnsaved);
+  await within(strip()).findByRole("button", { name: /^Profile: Evening/ });
+
+  const panel = await openProfileChip();
+  await fireEvent.click(within(panel).getByRole("button", { name: "Open Profiles" }));
+
+  uncovered();
+  expect(current()).toEqual(["Profiles"]);
+  vi.unstubAllGlobals();
+});
+
+test("f6_reaches_a_notice_region_that_has_no_button", async () => {
+  fakeShell(openRgbLostWhileConnected);
+  render(App);
+  const slot = await waitFor(() => notices() ?? Promise.reject(new Error("no notices")));
+  expect(within(slot).queryByRole("button")).toBeNull();
+
+  await fireEvent.keyDown(document.body, { key: "F6" });
+  expect(document.activeElement).toBe(railItem("Devices"));
+  await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "F6" });
+  expect(document.activeElement).toBe(connectionChip());
+  await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "F6" });
+  expect(slot.contains(document.activeElement)).toBe(true);
+  await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "F6" });
+  expect(document.activeElement).toBe(screen.getByRole("main"));
+  await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "F6", shiftKey: true });
+  expect(slot.contains(document.activeElement)).toBe(true);
+});
+
+test("a_new_problem_goes_above_a_standing_connection_warning", async () => {
+  fakeShell(openRgbDegraded, { ...effectHandlers(), refresh: refuse({ Session: "Busy" }) });
+  render(App);
+  await screen.findByRole("status", { name: "Connection status" });
+
+  await connectionAction("Rescan devices");
+
+  const slot = await waitFor(() => notices() ?? Promise.reject(new Error("no notices")));
+  await waitFor(() => expect(within(slot).getByRole("alert").textContent).toMatch(/still working on earlier requests/));
+  expect(within(slot).queryByRole("status", { name: "Connection status" })).toBeNull();
+  expect(within(slot).getByRole("button", { name: "Show all 2 notices" })).toBeTruthy();
+});
+
+test("among_warnings_the_newest_shows_first", async () => {
+  fakeShell(openRgbDegraded, withStore(storeRecovered));
+  render(App);
+  await screen.findByRole("status", { name: "Connection status" }).catch(() => null);
+
+  const slot = await waitFor(() => notices() ?? Promise.reject(new Error("no notices")));
+  await waitFor(() => expect(within(slot).getByRole("status", { name: "Repaired files" })).toBeTruthy());
+  expect(within(slot).queryByRole("status", { name: "Connection status" })).toBeNull();
+});
+
+test("a_notice_that_arrives_behind_the_count_is_announced", async () => {
+  const shell = fakeShell(openRgbDegraded, effectHandlers());
+  render(App);
+  await screen.findByRole("status", { name: "Connection status" });
+
+  await shell.pushView({ ...viewConnectApplied, session: openRgbDegraded, revision: 50 });
+
+  const slot = await waitFor(() => notices() ?? Promise.reject(new Error("no notices")));
+  await waitFor(() => expect(within(slot).getByRole("button", { name: "Show all 2 notices" })).toBeTruthy());
+  const announcer = screen.getByRole("status", { name: "New notices" });
+  expect(announcer.textContent).toMatch(/2 notices\. New: PrismForge applied Evening when it connected/);
+  const before = announcer.textContent;
+  await shell.pushView({ ...viewConnectApplied, session: openRgbDegraded, revision: 51 });
+  expect(screen.getByRole("status", { name: "New notices" }).textContent).toBe(before);
+});
+
+test("a_pending_rescan_is_off_with_its_reason_and_keeps_focus_off_disconnect", async () => {
+  const shell = fakeShell(openRgbConnected, { ...effectHandlers(), refresh: () => new Promise(() => {}) });
+  render(App);
+  await waitForConnection("Connected");
+  await connectionAction("Rescan devices");
+
+  await fireEvent.click(connectionChip());
+  const panel = screen.getByRole("group", { name: "Connection details" });
+  const rescan = within(panel).getByRole("button", { name: "Rescan devices" });
+  expect(document.activeElement).toBe(rescan);
+  expect(rescan.getAttribute("aria-disabled")).toBe("true");
+  expect(panel.textContent).toMatch(/PrismForge is still reading the device list\./);
+  await fireEvent.click(rescan);
+  expect(shell.commands().filter((command) => command === "refresh")).toHaveLength(1);
+});
+
+test("a_panel_whose_only_action_ends_the_session_takes_focus_itself", async () => {
+  const shell = fakeShell(openRgbRefused, { disconnect: () => shell.view(null) });
+  render(App);
+  await waitForConnection("Retrying, retry 3 next");
+
+  await fireEvent.click(connectionChip());
+
+  const panel = screen.getByRole("group", { name: "Connection details" });
+  expect(document.activeElement).toBe(panel);
+  await fireEvent.keyDown(panel, { key: "Enter" });
+  expect(shell.commands()).not.toContain("disconnect");
+  await fireEvent.keyDown(panel, { key: "ArrowDown" });
+  expect(document.activeElement).toBe(within(panel).getByRole("button", { name: "Stop retrying" }));
+});
+
+test("the_connection_panel_says_plainly_that_demo_mode_sends_nothing_to_hardware", async () => {
+  fakeShell(demoConnected);
+  render(App);
+  await waitForConnection("Connected");
+
+  const panel = await openConnection();
+
+  expect(within(panel).getByText("Demo mode: these devices are simulated. Nothing is sent to hardware.")).toBeTruthy();
+});
+
+test("the_demo_marker_sits_next_to_the_connection_chip", async () => {
+  fakeShell(demoConnected, withStore(storeUnsaved));
+  render(App);
+  await within(await findStrip()).findByRole("button", { name: /^Profile: Evening/ });
+  const marker = within(strip()).getByText("Demo mode");
+
+  const chip = connectionChip().closest(".popover") as HTMLElement;
+  expect(chip.nextElementSibling).toBe(marker.closest("[data-demo]"));
 });

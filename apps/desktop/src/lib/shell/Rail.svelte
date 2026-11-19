@@ -67,6 +67,10 @@
 </nav>
 
 <style>
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+
   .rail {
     display: flex;
     flex-direction: column;
@@ -75,7 +79,7 @@
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    scrollbar-width: thin;
+    scrollbar-width: none;
     padding: var(--space-3) var(--space-2);
     background: var(--surface-1);
     border-right: 1px solid var(--line-subtle);
@@ -183,9 +187,25 @@
     }
 
     .label {
+      max-width: 100%;
       font-size: var(--font-2xs);
       line-height: var(--leading-tight);
       overflow-wrap: normal;
+    }
+  }
+
+  @media (max-height: 560px) {
+    .rail {
+      padding-block: var(--space-2);
+    }
+
+    .brand {
+      display: none;
+    }
+
+    .item {
+      min-height: 0;
+      padding-block: var(--space-1);
     }
   }
 </style>

@@ -25,7 +25,7 @@ export function areaFor(event: KeyboardEvent): Area | null {
   if (event.repeat || !withModifier(event) || isTyping(event.target) || document.querySelector("[aria-modal='true']")) {
     return null;
   }
-  return ALL_AREAS.find((area) => area.key === event.key) ?? null;
+  return ALL_AREAS.find((area) => area.code === event.code) ?? ALL_AREAS.find((area) => area.key === event.key) ?? null;
 }
 
 export function isQuit(event: KeyboardEvent): boolean {
@@ -34,14 +34,17 @@ export function isQuit(event: KeyboardEvent): boolean {
 
 export function cycleRegion(regions: (HTMLElement | null | undefined)[], backwards: boolean) {
   const present = regions.filter((region): region is HTMLElement => !!region);
-  if (present.length === 0) {
-    return;
-  }
   const active = document.activeElement;
   const at = present.findIndex((region) => region === active || region.contains(active));
   const step = backwards ? -1 : 1;
-  const next = at === -1 ? (backwards ? present.length - 1 : 0) : (at + step + present.length) % present.length;
-  focusRegion(present[next]!);
+  const start = at === -1 ? (backwards ? present.length : -1) : at;
+  for (let tried = 1; tried <= present.length; tried += 1) {
+    const region = present[(start + step * tried + present.length * 2) % present.length]!;
+    focusRegion(region);
+    if (region.contains(document.activeElement)) {
+      return;
+    }
+  }
 }
 
 function focusRegion(region: HTMLElement) {
