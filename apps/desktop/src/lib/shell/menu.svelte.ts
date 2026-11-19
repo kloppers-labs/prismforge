@@ -13,7 +13,7 @@ export type MenuItem = {
 
 export type Menu = { label: string; items: MenuItem[]; focus?: "first" | "menu" };
 
-type Opened = { menu: Menu; origin: HTMLElement; anchor: Box; byKeyboard: boolean; at: number };
+type Opened = { build: () => Menu | null; node: HTMLElement; origin: HTMLElement; anchor: Box; byKeyboard: boolean; at: number };
 
 export const MENU_OVERLAY = "context-menu";
 const POINTER_WINDOW_MS = 1000;
@@ -22,9 +22,10 @@ const TEXT_INPUTS = new Set(["", "text", "search", "url", "email", "password", "
 class Menus {
   current = $state.raw<Opened | null>(null);
 
-  open(menu: Menu, origin: HTMLElement, anchor: Box, byKeyboard: boolean) {
+  /** `build` runs again whenever the state it reads changes, so an open menu never shows stale items. */
+  open(build: () => Menu | null, node: HTMLElement, origin: HTMLElement, anchor: Box, byKeyboard: boolean) {
     overlays.popover = MENU_OVERLAY;
-    this.current = { menu, origin, anchor, byKeyboard, at: performance.now() };
+    this.current = { build, node, origin, anchor, byKeyboard, at: performance.now() };
   }
 
   close(returnFocus: boolean) {
@@ -128,7 +129,7 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
       return;
     }
     event.preventDefault();
-    menus.open(menu, origin, anchor, byKeyboard);
+    menus.open(() => current?.() ?? null, node, origin, anchor, byKeyboard);
   }
 
   function oncontextmenu(event: MouseEvent) {
@@ -161,6 +162,9 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
       current = next;
     },
     destroy() {
+      if (menus.current?.node === node) {
+        menus.close(false);
+      }
       node.removeEventListener("contextmenu", oncontextmenu);
       node.removeEventListener("keydown", onkeydown);
     },

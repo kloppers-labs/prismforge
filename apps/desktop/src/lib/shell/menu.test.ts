@@ -267,3 +267,16 @@ test("a_covering_diagnostics_drawer_keeps_page_menus_shut_and_its_own_menus_open
   await fireEvent.contextMenu(within(drawer).getByRole("region", { name: "Backend" }));
   expect(screen.getByRole("menu", { name: "Actions for Backend" })).toBeTruthy();
 });
+
+test("a_menu_closes_when_the_item_it_came_from_goes_away", async () => {
+  const shell = fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo });
+  render(App);
+  await waitForConnection("Connected");
+  const row = within(await screen.findByRole("navigation", { name: /Devices/ })).getAllByRole("button")[0]!;
+  await fireEvent.contextMenu(row);
+  expect(screen.getByRole("menu")).toBeTruthy();
+
+  await shell.push(null);
+
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+});

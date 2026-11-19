@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { overlays } from "../overlays.svelte";
   import { groups, isMenuKey, MENU_OVERLAY, menus, type MenuItem } from "./menu.svelte";
   import { menuPlacement } from "./placement";
@@ -6,8 +7,11 @@
   const id = `menu-${Math.random().toString(36).slice(2)}`;
   let box: HTMLDivElement | undefined = $state();
   let opened = $derived(menus.current);
-  let sections = $derived(opened ? groups(opened.menu.items) : []);
-  let checkable = $derived(opened?.menu.items.some((item) => item.checked !== undefined) ?? false);
+  let menu = $derived(opened ? opened.build() : null);
+  let sections = $derived(menu ? groups(menu.items) : []);
+  let checkable = $derived(menu?.items.some((item) => item.checked !== undefined) ?? false);
+  let focusedId: string | null = null;
+  let shown: object | null = null;
 
   function place() {
     const current = opened;
@@ -20,15 +24,42 @@
     box.style.top = `${spot.top}px`;
   }
 
+  function firstEnabled(): HTMLElement | undefined {
+    const list = entries();
+    return list.find((entry) => entry.getAttribute("aria-disabled") !== "true") ?? list[0];
+  }
+
   $effect(() => {
     const current = opened;
     if (!current || !box) {
       return;
     }
+    untrack(() => {
+      shown = current;
+      focusedId = null;
+      place();
+      (menu?.focus === "menu" ? box : (firstEnabled() ?? box))?.focus();
+    });
+  });
+
+  $effect(() => {
+    const current = opened;
+    const now = menu;
+    if (!current) {
+      return;
+    }
+    if (!now || now.items.length === 0 || !current.origin.isConnected) {
+      menus.close(false);
+      return;
+    }
+    if (!box || shown !== current) {
+      return;
+    }
     place();
-    const list = entries();
-    const first = list.find((entry) => entry.getAttribute("aria-disabled") !== "true") ?? list[0];
-    (current.menu.focus === "menu" ? box : (first ?? box)).focus();
+    if (!box.contains(document.activeElement)) {
+      const same = entries().find((entry) => entry.dataset.item === focusedId);
+      (same ?? firstEnabled() ?? box).focus();
+    }
   });
 
   $effect(() => {
@@ -111,11 +142,21 @@
     return sections.flat()[index] ?? null;
   }
 
+  function onfocusin(event: FocusEvent) {
+    if (event.target instanceof HTMLElement && event.target.dataset.item) {
+      focusedId = event.target.dataset.item;
+    }
+  }
+
   function onfocusout(event: FocusEvent) {
     const next = event.relatedTarget;
-    if (!(next instanceof Node) || !box?.contains(next)) {
-      menus.close(false);
+    if (next instanceof Node) {
+      if (!box?.contains(next)) {
+        menus.close(false);
+      }
+      return;
     }
+    queueMicrotask(() => box?.contains(document.activeElement) || menus.close(false));
   }
 
   function onpointerdown(event: PointerEvent) {
@@ -137,10 +178,11 @@
     class="menu"
     class:checkable
     role="menu"
-    aria-label={opened.menu.label}
+    aria-label={menu?.label}
     tabindex="-1"
     bind:this={box}
     {onkeydown}
+    {onfocusin}
     {onfocusout}
     oncontextmenu={(event) => event.preventDefault()}
   >

@@ -95,3 +95,22 @@ test("the_profile_chip_menu_saves_changes_and_opens_profiles_like_its_panel", as
   await pick(profileChip(), "Profile actions", "Open Profiles");
   expect(current()).toEqual(["Profiles"]);
 });
+
+test("an_open_menu_follows_the_state_it_was_built_from_and_keeps_focus_on_its_item", async () => {
+  let finish: (value: null) => void = () => {};
+  const shell = fakeShell(openRgbConnected, { ...effectHandlers(), refresh: () => new Promise((resolve) => (finish = resolve)) });
+  render(App);
+  await waitForConnection("Connected");
+  await pick(connectionChip(), "Connection actions", "Rescan devices");
+
+  const menu = await openMenu(connectionChip(), "Connection actions");
+  const rescan = within(menu).getByRole("menuitem", { name: "Rescan devices" });
+  rescan.focus();
+  expect(rescan.getAttribute("aria-disabled")).toBe("true");
+
+  finish(null);
+  await waitFor(() => expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Rescan devices" }).getAttribute("aria-disabled")).toBeNull());
+  expect(document.activeElement).toBe(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Rescan devices" }));
+  await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Enter" });
+  expect(shell.commands().filter((command) => command === "refresh")).toHaveLength(2);
+});
