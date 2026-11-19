@@ -111,13 +111,14 @@ fn cases() -> Vec<Case> {
     vec![
         case!("view", "current", |f| f.shell.view()),
         case!("connect_openrgb", "fake server", |f| {
-            let _ = f
-                .lifecycle
-                .remember_address(&f.shell, "127.0.0.1", 6742)
-                .await;
-            let started = f.shell.start(openrgb(&f.server)).await;
-            f.lifecycle.publish(&f.shell).await;
-            started
+            marks::connect_openrgb(
+                &f.shell,
+                &f.lifecycle,
+                "127.0.0.1",
+                6742,
+                openrgb(&f.server),
+            )
+            .await
         }),
         case!("start_demo", "demo", |f| marks::start(
             &f.shell,

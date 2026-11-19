@@ -26,10 +26,7 @@ pub async fn connect_openrgb(
     if host.is_empty() {
         return Err(CommandError::EmptyHost);
     }
-    let _ = lifecycle.remember_address(&shell, host, port).await;
-    let connected = connect(&shell, host, port).await;
-    lifecycle.publish(&shell).await;
-    connected
+    marks::connect_openrgb(&shell, &lifecycle, host, port, openrgb(host, port)).await
 }
 
 /// The one connect path, for the Connect button and for connect at start.
@@ -38,10 +35,11 @@ pub async fn connect(
     host: &str,
     port: u16,
 ) -> Result<ShellView, CommandError> {
-    let connector = TcpConnector::new(host, port);
-    shell
-        .start(OpenRgbBackend::new(connector, ClientConfig::default()))
-        .await
+    shell.start(openrgb(host, port)).await
+}
+
+fn openrgb(host: &str, port: u16) -> OpenRgbBackend<TcpConnector> {
+    OpenRgbBackend::new(TcpConnector::new(host, port), ClientConfig::default())
 }
 
 #[tauri::command]

@@ -70,3 +70,14 @@ pub async fn import_profile<S: ViewSink, L: LifecycleSink>(
     lifecycle.publish(shell).await;
     imported
 }
+
+pub async fn connect_openrgb<S: ViewSink, L: LifecycleSink, B: RgbBackend + Send + 'static>(
+    shell: &Shell<S>,
+    lifecycle: &Lifecycle<L>,
+    host: &str,
+    port: u16,
+    backend: B,
+) -> Result<ShellView, CommandError> {
+    let _ = lifecycle.remember_address(shell, host, port).await;
+    start(shell, lifecycle, backend).await
+}
