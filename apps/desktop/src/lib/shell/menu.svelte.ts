@@ -72,8 +72,17 @@ export function isMenuKey(event: KeyboardEvent): boolean {
   return event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey);
 }
 
+function insideInert(element: HTMLElement): boolean {
+  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+    if (node.inert || node.hasAttribute("inert")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function canOpen(origin: HTMLElement): boolean {
-  if (origin.closest("[inert]")) {
+  if (insideInert(origin)) {
     return false;
   }
   const modal = document.querySelector("[aria-modal='true']");

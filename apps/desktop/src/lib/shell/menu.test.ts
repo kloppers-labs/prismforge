@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
 import { effectHandlers } from "../../test/effects";
@@ -8,8 +8,10 @@ import { demoConnected } from "../../test/fixtures/sessions";
 import { storeTwo } from "../../test/fixtures/stores";
 import MenuHarness from "../../test/MenuHarness.svelte";
 import { menuItems } from "../../test/menus";
-import { connectionChip, findStrip, profileChip, waitForConnection } from "../../test/shell";
+import { connectionChip, findStrip, go, profileChip, waitForConnection } from "../../test/shell";
 import type { Menu } from "./menu.svelte";
+
+afterEach(() => vi.unstubAllGlobals());
 
 function harness(ran: string[] = []) {
   const menu: Menu = {
@@ -247,4 +249,21 @@ test("a_resize_or_a_scroll_keeps_the_menu_open", async () => {
 
   expect(menu()).toBeTruthy();
   expect(focused()).toBe("Bravo");
+});
+
+test("a_covering_diagnostics_drawer_keeps_page_menus_shut_and_its_own_menus_open", async () => {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("max-width"), media: query, addEventListener() {}, removeEventListener() {} }));
+  fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo });
+  render(App);
+  await waitForConnection("Connected");
+  const row = within(await screen.findByRole("navigation", { name: /Devices/ })).getAllByRole("button")[0]!;
+  await go("Diagnostics");
+  expect(screen.getByRole("main").inert).toBe(true);
+
+  await fireEvent.contextMenu(row);
+  expect(screen.queryByRole("menu")).toBeNull();
+
+  const drawer = screen.getByRole("complementary", { name: "Diagnostics" });
+  await fireEvent.contextMenu(within(drawer).getByRole("region", { name: "Backend" }));
+  expect(screen.getByRole("menu", { name: "Actions for Backend" })).toBeTruthy();
 });
