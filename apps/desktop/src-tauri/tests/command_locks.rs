@@ -8,11 +8,8 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use prismforge_core::profile::{Extra, ProfileId};
-use prismforge_core::setup::{
-    Component, ComponentId, Geometry, OutputId, Placement, Ring, Setup, SetupOutput,
-    Turn as RingTurn, View, ViewId,
-};
+use prismforge_core::profile::ProfileId;
+use prismforge_core::setup::{Setup, ViewId};
 use prismforge_core::store::{CloseAction, GroupId, NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_desktop::{
@@ -24,6 +21,7 @@ use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 
 use support::lifecycle::{FakeEntry, FakeExit, FakeWindow, LifecycleRecorder};
+use support::setups::{fan, output, pc, place, setup, view};
 use support::temp::TempDir;
 use support::{Recorder, is_connected};
 
@@ -116,51 +114,19 @@ fn preview(name: &str) -> PreviewRequest {
     }
 }
 
-fn pc() -> ViewId {
-    ViewId::parse("v-pc").expect("view id")
-}
-
 /// The graphics card's logo as one ring placed in the PC view.
 fn logo_setup() -> Setup {
-    let logo = ComponentId::parse("c-logo").expect("component id");
-    Setup {
-        components: vec![Component {
-            id: logo.clone(),
-            name: "Logo".into(),
-            geometry: Geometry::Ring(Ring {
-                leds: 12,
-                first_angle: 0,
-                turn: RingTurn::Clockwise,
-                extra: Extra::new(),
-            }),
-            extra: Extra::new(),
-        }],
-        outputs: vec![SetupOutput {
-            id: OutputId::parse("o-logo").expect("output id"),
-            device: DeviceRef::new(GPU),
-            zone: None,
-            label: "Demo Graphics Card".into(),
-            zone_name: None,
-            first_led: 0,
-            branches: vec![vec![logo.clone()]],
-            extra: Extra::new(),
-        }],
-        views: vec![View {
-            id: pc(),
-            name: "PC".into(),
-            placements: vec![Placement {
-                component: logo,
-                x: 100,
-                y: 100,
-                size: 100,
-                rotation: 0,
-                flipped: false,
-                extra: Extra::new(),
-            }],
-            extra: Extra::new(),
-        }],
-        extra: Extra::new(),
-    }
+    setup(
+        vec![fan("c-logo", "Logo", 12)],
+        vec![output(
+            "o-logo",
+            &DeviceRef::new(GPU),
+            None,
+            "Demo Graphics Card",
+            &[&["c-logo"]],
+        )],
+        vec![view(pc(), "PC", vec![place("c-logo", 100, 100, 100, 0)])],
+    )
 }
 
 fn across_preview() -> AcrossPreviewRequest {

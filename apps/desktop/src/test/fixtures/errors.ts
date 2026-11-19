@@ -132,3 +132,25 @@ export const settingStartEntryNotKept: CommandError = {
 export const settingsInUse: CommandError = {
   "StoreUnavailable": "InUse"
 };
+
+export const errorSetupLedBounds: CommandError = {
+  "Store": {
+    "InvalidSetup": {
+      "problem": {
+        "ExceedsOutput": {
+          "output": "o-cooler",
+          "needed": 17,
+          "available": 16
+        }
+      }
+    }
+  }
+};
+
+export const errorPlanUnknownView: CommandError = {
+  "Plan": {
+    "UnknownView": {
+      "view": "v-gone"
+    }
+  }
+};
