@@ -39,3 +39,16 @@ export function componentMenu(context: SetupMenuContext, id: ComponentId): Menu 
   }
   return { label: `Actions for ${together ? selectionName(setup.draft, setup.selection) : nameOf(setup.draft, id)}`, items };
 }
+
+export function outlineMenu(context: SetupMenuContext, id: string): Menu {
+  const { setup } = context;
+  const focus = () => setup.selection.length === 1 && setup.selection[0] === id ? true : setup.select([id]);
+  return {
+    label: `Actions for ${nameOf(setup.draft, id)}`,
+    items: [
+      { id: "outline.select", label: "Select only this outline", run: () => setup.select([id]) },
+      { id: "outline.turn", label: "Turn right 15°", run: () => (focus(), setup.turnSelection(1)) },
+      { id: "outline.delete", label: "Delete outline…", danger: true, run: (origin) => (focus(), (setup.asked = { kind: "delete", from: origin })) },
+    ],
+  };
+}

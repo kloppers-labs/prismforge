@@ -41,19 +41,31 @@ export function listText(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
-export function nameOf(setup: Setup, id: ComponentId): string {
-  return setup.components.find((component) => component.id === id)?.name ?? id;
+export function nameOf(setup: Setup, id: string): string {
+  return (
+    setup.components.find((component) => component.id === id)?.name ??
+    setup.views.flatMap((view) => view.outlines).find((outline) => outline.id === id)?.name ??
+    id
+  );
 }
 
-export function selectionName(setup: Setup, ids: ComponentId[]): string {
-  return ids.length === 1 ? nameOf(setup, ids[0]!) : `${ids.length} components`;
-}
-
-export function kindText(geometry: Geometry): string {
-  if ("Matrix" in geometry) {
-    return `Matrix of ${geometry.Matrix.columns} × ${geometry.Matrix.rows}, ${leds(ledCount(geometry))}`;
+export function selectionName(setup: Setup, ids: string[]): string {
+  if (ids.length === 1) {
+    return nameOf(setup, ids[0]!);
   }
-  return `${KIND_NAMES[kindOf(geometry)]}, ${leds(ledCount(geometry))}`;
+  return ids.every((id) => setup.components.some((component) => component.id === id)) ? `${ids.length} components` : `${ids.length} items`;
+}
+
+export function kindText(geometry: Geometry, framed = false): string {
+  const frame = framed ? ", in a frame" : "";
+  if ("Matrix" in geometry) {
+    return `Matrix of ${geometry.Matrix.columns} × ${geometry.Matrix.rows}, ${leds(ledCount(geometry))}${frame}`;
+  }
+  return `${KIND_NAMES[kindOf(geometry)]}, ${leds(ledCount(geometry))}${frame}`;
+}
+
+export function outlinePlaceText(outline: { x: number; y: number; width: number; height: number; rotation: number }): string {
+  return `x ${outline.x}, y ${outline.y}, ${outline.width} × ${outline.height}, turned ${outline.rotation}°`;
 }
 
 export function placeText(placement: Placement): string {

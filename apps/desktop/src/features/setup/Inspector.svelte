@@ -6,8 +6,10 @@
   import { failureText } from "../../lib/errors";
   import type { Names } from "../../lib/names";
   import type { GroupsState } from "../effects/groups.svelte";
-  import { CANVAS, NUDGE, SIZE_LIMITS, placementOf } from "./edits";
-  import { COMPONENT_LED_LIMIT, ledCount, reversed, withLeds } from "./geometry";
+  import type { OutlineKind } from "../../lib/api/bindings/OutlineKind";
+  import { CANVAS, FRAME_LIMITS, NUDGE, OUTLINE_LIMITS, SIZE_LIMITS, outlineOf, placementOf } from "./edits";
+  import { COMPONENT_LED_LIMIT, LINE_POINT_LIMIT, POINT_RANGE, addPoint, ledCount, movePoint, removePoint, reversed, withLeds } from "./geometry";
+  import { OUTLINES } from "./library";
   import NumberField from "./NumberField.svelte";
   import { firstLedText, kindText, outputLine, selectionName, wiringTexts } from "./present";
   import type { SetupState } from "./state.svelte";
@@ -39,6 +41,9 @@
   let ids = $derived(setup.selection);
   let one = $derived(ids.length === 1 ? ids[0]! : null);
   let component = $derived(one ? (setup.draft.components.find((each) => each.id === one) ?? null) : null);
+  let outline = $derived(one ? outlineOf(setup.draft, setup.tab, one) : null);
+  let deletingOutline = $state(false);
+  let outlineDelete: HTMLButtonElement | undefined = $state();
   let placement = $derived(one ? placementOf(setup.draft, setup.tab, one) : null);
   let output = $derived(one ? outputOf(setup.draft, one) : null);
   let chain = $derived(one ? chainOf(setup.draft, one) : null);
@@ -64,7 +69,9 @@
     }
     setup.asked = null;
     opener = asked.from;
-    if (asked.kind === "delete" && one) {
+    if (asked.kind === "delete" && one && outline) {
+      deletingOutline = true;
+    } else if (asked.kind === "delete" && one) {
       deleting = true;
     } else if (asked.kind === "group" && members.length > 0) {
       startGroup();
@@ -108,6 +115,27 @@
     }
     nameProblem = null;
     setup.rename(component.id, input.value);
+  }
+
+  function renameOutline(input: HTMLInputElement) {
+    if (!outline) {
+      return;
+    }
+    if (input.value.trim() === "") {
+      nameProblem = `Enter a name. The outline keeps the name ${outline.name}.`;
+      input.value = outline.name;
+      return;
+    }
+    nameProblem = null;
+    setup.setOutline(outline.id, { name: input.value }, "Rename");
+  }
+
+  function point(index: number, axis: "x" | "y", value: number) {
+    const geometry = component?.geometry;
+    if (geometry && "Line" in geometry) {
+      const current = geometry.Line.points[index]!;
+      reshape(movePoint(geometry, index, { ...current, [axis]: value }), `Move point ${index + 1}`);
+    }
   }
 
   function reverseHint(geometry: Geometry): string {
@@ -160,9 +188,53 @@
       {@render groupButtonSnippet()}
       <button type="button" class="small" data-mirror="component.take-out" onclick={() => setup.takeOut()}>Take out of the {setup.view?.name} view</button>
     </div>
+  {:else if outline}
+    <h2 class="heading">{outline.name}</h2>
+    <p class="kind">Outline without LEDs. It is drawn only; nothing is wired to it.</p>
+    <div class="block">
+      <label for="outline-name">Name</label>
+      <input
+        id="outline-name"
+        type="text"
+        autocomplete="off"
+        value={outline.name}
+        aria-describedby={nameProblem ? "component-name-problem" : undefined}
+        onchange={(event) => renameOutline(event.currentTarget)}
+      />
+      {#if nameProblem}<p id="component-name-problem" class="problem-text">{nameProblem}</p>{/if}
+    </div>
+    <div class="field">
+      <label for="outline-kind">Kind</label>
+      <select id="outline-kind" value={outline.kind} onchange={(event) => setup.setOutline(outline!.id, { kind: event.currentTarget.value as OutlineKind }, "Change the kind of")}>
+        {#each OUTLINES as option (option.kind)}
+          <option value={option.kind}>{option.name}</option>
+        {/each}
+      </select>
+    </div>
+    <fieldset class="block">
+      <legend>Place in the {setup.view?.name} view</legend>
+      <div class="grid">
+        <NumberField id="outline-x" label="X" value={outline.x} min={0} max={CANVAS.width} onchange={(value) => setup.setOutline(outline!.id, { x: value }, "Move")} />
+        <NumberField id="outline-y" label="Y" value={outline.y} min={0} max={CANVAS.height} onchange={(value) => setup.setOutline(outline!.id, { y: value }, "Move")} />
+        <NumberField id="outline-width" label="Width" value={outline.width} min={OUTLINE_LIMITS.min} max={OUTLINE_LIMITS.max} onchange={(value) => setup.setOutline(outline!.id, { width: value }, "Resize")} />
+        <NumberField id="outline-height" label="Height" value={outline.height} min={OUTLINE_LIMITS.min} max={OUTLINE_LIMITS.max} onchange={(value) => setup.setOutline(outline!.id, { height: value }, "Resize")} />
+        <NumberField id="outline-turn" label="Turn" unit="°" value={outline.rotation} min={0} max={359} step={15} onchange={(value) => setup.setOutline(outline!.id, { rotation: value }, "Turn")} />
+      </div>
+      <div class="buttons">
+        <button type="button" class="small" onclick={() => setup.moveSelection(-NUDGE, 0)}>Move left</button>
+        <button type="button" class="small" onclick={() => setup.moveSelection(NUDGE, 0)}>Move right</button>
+        <button type="button" class="small" onclick={() => setup.moveSelection(0, -NUDGE)}>Move up</button>
+        <button type="button" class="small" onclick={() => setup.moveSelection(0, NUDGE)}>Move down</button>
+        <button type="button" class="small" onclick={() => setup.turnSelection(-1)}>Turn left 15°</button>
+        <button type="button" class="small" data-mirror="outline.turn" onclick={() => setup.turnSelection(1)}>Turn right 15°</button>
+      </div>
+    </fieldset>
+    <div class="buttons">
+      <button type="button" class="small danger" data-mirror="outline.delete" bind:this={outlineDelete} onclick={() => ((opener = outlineDelete), (deletingOutline = true))}>Delete outline…</button>
+    </div>
   {:else if component && placement}
     <h2 class="heading">{component.name}</h2>
-    <p class="kind">{kindText(component.geometry)}</p>
+    <p class="kind">{kindText(component.geometry, component.frame !== undefined)}</p>
 
     <div class="block">
       <label for="component-name">Name</label>
@@ -266,6 +338,37 @@
       {/if}
     </fieldset>
 
+    {#if "Line" in component.geometry}
+      {@const points = component.geometry.Line.points}
+      <fieldset class="block">
+        <legend>Points of the line</legend>
+        {#each points as each, index (index)}
+          <div class="point">
+            <NumberField id="point-{index}-x" label="Point {index + 1}, x" value={each.x} min={POINT_RANGE.min} max={POINT_RANGE.max} onchange={(value) => point(index, "x", value)} />
+            <NumberField id="point-{index}-y" label="Point {index + 1}, y" value={each.y} min={POINT_RANGE.min} max={POINT_RANGE.max} onchange={(value) => point(index, "y", value)} />
+            <button type="button" class="small" disabled={points.length <= 2} onclick={() => reshape(removePoint(component!.geometry, index), `Remove point ${index + 1}`)}>Remove point {index + 1}</button>
+          </div>
+        {/each}
+        <button type="button" class="small" disabled={points.length >= LINE_POINT_LIMIT} onclick={() => reshape(addPoint(component!.geometry), "Add a point")}>Add a point</button>
+        <p class="hint">The LEDs spread evenly along the path from point 1, in the line's own units; Size and Turn place it in the view. A line has 2 to {LINE_POINT_LIMIT} points.</p>
+      </fieldset>
+    {/if}
+
+    <fieldset class="block">
+      <legend>Frame</legend>
+      {#if component.frame}
+        {@const frame = component.frame}
+        <div class="grid">
+          <NumberField id="frame-width" label="Frame width" unit="%" value={frame.width} min={FRAME_LIMITS.min} max={FRAME_LIMITS.max} onchange={(value) => setup.setFrame(component!.id, { width: value, height: frame.height }, "Resize the frame")} />
+          <NumberField id="frame-height" label="Frame height" unit="%" value={frame.height} min={FRAME_LIMITS.min} max={FRAME_LIMITS.max} onchange={(value) => setup.setFrame(component!.id, { width: frame.width, height: value }, "Resize the frame")} />
+        </div>
+        <button type="button" class="small" onclick={() => setup.setFrame(component!.id, null, "Remove the frame")}>Remove the frame</button>
+      {:else}
+        <button type="button" class="small" onclick={() => setup.setFrame(component!.id, { width: 120, height: 60 }, "Add a frame")}>Add a frame</button>
+      {/if}
+      <p class="hint">A frame is drawn round the LEDs, such as a graphics card or a cooler plate. It holds no LEDs. Sizes are percent of the LEDs' longer side.</p>
+    </fieldset>
+
     <fieldset class="block">
       <legend>Wiring</legend>
       {#if output}
@@ -316,6 +419,23 @@
     {#snippet actions()}
       <button type="button" onclick={() => (grouping = false)}>Cancel</button>
       <button type="submit" form="setup-group-form" class="primary" disabled={groups.working}>Make group</button>
+    {/snippet}
+  </Dialog>
+{/if}
+
+{#if deletingOutline && outline}
+  <Dialog title="Delete {outline.name}?" {opener} onclose={() => (deletingOutline = false)}>
+    <p>The outline leaves the drawing. It has no LEDs, so nothing else changes. Undo brings it back until you discard changes or close PrismForge, also after a save.</p>
+    {#snippet actions()}
+      <button type="button" onclick={() => (deletingOutline = false)}>Keep outline</button>
+      <button
+        type="button"
+        class="danger"
+        onclick={() => {
+          setup.removeOutline(outline!.id);
+          deletingOutline = false;
+        }}>Delete outline</button
+      >
     {/snippet}
   </Dialog>
 {/if}
@@ -396,6 +516,13 @@
   .field label {
     font-size: var(--font-s);
     color: var(--text-dim);
+  }
+
+  .point {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: var(--space-2);
+    align-items: end;
   }
 
   .problems {

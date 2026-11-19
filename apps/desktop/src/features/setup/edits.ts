@@ -1,7 +1,9 @@
 import type { Component } from "../../lib/api/bindings/Component";
 import type { ComponentId } from "../../lib/api/bindings/ComponentId";
 import type { DeviceRef } from "../../lib/api/bindings/DeviceRef";
+import type { Frame } from "../../lib/api/bindings/Frame";
 import type { Geometry } from "../../lib/api/bindings/Geometry";
+import type { Outline } from "../../lib/api/bindings/Outline";
 import type { OutputId } from "../../lib/api/bindings/OutputId";
 import type { Placement } from "../../lib/api/bindings/Placement";
 import type { Setup } from "../../lib/api/bindings/Setup";
@@ -14,6 +16,8 @@ export const CANVAS = { width: 1000, height: 700 } as const;
 export const ROTATION_STEP = 15;
 export const NUDGE = 10;
 export const SIZE_LIMITS = { min: 10, max: 1000 } as const;
+export const OUTLINE_LIMITS = { min: 10, max: 4000 } as const;
+export const FRAME_LIMITS = { min: 10, max: 1000 } as const;
 export const VIEWS = { pc: "v-pc", desk: "v-desk" } as const satisfies Record<string, ViewId>;
 export const VIEW_NAMES: Record<ViewId, string> = { [VIEWS.pc]: "PC", [VIEWS.desk]: "Desk" };
 
@@ -22,7 +26,7 @@ export type OutputChoice = { device: DeviceRef; zone: number | null; label: stri
 /** How a component joins an output: alone, beside the others with the same colours, or after the last part on the wire. */
 export type Joining = "own" | "mirror" | "chain";
 
-export type NewComponent = Pick<Component, "id" | "name" | "geometry">;
+export type NewComponent = Pick<Component, "id" | "name" | "geometry" | "frame">;
 
 export function withViews(setup: Setup): Setup {
   const missing = [VIEWS.pc, VIEWS.desk].filter((id) => !setup.views.some((view) => view.id === id));
@@ -68,12 +72,65 @@ function onOutput(setup: Setup, id: OutputId, change: (output: SetupOutput) => S
   };
 }
 
+function onOutlines(setup: Setup, view: ViewId, ids: string[], change: (outline: Outline) => Outline): Setup {
+  return inView(setup, view, (each) => ({
+    ...each,
+    outlines: each.outlines.map((outline) => (ids.includes(outline.id) ? change(outline) : outline)),
+  }));
+}
+
+export function outlineOf(setup: Setup, view: ViewId, id: string): Outline | null {
+  return setup.views.find((each) => each.id === view)?.outlines.find((outline) => outline.id === id) ?? null;
+}
+
+function bounded(outline: Outline): Outline {
+  return {
+    ...outline,
+    x: clamp(outline.x, 0, CANVAS.width),
+    y: clamp(outline.y, 0, CANVAS.height),
+    width: clamp(outline.width, OUTLINE_LIMITS.min, OUTLINE_LIMITS.max),
+    height: clamp(outline.height, OUTLINE_LIMITS.min, OUTLINE_LIMITS.max),
+    rotation: turn(outline.rotation),
+  };
+}
+
+export function addOutline(setup: Setup, view: ViewId, outline: Outline): Setup {
+  return inView(withViews(setup), view, (each) => ({ ...each, outlines: [...each.outlines, bounded(outline)] }));
+}
+
+export function setOutline(setup: Setup, view: ViewId, id: string, patch: Partial<Omit<Outline, "id">>): Setup {
+  return onOutlines(setup, view, [id], (outline) => bounded({ ...outline, ...patch }));
+}
+
+export function removeOutline(setup: Setup, view: ViewId, id: string): Setup {
+  return inView(setup, view, (each) => ({ ...each, outlines: each.outlines.filter((outline) => outline.id !== id) }));
+}
+
+/** Sets or, with `null`, removes the drawn frame round a component's LEDs; the LEDs stay as they are. */
+export function setFrame(setup: Setup, id: ComponentId, frame: Pick<Frame, "width" | "height"> | null): Setup {
+  return onComponent(setup, id, (component) => {
+    if (frame === null) {
+      const { frame: _, ...rest } = component;
+      return rest;
+    }
+    return {
+      ...component,
+      frame: {
+        ...component.frame,
+        width: clamp(frame.width, FRAME_LIMITS.min, FRAME_LIMITS.max),
+        height: clamp(frame.height, FRAME_LIMITS.min, FRAME_LIMITS.max),
+      },
+    };
+  });
+}
+
 export function placementOf(setup: Setup, view: ViewId, id: ComponentId): Placement | null {
   return setup.views.find((each) => each.id === view)?.placements.find((placement) => placement.component === id) ?? null;
 }
 
 export function addComponent(setup: Setup, view: ViewId, component: NewComponent, at: { x: number; y: number; size?: number; rotation?: number }): Setup {
-  const placed = withViews({ ...setup, components: [...setup.components, { ...component }] });
+  const added: Component = component.frame ? { ...component } : { id: component.id, name: component.name, geometry: component.geometry };
+  const placed = withViews({ ...setup, components: [...setup.components, added] });
   return place(placed, view, component.id, at);
 }
 
@@ -97,24 +154,26 @@ export function unplace(setup: Setup, view: ViewId, id: ComponentId): Setup {
 }
 
 /** Moves every listed component by the same amount, so the group keeps its shape and stays inside the view. */
-export function moveBy(setup: Setup, view: ViewId, ids: ComponentId[], dx: number, dy: number): Setup {
-  const moving = ids.flatMap((id) => placementOf(setup, view, id) ?? []);
+export function moveBy(setup: Setup, view: ViewId, ids: string[], dx: number, dy: number): Setup {
+  const moving = [...ids.flatMap((id) => placementOf(setup, view, id) ?? []), ...ids.flatMap((id) => outlineOf(setup, view, id) ?? [])];
   if (moving.length === 0) {
     return setup;
   }
-  const xs = moving.map((placement) => placement.x);
-  const ys = moving.map((placement) => placement.y);
+  const xs = moving.map((item) => item.x);
+  const ys = moving.map((item) => item.y);
   const stepX = clamp(dx, -Math.min(...xs), CANVAS.width - Math.max(...xs));
   const stepY = clamp(dy, -Math.min(...ys), CANVAS.height - Math.max(...ys));
-  return onPlacements(setup, view, ids, (placement) => ({ ...placement, x: placement.x + stepX, y: placement.y + stepY }));
+  const shift = <T extends { x: number; y: number }>(item: T): T => ({ ...item, x: item.x + stepX, y: item.y + stepY });
+  return onOutlines(onPlacements(setup, view, ids, shift), view, ids, shift);
 }
 
 export function moveTo(setup: Setup, view: ViewId, id: ComponentId, x: number, y: number): Setup {
   return onPlacements(setup, view, [id], (placement) => ({ ...placement, x: clamp(x, 0, CANVAS.width), y: clamp(y, 0, CANVAS.height) }));
 }
 
-export function rotateBy(setup: Setup, view: ViewId, ids: ComponentId[], steps: number): Setup {
-  return onPlacements(setup, view, ids, (placement) => ({ ...placement, rotation: turn(placement.rotation + steps * ROTATION_STEP) }));
+export function rotateBy(setup: Setup, view: ViewId, ids: string[], steps: number): Setup {
+  const spin = <T extends { rotation: number }>(item: T): T => ({ ...item, rotation: turn(item.rotation + steps * ROTATION_STEP) });
+  return onOutlines(onPlacements(setup, view, ids, spin), view, ids, spin);
 }
 
 export function setRotation(setup: Setup, view: ViewId, id: ComponentId, degrees: number): Setup {

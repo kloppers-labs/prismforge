@@ -50,8 +50,10 @@ test("the_tower_template_proposes_components_and_wires_none_of_them", async () =
     "Memory module 2",
     "Graphics card",
     "Board edge",
+    "Case",
   ]);
-  expect(within(list).getAllByRole("option").every((row) => row.textContent?.includes("Not wired to an output"))).toBe(true);
+  expect(within(list).getAllByRole("option").slice(0, 10).every((row) => row.textContent?.includes("Not wired to an output"))).toBe(true);
+  expect(within(list).getByRole("option", { name: "Case" }).textContent).toContain("No LEDs");
   expect(screen.getByRole("button", { name: "Undo" })).toBeTruthy();
   await save(shell);
   expect(saved(shell).outputs).toEqual([]);
@@ -110,7 +112,7 @@ test("the_desk_template_fills_the_desk_view", async () => {
   await fireEvent.click(screen.getByRole("button", { name: "Add the Desk template" }));
 
   const desk = screen.getByRole("listbox", { name: "Components in the Desk view" });
-  expect(names(desk)).toEqual(["Monitor edge", "Desk edge strip", "Keyboard", "Light bar", "Mouse logo"]);
+  expect(names(desk)).toEqual(["Monitor edge", "Desk edge strip", "Keyboard", "Light bar", "Mouse logo", "Desk", "Monitor", "PC"]);
 });
 
 test("a_component_of_the_other_view_is_placed_here_from_the_list", async () => {

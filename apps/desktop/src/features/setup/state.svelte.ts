@@ -12,17 +12,22 @@ import type { OutputId } from "../../lib/api/bindings/OutputId";
 import {
   VIEWS,
   addComponent,
+  addOutline,
   flip,
   moveBy,
   moveInChain,
   moveTo,
+  outlineOf,
   place,
   placementOf,
   removeComponent,
+  removeOutline,
   rename,
   rotateBy,
   setFirstLed,
+  setFrame,
   setGeometry,
+  setOutline,
   setRotation,
   setSize,
   unplace,
@@ -35,6 +40,9 @@ import {
 } from "./edits";
 import type { ShapePart } from "./library";
 import type { Template } from "./templates";
+import { OUTLINES } from "./library";
+import type { Outline } from "../../lib/api/bindings/Outline";
+import type { OutlineKind } from "../../lib/api/bindings/OutlineKind";
 import { nameOf, selectionName } from "./present";
 import { History } from "./history";
 
@@ -49,8 +57,13 @@ function same(left: Setup, right: Setup): boolean {
 }
 
 /** The smallest free id with this prefix; ids stay unique across components, outputs and views. */
-export function freeId(setup: Setup, prefix: "c-" | "o-"): string {
-  const used = new Set([...setup.components.map((each) => each.id), ...setup.outputs.map((each) => each.id), ...setup.views.map((each) => each.id)]);
+export function freeId(setup: Setup, prefix: "c-" | "o-" | "u-"): string {
+  const used = new Set([
+    ...setup.components.map((each) => each.id),
+    ...setup.outputs.map((each) => each.id),
+    ...setup.views.map((each) => each.id),
+    ...setup.views.flatMap((view) => view.outlines.map((each) => each.id)),
+  ]);
   let number = 1;
   while (used.has(`${prefix}${number}`)) {
     number += 1;
@@ -88,6 +101,7 @@ export class SetupState {
   dirty = $derived(this.stored !== null && !same(this.draft, withViews(this.stored.setup)));
   view = $derived(this.draft.views.find((view) => view.id === this.tab) ?? null);
   placed = $derived(this.view?.placements.map((placement) => placement.component) ?? []);
+  drawn = $derived(this.view?.outlines.map((outline) => outline.id) ?? []);
   issues = $derived.by(() => {
     const session = this.session();
     return session ? problems(this.draft, session) : [];
@@ -256,7 +270,7 @@ export class SetupState {
       const view = this.view?.name ?? "";
       this.edit(
         `Take ${selectionName(this.draft, ids)} out of the ${view} view`,
-        (setup) => ids.reduce((next, id) => unplace(next, this.tab, id), setup),
+        (setup) => ids.reduce((next, id) => removeOutline(unplace(next, this.tab, id), this.tab, id), setup),
         this.selection.filter((id) => !ids.includes(id)),
       );
     }
@@ -297,7 +311,7 @@ export class SetupState {
         parts.reduce((next, part, index) => {
           const id = freeId(next, "c-");
           ids.push(id);
-          const added = addComponent(next, this.tab, { id, name: `${name}${part.suffix}`, geometry: part.geometry }, { ...at, size: Math.round(at.size * part.scale) });
+          const added = addComponent(next, this.tab, { id, name: `${name}${part.suffix}`, geometry: part.geometry, ...(part.frame ? { frame: part.frame } : {}) }, { ...at, size: Math.round(at.size * part.scale) });
           if (!wiring) {
             return added;
           }
@@ -319,7 +333,7 @@ export class SetupState {
           const id = freeId(next, "c-");
           ids.push(id);
           return addComponent(next, template.view, { id, name: slot.name, geometry: slot.geometry }, slot);
-        }, setup),
+        }, template.outlines.reduce((next, backdrop) => addOutline(next, template.view, { ...backdrop, id: freeId(next, "u-"), rotation: 0 }), setup)),
       ids,
     );
   }
@@ -352,8 +366,38 @@ export class SetupState {
     );
   }
 
+  addOutline(kind: OutlineKind) {
+    const shape = OUTLINES.find((each) => each.kind === kind)!;
+    let id = "";
+    this.edit(
+      `Add the ${shape.name.toLowerCase()} outline`,
+      (setup) => {
+        id = freeId(setup, "u-");
+        return addOutline(setup, this.tab, { id, name: shape.name, kind, x: shape.x, y: shape.y, width: shape.width, height: shape.height, rotation: 0 });
+      },
+      [],
+    );
+    this.selection = [id];
+  }
+
+  setOutline(id: string, patch: Partial<Omit<Outline, "id">>, what: string) {
+    this.edit(`${what} ${nameOf(this.draft, id)}`, (setup) => setOutline(setup, this.tab, id, patch));
+  }
+
+  removeOutline(id: string) {
+    this.edit(
+      `Delete ${nameOf(this.draft, id)}`,
+      (setup) => removeOutline(setup, this.tab, id),
+      this.selection.filter((each) => each !== id),
+    );
+  }
+
+  setFrame(id: ComponentId, frame: { width: number; height: number } | null, what: string) {
+    this.edit(`${what} of ${nameOf(this.draft, id)}`, (setup) => setFrame(setup, id, frame));
+  }
+
   private keepSelection() {
-    this.selection = this.selection.filter((id) => placementOf(this.draft, this.tab, id) !== null);
+    this.selection = this.selection.filter((id) => placementOf(this.draft, this.tab, id) !== null || outlineOf(this.draft, this.tab, id) !== null);
   }
 
   private syncHistory() {

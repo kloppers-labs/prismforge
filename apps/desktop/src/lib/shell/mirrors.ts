@@ -41,6 +41,9 @@ export const MIRRORS = {
   "component.group": "Make a group from the selection in the Setup editor",
   "component.take-out": "Take out of the view in the Setup editor",
   "component.delete": "Delete component in the Setup editor",
+  "outline.select": "the outline's row in the Setup list",
+  "outline.turn": "Turn right 15° in the outline editor",
+  "outline.delete": "Delete outline in the outline editor",
 } as const;
 
 export type MirrorId = keyof typeof MIRRORS;

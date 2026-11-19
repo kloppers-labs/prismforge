@@ -4,9 +4,9 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { Names } from "../../lib/names";
   import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
-  import { placementOf } from "./edits";
+  import { outlineOf, placementOf } from "./edits";
   import { editAction, keyHelp, type EditAction } from "./keys";
-  import { firstLedText, kindText, outputLine, placeText, wiringTexts } from "./present";
+  import { firstLedText, kindText, outlinePlaceText, outputLine, placeText, wiringTexts } from "./present";
   import type { SetupState } from "./state.svelte";
   import { outputOf } from "./wiring";
 
@@ -26,9 +26,11 @@
     menu: (id: ComponentId) => Menu | null;
   } = $props();
 
+  const OUTLINE_WORDS = { Case: "a case", Desk: "a desk", Monitor: "a monitor", Pc: "a PC" } as const;
+
   let list: HTMLElement | undefined = $state();
   let focused = $state<ComponentId | null>(null);
-  let rows = $derived(setup.placed);
+  let rows = $derived([...setup.placed, ...setup.drawn]);
   let viewName = $derived(setup.view?.name ?? "");
   let count = $derived(setup.selection.length);
   let stop = $derived((focused !== null && rows.includes(focused) ? focused : null) ?? rows.find((id) => setup.selection.includes(id)) ?? rows[0] ?? null);
@@ -124,6 +126,7 @@
     bind:this={list}
   >
     {#each rows as id (id)}
+      {@const outline = outlineOf(setup.draft, setup.tab, id)}
       {@const component = setup.draft.components.find((each) => each.id === id)}
       {@const placement = placementOf(setup.draft, setup.tab, id)}
       {@const output = outputOf(setup.draft, id)}
@@ -149,7 +152,7 @@
           <span class="body">
             <span class="line">
               <span id="row-name-{id}" class="pick-name">{component.name}</span>
-              <span class="pick-meta">{kindText(component.geometry)}</span>
+              <span class="pick-meta">{kindText(component.geometry, component.frame !== undefined)}</span>
             </span>
             <span id="row-about-{id}" class="about">
               <span class:unwired={!output}>{output ? outputLine(output, names, session) : "Not wired to an output"}</span>
@@ -166,6 +169,35 @@
                 {/each}
               </span>
             {/if}
+          </span>
+        </div>
+      {:else if outline}
+        {@const selected = setup.selection.includes(id)}
+        <div
+          class="pick option"
+          role="option"
+          tabindex={stop === id ? 0 : -1}
+          aria-selected={selected}
+          aria-labelledby="row-name-{id}"
+          aria-describedby="row-about-{id}"
+          aria-keyshortcuts="Shift+F10"
+          data-row={id}
+          data-mirror="outline.select"
+          onclick={(event) => onclick(event, id)}
+          onkeydown={(event) => onkey(event, id)}
+          onfocus={() => (focused = id)}
+          use:contextMenu={() => menu(id)}
+        >
+          <span class="box" class:checked={selected} aria-hidden="true">{selected ? "✓" : ""}</span>
+          <span class="body">
+            <span class="line">
+              <span id="row-name-{id}" class="pick-name">{outline.name}</span>
+              <span class="pick-meta">Outline</span>
+            </span>
+            <span id="row-about-{id}" class="about">
+              <span>Outline of {OUTLINE_WORDS[outline.kind]}. No LEDs: it is drawn only and nothing is wired to it.</span>
+              <span>{outlinePlaceText(outline)}</span>
+            </span>
           </span>
         </div>
       {/if}

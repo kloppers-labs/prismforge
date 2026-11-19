@@ -17,7 +17,8 @@
   import DetectedList from "./DetectedList.svelte";
   import GroupsList from "./GroupsList.svelte";
   import Inspector from "./Inspector.svelte";
-  import { componentMenu } from "./menu";
+  import { componentMenu, outlineMenu } from "./menu";
+  import OutlinesPanel from "./OutlinesPanel.svelte";
   import LibraryPanel from "./LibraryPanel.svelte";
   import UnwiredList from "./UnwiredList.svelte";
   import { editAction, type EditAction } from "./keys";
@@ -160,7 +161,7 @@
             <Canvas {setup} {colors} live={across.stage === "live"} onaction={act} />
           </div>
           <aside class="side" aria-label="Components and editor">
-            <ComponentList {setup} {session} names={app.names} {colors} onaction={act} menu={(id) => componentMenu({ setup, identify }, id)} />
+            <ComponentList {setup} {session} names={app.names} {colors} onaction={act} menu={(id) => (setup.drawn.includes(id) ? outlineMenu({ setup, identify }, id) : componentMenu({ setup, identify }, id))} />
             <Inspector {setup} {session} names={app.names} groups={app.groups} onidentify={identify} />
             {#if identified && setup.selection.includes(identified)}
               <p class="identify" role="status">
@@ -175,6 +176,7 @@
         <GroupsList {setup} groups={app.groups} />
         <OutputList {setup} {session} names={app.names} />
         <DetectedList {setup} {session} names={app.names} />
+        <OutlinesPanel {setup} />
         <LibraryPanel {setup} />
       </div>
     {/if}

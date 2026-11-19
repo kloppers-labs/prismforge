@@ -21,7 +21,7 @@
   {#each templates as template (template.id)}
     <div class="template">
       <p class="hint">
-        Proposes {template.slots.length} generic components for a {template.label.toLowerCase()}: {template.slots.map((slot) => slot.name.toLowerCase()).join(", ")}. It wires none of them; you choose the output of each, and you can move, change or delete any of them.
+        Proposes {template.slots.length} generic components for a {template.label.toLowerCase()}: {template.slots.map((slot) => slot.name.toLowerCase()).join(", ")}. It also draws {template.outlines.map((outline) => outline.name.toLowerCase()).join(", ")} as {template.outlines.length === 1 ? "an outline" : "outlines"} without LEDs. It wires none of them; you choose the output of each, and you can move, change or delete any of them.
         {setup.placed.length > 0 ? `They are added beside what is in the ${viewName} view.` : ""}
       </p>
       <button type="button" class="small" onclick={() => setup.addTemplate(template)}>Add the {template.label} template</button>

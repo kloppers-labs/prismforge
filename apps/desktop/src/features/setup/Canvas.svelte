@@ -4,6 +4,7 @@
   import { CANVAS } from "./edits";
   import { viewLeds, type Point } from "./geometry";
   import type { EditAction } from "./keys";
+  import OutlineShape from "./OutlineShape.svelte";
   import Shape from "./Shape.svelte";
   import type { SetupState } from "./state.svelte";
   import { outputOf } from "./wiring";
@@ -68,19 +69,19 @@
     return { x: point.x, y: point.y };
   }
 
-  function offsetFor(id: ComponentId): Point {
+  function offsetFor(id: string): Point {
     return drag?.started && setup.selection.includes(id) ? drag.moved : { x: 0, y: 0 };
   }
 
   function onpointerdown(event: PointerEvent) {
-    const shape = (event.target as Element | null)?.closest<SVGElement>("[data-component]");
+    const shape = (event.target as Element | null)?.closest<SVGElement>("[data-component], [data-outline]");
     if (!shape || event.button !== 0) {
       if (!shape && event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
         setup.select([]);
       }
       return;
     }
-    const id = shape.dataset.component!;
+    const id = shape.dataset.component ?? shape.dataset.outline!;
     if (event.ctrlKey || event.metaKey) {
       setup.toggle(id);
       return;
@@ -121,7 +122,8 @@
   }
 
   function oncontextmenu(event: MouseEvent) {
-    const id = (event.target as Element | null)?.closest<SVGElement>("[data-component]")?.dataset.component;
+    const shape = (event.target as Element | null)?.closest<SVGElement>("[data-component], [data-outline]");
+    const id = shape?.dataset.component ?? shape?.dataset.outline;
     const row = id ? document.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"]`) : null;
     if (!id || !row) {
       return;
@@ -165,6 +167,9 @@
     </defs>
     <rect class="paper" width={CANVAS.width} height={CANVAS.height} />
     <rect width={CANVAS.width} height={CANVAS.height} fill="url(#setup-grid)" />
+    {#each view?.outlines ?? [] as outline (outline.id)}
+      <OutlineShape {outline} selected={setup.selection.includes(outline.id)} offset={offsetFor(outline.id)} />
+    {/each}
     {#each mirrors as points, index (index)}
       <polyline class="mirror" points={points.map((point) => `${point.x},${point.y}`).join(" ")} />
     {/each}

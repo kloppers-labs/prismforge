@@ -36,7 +36,8 @@
   let bounds = $derived.by(() => {
     const xs = points.map((point) => point.x);
     const ys = points.map((point) => point.y);
-    const half = { x: (box.width * at.size) / 2, y: (box.height * at.size) / 2 };
+    const frame = component.frame ? Math.max(component.frame.width, component.frame.height) / 100 : 0;
+    const half = { x: (Math.max(box.width, frame) * at.size) / 2, y: (Math.max(box.height, frame) * at.size) / 2 };
     return {
       left: Math.min(...xs, at.x - half.x) - radius,
       right: Math.max(...xs, at.x + half.x) + radius,
@@ -90,6 +91,9 @@
 
 <g class="shape" class:selected class:unwired={!wired} data-component={component.id}>
   <g transform="translate({at.x} {at.y}) rotate({at.rotation}) scale({at.flipped ? -at.size : at.size} {at.size})">
+    {#if component.frame}
+      <rect class="frame" x={-component.frame.width / 200} y={-component.frame.height / 200} width={component.frame.width / 100} height={component.frame.height / 100} rx={pad} />
+    {/if}
     {#if "Ring" in component.geometry}
       <circle class="outline" r="0.58" />
       <circle class="hub" r="0.2" />
@@ -129,6 +133,13 @@
   .hub,
   .path {
     fill: var(--shape-fill);
+    stroke: var(--line-control);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .frame {
+    fill: var(--surface-2);
     stroke: var(--line-control);
     stroke-width: 1.5;
     vector-effect: non-scaling-stroke;

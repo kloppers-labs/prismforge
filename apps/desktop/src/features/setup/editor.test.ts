@@ -7,20 +7,25 @@ import { problems } from "./bounds";
 import {
   CANVAS,
   addComponent,
+  addOutline,
   flip,
   moveBy,
   moveInChain,
+  outlineOf,
   placementOf,
+  removeOutline,
   rename,
   rotateBy,
+  setFrame,
   setGeometry,
+  setOutline,
   setRotation,
   unwire,
   VIEWS,
   wire,
   withViews,
 } from "./edits";
-import { ledCount, localLeds, viewLeds, withLeds, reversed } from "./geometry";
+import { addPoint, ledCount, localLeds, movePoint, removePoint, viewLeds, withLeds, reversed } from "./geometry";
 import { History } from "./history";
 import { chainOf, parts, sharedWith } from "./wiring";
 
@@ -271,5 +276,58 @@ describe("reversing the direction", () => {
         expect(led.y).toBeCloseTo(forward[index]!.y, 9);
       });
     }
+  });
+});
+
+describe("the rest of the first component library", () => {
+  const caseOutline = { id: "u-1", name: "Case", kind: "Case" as const, x: 500, y: 350, width: 400, height: 600, rotation: 0 };
+
+  test("an_outline_is_drawing_only_and_changes_no_output_or_led", () => {
+    const drawn = addOutline(tower(), PC, caseOutline);
+
+    expect(drawn.outputs).toEqual(tower().outputs);
+    expect(drawn.components).toEqual(tower().components);
+    expect(outlineOf(drawn, PC, "u-1")).toEqual(caseOutline);
+  });
+
+  test("an_outline_moves_and_turns_with_the_components_it_is_selected_with_and_is_never_flipped", () => {
+    const drawn = addOutline(tower(), PC, caseOutline);
+
+    const moved = rotateBy(moveBy(drawn, PC, ["u-1", "c-graphics"], 10, -20), PC, ["u-1"], 1);
+    const flipped = flip(moved, PC, ["u-1"]);
+
+    expect(outlineOf(moved, PC, "u-1")).toMatchObject({ x: 510, y: 330, rotation: 15 });
+    expect(at(moved, "c-graphics")).toMatchObject({ x: 570, y: 450 });
+    expect(flipped).toEqual(moved);
+  });
+
+  test("an_outline_keeps_a_size_inside_its_limits", () => {
+    const drawn = setOutline(addOutline(tower(), PC, caseOutline), PC, "u-1", { width: 0, height: 99999, rotation: 370 });
+
+    expect(outlineOf(drawn, PC, "u-1")).toMatchObject({ width: 10, height: 4000, rotation: 10 });
+    expect(outlineOf(removeOutline(drawn, PC, "u-1"), PC, "u-1")).toBeNull();
+  });
+
+  test("a_free_line_gets_moves_and_loses_points_between_2_and_256", () => {
+    const line: Geometry = { Line: { leds: 6, points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], first: "AtStart" } };
+
+    const more = addPoint(line);
+    const moved = movePoint(more, 1, { x: 100, y: 50 });
+    const fewer = removePoint(removePoint(moved, 0), 0);
+
+    expect("Line" in more && more.Line.points).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 0 }]);
+    expect("Line" in moved && moved.Line.points[1]).toEqual({ x: 100, y: 50 });
+    expect("Line" in fewer && fewer.Line.points).toHaveLength(2);
+  });
+
+  test("a_frame_is_added_resized_and_removed_without_touching_the_leds", () => {
+    const framed = setFrame(tower(), "c-graphics", { width: 5, height: 2000 });
+    const graphics = framed.components.find((component) => component.id === "c-graphics")!;
+
+    expect(graphics.frame).toEqual({ width: 10, height: 1000 });
+    expect(graphics.geometry).toEqual(tower().components.find((component) => component.id === "c-graphics")!.geometry);
+    expect(setFrame(framed, "c-graphics", null).components.find((component) => component.id === "c-graphics")).toEqual(
+      tower().components.find((component) => component.id === "c-graphics"),
+    );
   });
 });

@@ -8,7 +8,7 @@ export type Point = { x: number; y: number };
 export type Kind = "Strip" | "Ring" | "Matrix" | "Perimeter" | "Point" | "Line";
 
 export const COMPONENT_LED_LIMIT = 4096;
-const LINE_POINT_LIMIT = 256;
+export const LINE_POINT_LIMIT = 256;
 
 export function kindOf(geometry: Geometry): Kind {
   return Object.keys(geometry)[0] as Kind;
@@ -225,4 +225,34 @@ function lastCorner(geometry: Extract<Geometry, { Matrix: unknown }>): Corner {
     return last.x < 0 ? "TopLeft" : "TopRight";
   }
   return last.x < 0 ? "BottomLeft" : "BottomRight";
+}
+
+export const POINT_RANGE = { min: -1000, max: 1000 } as const;
+
+function onLine(geometry: Geometry, change: (points: GridPoint[]) => GridPoint[]): Geometry {
+  return "Line" in geometry ? { Line: { ...geometry.Line, points: change(geometry.Line.points) } } : geometry;
+}
+
+function inRange(value: number): number {
+  return Math.min(Math.max(Math.round(value), POINT_RANGE.min), POINT_RANGE.max);
+}
+
+/** Adds a point after the last one, continuing its last segment. */
+export function addPoint(geometry: Geometry): Geometry {
+  return onLine(geometry, (points) => {
+    if (points.length >= LINE_POINT_LIMIT) {
+      return points;
+    }
+    const last = points.at(-1) ?? { x: 0, y: 0 };
+    const before = points.at(-2) ?? { x: last.x - 100, y: last.y };
+    return [...points, { x: inRange(2 * last.x - before.x), y: inRange(2 * last.y - before.y) }];
+  });
+}
+
+export function movePoint(geometry: Geometry, index: number, to: { x: number; y: number }): Geometry {
+  return onLine(geometry, (points) => points.map((point, at) => (at === index ? { ...point, x: inRange(to.x), y: inRange(to.y) } : point)));
+}
+
+export function removePoint(geometry: Geometry, index: number): Geometry {
+  return onLine(geometry, (points) => (points.length <= 2 ? points : points.filter((_, at) => at !== index)));
 }

@@ -53,6 +53,9 @@ const SETUP_IDS = [
   "component.group",
   "component.take-out",
   "component.delete",
+  "outline.select",
+  "outline.turn",
+  "outline.delete",
 ];
 const EFFECT_IDS = [
   "target.choose",
@@ -167,6 +170,10 @@ test("every_setup_menu_item_has_a_visible_counterpart_on_the_setup_screen", asyn
 
   await fireEvent.click(row);
   await expectMirrored(await itemIds(row));
+  await fireEvent.change(screen.getByRole("combobox", { name: "Outline" }), { target: { value: "Case" } });
+  await fireEvent.click(screen.getByRole("button", { name: "Add the outline" }));
+  const outline = within(list).getByRole("option", { name: "Case" });
+  await expectMirrored(await itemIds(outline));
 
   expect(seen()).toEqual([...SETUP_IDS].sort());
 });

@@ -1,11 +1,15 @@
 import type { Geometry } from "../../lib/api/bindings/Geometry";
+import type { OutlineKind } from "../../lib/api/bindings/OutlineKind";
 import type { ViewId } from "../../lib/api/bindings/ViewId";
 import { VIEWS } from "./edits";
 
 /** A proposed component: a name, a shape and a place, wired to nothing until the user chooses its output. */
 export type Slot = { name: string; geometry: Geometry; x: number; y: number; size: number; rotation: number };
 
-export type Template = { id: "tower" | "desk"; label: string; view: ViewId; slots: Slot[] };
+/** An unlit outline a template draws behind its components. */
+export type Backdrop = { kind: OutlineKind; name: string; x: number; y: number; width: number; height: number };
+
+export type Template = { id: "tower" | "desk"; label: string; view: ViewId; slots: Slot[]; outlines: Backdrop[] };
 
 const ring = (leds: number): Geometry => ({ Ring: { leds, first_angle: 0, turn: "Clockwise" } });
 const strip = (leds: number): Geometry => ({ Strip: { leds, first: "AtStart" } });
@@ -27,6 +31,7 @@ export const TEMPLATES: Template[] = [
       { name: "Graphics card", geometry: strip(12), x: 560, y: 470, size: 320, rotation: 0 },
       { name: "Board edge", geometry: strip(6), x: 530, y: 610, size: 200, rotation: 0 },
     ],
+    outlines: [{ kind: "Case", name: "Case", x: 535, y: 350, width: 900, height: 640 }],
   },
   {
     id: "desk",
@@ -38,6 +43,11 @@ export const TEMPLATES: Template[] = [
       { name: "Keyboard", geometry: { Matrix: { columns: 12, rows: 4, first: "TopLeft", runs: "AlongRows", serpentine: false } }, x: 430, y: 500, size: 340, rotation: 0 },
       { name: "Light bar", geometry: strip(10), x: 860, y: 220, size: 220, rotation: 90 },
       { name: "Mouse logo", geometry: { Point: {} }, x: 700, y: 520, size: 40, rotation: 0 },
+    ],
+    outlines: [
+      { kind: "Desk", name: "Desk", x: 500, y: 660, width: 920, height: 40 },
+      { kind: "Monitor", name: "Monitor", x: 500, y: 220, width: 460, height: 280 },
+      { kind: "Pc", name: "PC", x: 120, y: 450, width: 150, height: 260 },
     ],
   },
 ];
