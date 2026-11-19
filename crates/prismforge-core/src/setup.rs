@@ -2,7 +2,9 @@ mod control;
 mod geometry;
 mod ids;
 mod model;
+mod plan;
 mod problem;
+mod resolve;
 mod validate;
 
 pub use control::{Control, Part};
@@ -12,5 +14,7 @@ pub use geometry::{
 };
 pub use ids::{ComponentId, OutputId, ViewId};
 pub use model::{Component, Placement, Setup, SetupOutput, View};
+pub use plan::{AcrossPlan, PlacedTarget, plan_across};
 pub use problem::{SetupPart, SetupProblem};
+pub use resolve::{OutputStatus, resolve_outputs};
 pub use validate::{BRANCH_LIMIT, COMPONENT_LIMIT, OUTPUT_LIMIT, VIEW_LIMIT};

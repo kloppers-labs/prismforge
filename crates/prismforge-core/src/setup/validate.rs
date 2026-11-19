@@ -42,40 +42,45 @@ impl Setup {
 
     /// Checks each output of a device the session knows against the LED counts the backend reports for it.
     pub fn check_devices(&self, devices: &[SessionDevice]) -> Result<(), SetupProblem> {
-        for output in &self.outputs {
-            let state = target_state(
-                &output.device,
-                output.zone,
-                output.zone_name.as_ref(),
-                devices,
-            );
-            if !matches!(state, MemberState::Resolved | MemberState::Unavailable) {
-                continue;
-            }
-            let Some((max, available)) = capacity(output, devices) else {
-                continue;
-            };
-            for component in output.branches.iter().flatten() {
-                let leds = self.led_count(component);
-                if u64::from(leds) > max {
-                    return Err(SetupProblem::LedCountOutsideBounds {
-                        component: component.clone(),
-                        leds,
-                        min: 1,
-                        max,
-                    });
-                }
-            }
-            let needed = u64::from(output.first_led) + self.span(output);
-            if needed > available {
-                return Err(SetupProblem::ExceedsOutput {
-                    output: output.id.clone(),
-                    needed,
-                    available,
+        self.outputs
+            .iter()
+            .find_map(|output| self.device_problem(output, devices))
+            .map_or(Ok(()), Err)
+    }
+
+    /// Why the parts of `output` do not fit the device or zone it names now, if it names one the session knows.
+    pub(crate) fn device_problem(
+        &self,
+        output: &SetupOutput,
+        devices: &[SessionDevice],
+    ) -> Option<SetupProblem> {
+        let state = target_state(
+            &output.device,
+            output.zone,
+            output.zone_name.as_ref(),
+            devices,
+        );
+        if !matches!(state, MemberState::Resolved | MemberState::Unavailable) {
+            return None;
+        }
+        let (max, available) = capacity(output, devices)?;
+        for component in output.branches.iter().flatten() {
+            let leds = self.led_count(component);
+            if u64::from(leds) > max {
+                return Some(SetupProblem::LedCountOutsideBounds {
+                    component: component.clone(),
+                    leds,
+                    min: 1,
+                    max,
                 });
             }
         }
-        Ok(())
+        let needed = u64::from(output.first_led) + self.span(output);
+        (needed > available).then(|| SetupProblem::ExceedsOutput {
+            output: output.id.clone(),
+            needed,
+            available,
+        })
     }
 
     fn check_ids(&self) -> Result<(), SetupProblem> {
@@ -197,7 +202,7 @@ impl Setup {
 }
 
 /// The most LEDs the backend allows for the output, and how many it has now.
-fn capacity(output: &SetupOutput, devices: &[SessionDevice]) -> Option<(u64, u64)> {
+pub(crate) fn capacity(output: &SetupOutput, devices: &[SessionDevice]) -> Option<(u64, u64)> {
     let device = devices
         .iter()
         .find(|device| device.identity.reference() == Some(&output.device))?;
