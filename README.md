@@ -6,7 +6,7 @@ PrismForge has no subscription, no account, no advertisements and no telemetry.
 
 ## Status
 
-PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone, or on several at once in step, from a selection or a saved group, and shows the colours it sends. Its profiles screen saves the lighting as profiles on this computer, applies them, and exports and imports them. Devices and zones can have your own names. The Rust core has a setup model: where each LED is, mirrored and daisy-chained fans, and effects that run across several devices as one picture. The views to build it, the PC view and the desk view, are not built yet.
+PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone, or on several at once in step, from a selection or a saved group, and shows the colours it sends. Its profiles screen saves the lighting as profiles on this computer, applies them, and exports and imports them. Devices and zones can have your own names. Its Setup area draws the PC and the desk as schematics of generic shapes: you place the devices OpenRGB reports, or start from a template, declare mirrored and daisy-chained fans, see the colours PrismForge sends on the drawing, and run one effect across all of it as one picture.
 
 | Part | Status |
 |---|---|
@@ -26,8 +26,8 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | Profiles in the Rust core: versioned files, backups and recovery, device registry on disk, capture, apply with a result per setting, export and import without private data | Built. Tested on real files in temporary folders with the demo backend and the fake server only. |
 | Profiles screen in the app: save, update with a change list, apply with a result per setting, rename, duplicate, delete, export, import, apply on connect, repaired-file notices; device and zone names | Built. Tested through the shell and the interface tests only. Native dialogs not run by hand. |
 | Tray, close or quit, one instance, start with the system, start hidden, connect at start, Settings screen | Built. Tested through the shell with fake window and start-entry seams and in interface tests. Native macOS build only; not run by hand, not run on Windows. |
-| Setup model in the Rust core: components with a declared shape, outputs with mirrored branches and daisy chains, views, a place for each LED, effects across the setup as one picture, the setup file, profile schema 2 | Built. Tested in Rust with generic fixtures, the demo backend and the fake server in simulated time only. No interface yet. |
-| Setup views: PC view and desk view | Not started |
+| Setup model in the Rust core: components with a declared shape, outputs with mirrored branches and daisy chains, views, a place for each LED, effects across the setup as one picture, the setup file, profile schema 2 | Built. Tested in Rust with generic fixtures, the demo backend and the fake server in simulated time only. |
+| Setup area: PC view and desk view, list twin, templates, editing without a drag, undo, live colours and a draft on the drawing, apply across the setup, the mode kept on Effects | Built. Tested through the shell, in interface tests and looked at in a browser preview with simulated data. Not run against a real server, on real hardware, in the native window or on Windows. |
 
 ## Requirements
 

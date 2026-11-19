@@ -2,11 +2,11 @@
 
 - Status: accepted
 - Date: 2026-11-20
-- Scope: where each LED is, how the user declares mirrors and daisy chains, how an effect becomes one picture across several devices, and how the setup is stored. Plan 2, Task 10.
+- Scope: where each LED is, how the user declares mirrors and daisy chains, how an effect becomes one picture across several devices, and how the setup is stored (Plan 2, Task 10); the PC view, the desk view, the editor and its save model (Task 11).
 
 ## Current state
 
-The Rust core has the setup model, the planner that gives each LED a place, the 2-D effects, the apply mode "across the setup" in the session, the setup store and profile schema 2 (Task 10). There is no interface yet: the PC view and the desk view, the editor and their Tauri commands are Task 11. **Nothing here has run against a real OpenRGB server or real hardware.** The evidence comes from tests with generic fixtures, the demo backend and the scripted fake server in simulated time.
+The Rust core has the setup model, the planner that gives each LED a place, the 2-D effects, the apply mode "across the setup" in the session, the setup store and profile schema 2 (Task 10). The Setup area has the PC view and the desk view, the editor, the draft preview and live colours on the drawing, and Apply across a view, through four Tauri commands (Task 11). **Nothing here has run against a real OpenRGB server or real hardware.** The evidence comes from tests with generic fixtures, the demo backend and the scripted fake server in simulated time.
 
 The code is in `crates/prismforge-core/src/setup` (the model, geometry, validation, controls, resolution and the planner), `crates/prismforge-core/src/store/setup.rs` (the file), `crates/prismforge-effects/src/plane.rs` (the 2-D projection) and the session's `ApplyAcross` command. The research behind it is `docs/research/setup-views-research.md`, sections 1, 2 and 5.
 
@@ -104,17 +104,86 @@ The session holds the places of each target with its running effect and renders 
 - **Saving** (`Profiles::save_setup`) trims names, validates the whole setup and checks every output that is new or whose parts changed against the devices the session reports now. A stored output that no longer fits does not block an unrelated edit; it is reported by `resolve_outputs` and excluded from plans.
 - **Profiles move to schema 2.** Each stored effect has a `mode`. A version 1 profile or export is migrated on load: every effect gets "each device", which is all version 1 could mean. Applying a profile runs the effects across a view as one batch per view, flow and effect, so they share one start. An effect whose view is gone, or whose target the view no longer places, is skipped with `SetupChanged`; while `setup.json` needs a newer PrismForge, `Profiles::setup` refuses with `NewerFile` and those effects are skipped with `NewerSetup`. Apply and the profile details check in one order: the device, the effect, the setup, then the session's reasons (declared external, no Direct Mode). See `0002-profile-and-identity.md`.
 
-## What Task 11 adds
+## The Setup area (Task 11)
 
-Task 11 adds the PC and desk views, the editor and the Tauri commands on top of this core, without a change to the model:
+The code is in `apps/desktop/src/features/setup` and `apps/desktop/src-tauri/src/setup.rs` with `setup_commands.rs`. The model is unchanged; the setup types gained TypeScript bindings, with the kept unknown fields left out of the types and carried through untouched by every edit.
 
-- Read and save the setup: `Profiles::setup()` (refused with `NewerFile` while the file needs a newer PrismForge) and `Profiles::save_setup(setup, handle)`. They work on the store alone, at the store's place in the lock order, and send nothing to a device, as the group commands do.
-- Show each output's state and problems: `resolve_outputs(setup, devices)`; show mirrors and chains: `Setup::parts` and `Setup::control`.
-- Preview and apply: `plan_across(setup, view, flow, devices)` (a `PlanError` for an unknown view, a setup that is not valid or a flow out of range), then `Effect::render_across` for a draft preview (no hardware) or `SessionHandle::apply_across(plan, effect)` for output; stop with `stop_batch` on the plan's targets. Show `plan.excluded` and `not_placed()` with the batch report.
-- **Lock table.** Every new Tauri command enters `apps/desktop/src-tauri/tests/command_locks.rs`. The core entry points behind them are `Profiles::setup`, `Profiles::save_setup` (store commands: session slot only to read the devices, then the store) and `SessionHandle::apply_across` (an output command: its Tauri command takes a permit under the session slot and is refused while a profile applies, like `apply_effect_batch`; the session records user intent for it like `apply_batch`). `stop_batch` is already in the table. The planner and `resolve_outputs` are pure.
-- The interface must say which mode is active, with two cues, and must not send a Live edit of a target that runs across the setup as an "each device" apply.
+### Commands
+
+| Command | Does | Behind it |
+|---|---|---|
+| `setup` | Reads the stored setup, each output matched against the devices of now (`SetupOutputStatus`), and the limits | `Profiles::setup`, `resolve_outputs` |
+| `save_setup` | Stores a drawing; returns the same view | `Profiles::save_setup` |
+| `apply_across` | Plans a view of the **saved** setup against the devices of now and runs one effect across it; with a list of targets, only those, on the plane of the whole view | `plan_across`, `AcrossPlan::only`, `SessionHandle::apply_across` |
+| `preview_across` | Renders frames of an effect across a view of the drawing it is given, against no device, up to 16,384 LEDs | `plan_across`, `Effect::render_across` |
+
+`apply_across` returns an `AcrossReport`: the `BatchReport`, `excluded` (outputs whose zone changed or whose parts no longer fit, with their state and problem) and `not_placed` (per target, how many of its LEDs no placed component covers; they are written black). A `PlanError` (unknown view, a setup that is not valid, a flow out of range) is a `CommandError` and sends nothing. The lock places are in `0002-profile-and-identity.md`.
+
+### Two views, a drawing and its list
+
+- **Tabs "PC" and "Desk"** are the views `v-pc` and `v-desk`. They are made in the drawing when the stored setup has none. Views with other ids are kept and not shown.
+- **The drawing** is SVG with a fixed extent of 1000 × 700 view units, so a number means the same at every window size. Each component is a generic outline made for PrismForge (a circle with a hub for a ring, a rounded bar for a strip, a grid for a matrix, a frame for a screen edge, a dot for a point, a path for a free line) with its LEDs at the places the Rust model computes; a test compares the TypeScript port with a fixture the Rust model writes. LED 1 is larger, ringed and numbered "1", with an arrow along the direction of the LEDs. Mirrored components are joined by a dashed line; the parts of a daisy chain by an arrow from the last LED of one part to the first of the next, in wire order. A component wired to nothing has hollow, dashed LEDs.
+- **The list twin** beside the drawing has the same components in the same order and is the keyboard and screen-reader path. Each row says the shape and LED count, the device and zone it is wired to, whether it is a mirror ("one control with …; all four always show the same colours") or a chain part ("Part 2 of 2 of a daisy chain on …: LEDs 9 to 16"), where LED 1 is and which way the LEDs run as drawn (after the turn and the flip), and its place. Focus and selection are apart, as in the target list of Effects (`0005-shell-and-design-tokens.md`).
+- **Outputs** lists each output once: a mirrored output is "4 fans mirrored: one control shown in 4 places", a chain "2 parts in a daisy chain", what it holds, and how many of its LEDs have a place in this view and how many are not placed and stay dark during an effect across the setup. An output with nothing in this view says that an effect across this view leaves it as it is, because the planner leaves it out.
+
+The drawing never claims more control than the hardware has: a mirror is drawn as one control in several places, a chain as parts of one zone, unplaced LEDs are counted, and Identify says that it lights the whole device or zone and names every component on it.
+
+### Placing and templates
+
+- **From the detected devices.** Each device, or each zone of a device with several, can be placed in the view on screen with a name, a shape from the first library of the research (strip or bar, ring fan, fan with two rings, matrix, screen edge, single light) and an LED count, which starts at the zone's count. When the zone already shows a component, the user must say whether the new one is a mirror or the next part of the daisy chain; Place stays off until then. A fan with two rings is two ring components chained on one output, the inner one smaller at the same centre.
+- **Templates.** "Tower PC" proposes three front fans, a rear fan, two cooler strips, two memory modules, the graphics card and a board edge; "Desk" a screen edge, a desk strip, a keyboard, a light bar and a mouse logo. They place components and wire none. "Not wired yet" lists each with an output choice and the same mirror-or-chain question. LED counts in a template are placeholders, never a product's count.
+- A component of the other view can be placed here; its wiring is the same in both views.
+
+### Editing without a drag
+
+Every edit has a button or a number field and, from the list, a key; a drag on the drawing is an extra (WCAG 2.5.7).
+
+| Edit | Buttons and fields | Keys in the list |
+|---|---|---|
+| Move | X, Y; Move left, right, up, down by 10 | Alt with an arrow by 10, with Shift by 50 |
+| Turn | Turn (degrees, any whole number); Turn left or right 15° | `[` and `]` |
+| Flip | Flip (pressed state) | Shift+H |
+| Size | Size, 10 to 1000 | — |
+| LED count, first LED, direction | LED count (or columns and rows, or LEDs per side); LED 1 angle or corner; Reverse the LED order | — |
+| Name | Name | — |
+| Wiring | Output, mirror or chain, Earlier or Later in the chain, Starts at LED, Unwire | — |
+| Take out of the view, delete | Buttons; Delete component asks first | Delete takes out of the view |
+
+Several selected components move by the same amount, so their spacing stays; each turns and flips round its own centre. Moves keep centres inside the view. Flip mirrors the drawing only; Reverse the LED order changes the order on the wire. LED counts are checked before Save with the store's rules (1 to the zone's maximum for each component; the parts must fit the LEDs the zone has now), and the reason shows beside the field.
+
+### Save model and undo
+
+**Edits change only the drawing until Save setup.** The bar shows "Saved" or "Unsaved changes" (a mark and a word), with Discard changes. Saving runs the store's checks; a refusal keeps the drawing and names the component or output. The drawing survives leaving the area; an unsaved drawing of the demo store waits while the real store is in use, and the other way round.
+
+Undo and redo work on the drawing: each finished edit (a button, a key, a field change, a drag, a template) is one step with the selection, up to 100 steps; an edit that changes nothing adds none. The bar says "Undo and redo change this drawing only. Your lights stay as they are." Undo never sends anything.
+
+Apply across a view waits for a saved setup, because a profile saved after it names a view whose places must be stored. The draft preview draws the unsaved drawing.
+
+### Colours on the drawing
+
+- **Draft preview:** the chosen effect across this view of the drawing, rendered in Rust (`preview_across`), on the components; the mark ◇, the word "Draft", a dashed frame and "The pattern only. PrismForge sends nothing for it."
+- **Live output:** the frames PrismForge sends (the live feed of Task 9) cut to each component by its part, so mirrored components show the same colours; the mark ●, the word "Live", a solid frame in the ok colour and the same sentence as on Effects. It is asked for only while the Setup area, the window and the document are shown.
+- Reduced motion keeps the draft at one still frame and the live drawing at a new still frame every 2 seconds. The flash cap of Effects applies to both.
+
+### Applying across the setup
+
+The panel names the mode with its flow ("Across the setup: PC view, flowing left to right (0°)"), takes an effect and its settings, and a flow by angle or by centre. Apply sends the saved view, the flow and the effect; the result lists each target, the excluded outputs with their reason, and the LEDs sent black. Retry resends the same picture, on its own view and flow, only to targets a second try can reach. Stop stops the targets that run across this view.
+
+### Effects keeps the mode
+
+When the selected targets run an effect across the setup, Effects says so with the flow, and a Live edit, an Apply and a Retry go through `apply_across` with that view and flow and those targets; they are never sent as "each device". Targets in different modes are not sent in either mode: Live is off and Apply says why.
+
+### Groups and menus
+
+"Make a group from the selection" stores a saved group of Task 9 from the outputs of the selected components; "Select its components" selects the components wired to a group's members. There is no second grouping. Component rows and the drawing have a context menu; each item mirrors an editor button (`0005-shell-and-design-tokens.md`).
+
+### Profiles
+
+Saving a profile while effects run across the setup stores the mode, the view and the flow (Task 10). A profile stores the view id, not the places, so a profile applied after its view was edited uses the new places without a warning. Whether it should warn is an open question for the owner; a test pins today's behaviour (`a_profile_applied_after_its_view_changed_applies_without_a_warning`).
 
 ## Not verified
+
+- The Setup area in the native window, with a screen reader, and pointer drags on Windows; the drawing at 200 % text. Screenshots come from the interface preview in Chromium on macOS.
 
 - Any run against a real OpenRGB server or real hardware: whether one picture looks continuous across devices, the first LED and direction of real fans, splitter behaviour with branches of different lengths, and daisy-chain counts against a resized zone.
 - The residual skew between controllers. All targets start on one clock in one tick, but transport and per-device latency are not measured.
