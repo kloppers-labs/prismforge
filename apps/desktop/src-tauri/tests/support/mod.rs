@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod lifecycle;
 pub mod logged;
 pub mod temp;
 

@@ -29,6 +29,10 @@ fn main() {
         "set_device_name",
         "set_zone_name",
         "dismiss_store_notice",
+        "lifecycle",
+        "change_setting",
+        "answer_close",
+        "quit",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("tauri build configuration");

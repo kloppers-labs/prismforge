@@ -4,7 +4,8 @@ import type { FileRule } from "./FileRule";
 import type { InstanceError } from "./InstanceError";
 import type { OutputTarget } from "./OutputTarget";
 import type { SessionError } from "./SessionError";
+import type { SettingProblem } from "./SettingProblem";
 import type { StoreError } from "./StoreError";
 import type { StoreUnavailable } from "./StoreUnavailable";
 
-export type CommandError = "NoSession" | "EmptyHost" | { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } } | "ProfileApplying" | "NotConnected" | { "Store": StoreError } | { "StoreUnavailable": StoreUnavailable } | { "Unreadable": { problem: FileProblem, } } | { "File": FileRule };
+export type CommandError = "NoSession" | "EmptyHost" | { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } } | "ProfileApplying" | "NotConnected" | { "Store": StoreError } | { "StoreUnavailable": StoreUnavailable } | { "Unreadable": { problem: FileProblem, } } | { "File": FileRule } | { "Setting": SettingProblem };

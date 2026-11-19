@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { ApplyOutcome } from "./bindings/ApplyOutcome";
+import type { CloseAction } from "./bindings/CloseAction";
 import type { CommandError } from "./bindings/CommandError";
 import type { DeviceRef } from "./bindings/DeviceRef";
 import type { EffectCatalog } from "./bindings/EffectCatalog";
@@ -8,6 +9,7 @@ import type { EffectInstance } from "./bindings/EffectInstance";
 import type { ExportReport } from "./bindings/ExportReport";
 import type { IdentifyOutcome } from "./bindings/IdentifyOutcome";
 import type { ImportReport } from "./bindings/ImportReport";
+import type { LifecycleView } from "./bindings/LifecycleView";
 import type { OutputTarget } from "./bindings/OutputTarget";
 import type { PreviewBatch } from "./bindings/PreviewBatch";
 import type { PreviewRequest } from "./bindings/PreviewRequest";
@@ -15,11 +17,13 @@ import type { ProfileDetails } from "./bindings/ProfileDetails";
 import type { ProfileId } from "./bindings/ProfileId";
 import type { RestoreOutcome } from "./bindings/RestoreOutcome";
 import type { Saved } from "./bindings/Saved";
+import type { AppSettingChange } from "./bindings/AppSettingChange";
 import type { ShellView } from "./bindings/ShellView";
 import type { StoreNotice } from "./bindings/StoreNotice";
 import type { StoreView } from "./bindings/StoreView";
 
 export const VIEW_EVENT = "session-view";
+export const LIFECYCLE_EVENT = "lifecycle-view";
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 6742;
 
@@ -35,7 +39,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 }
 
 const PLAIN_ERRORS = ["NoSession", "EmptyHost", "ProfileApplying", "NotConnected"];
-const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "Store", "StoreUnavailable", "Unreadable", "File"];
+const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "Store", "StoreUnavailable", "Unreadable", "File", "Setting"];
 
 function asFailure(error: unknown): Failure {
   if (typeof error === "string" && PLAIN_ERRORS.includes(error)) {
@@ -79,6 +83,12 @@ export const api = {
   setZoneName: (device: DeviceRef, zone: number, name: string | null) =>
     call<null>("set_zone_name", { device, zone, name }),
   dismissStoreNotice: (notice: StoreNotice) => call<boolean>("dismiss_store_notice", { notice }),
+  lifecycle: () => call<LifecycleView>("lifecycle"),
+  changeSetting: (change: AppSettingChange) => call<LifecycleView>("change_setting", { change }),
+  answerClose: (choice: CloseAction | null) => call<null>("answer_close", { choice }),
+  quit: () => call<null>("quit"),
+  onLifecycle: (handler: (view: LifecycleView) => void): Promise<UnlistenFn> =>
+    listen<LifecycleView>(LIFECYCLE_EVENT, (event) => handler(event.payload)),
   onView: (handler: (view: ShellView) => void): Promise<UnlistenFn> =>
     listen<ShellView>(VIEW_EVENT, (event) => handler(event.payload)),
 };

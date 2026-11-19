@@ -102,3 +102,29 @@ export const sessionBusy: CommandError = {
     }
   }
 };
+
+export const settingNoAddress: CommandError = {
+  "Setting": "NoAddress"
+};
+
+export const settingTrayUnavailable: CommandError = {
+  "Setting": "TrayUnavailable"
+};
+
+export const settingStartEntryRefused: CommandError = {
+  "Setting": {
+    "StartEntry": {
+      "wanted": true,
+      "detail": "Access is denied."
+    }
+  }
+};
+
+export const settingStartEntryNotKept: CommandError = {
+  "Setting": {
+    "StartEntry": {
+      "wanted": true,
+      "detail": null
+    }
+  }
+};

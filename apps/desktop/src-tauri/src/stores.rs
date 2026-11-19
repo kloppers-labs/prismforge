@@ -6,6 +6,8 @@ use prismforge_core::store::{DeviceNames, Profiles, StdFileOps, StoreSummary};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
+use crate::settings::SettingsStore;
+
 const REAL_FOLDER: &str = "store";
 const DEMO_FOLDER: &str = "demo-store";
 const LOCK_FILE: &str = "instance.lock";
@@ -55,12 +57,13 @@ pub struct StoreView {
     pub name_limit: usize,
 }
 
-/// The real and the demo store below one folder; each opens on first use, after the folder lock is held.
+/// The real and the demo store and the app settings below one folder; each opens after the folder lock is held.
 pub struct Stores {
     root: PathBuf,
     lock: Mutex<Option<File>>,
     real: Mutex<Option<Profiles>>,
     demo: Mutex<Option<Profiles>>,
+    settings: Mutex<Option<SettingsStore>>,
 }
 
 impl Stores {
@@ -70,6 +73,7 @@ impl Stores {
             lock: Mutex::new(None),
             real: Mutex::new(None),
             demo: Mutex::new(None),
+            settings: Mutex::new(None),
         }
     }
 
@@ -96,6 +100,26 @@ impl Stores {
                 detail: error.to_string(),
             })?;
         Ok(slot.insert(profiles).clone())
+    }
+
+    /// The store of `kind` if it is already open; never opens one.
+    pub async fn opened(&self, kind: StoreKind) -> Option<Profiles> {
+        match kind {
+            StoreKind::Real => self.real.lock().await.clone(),
+            StoreKind::Demo => self.demo.lock().await.clone(),
+        }
+    }
+
+    /// Per user, not per store: the settings file sits in the root beside both store folders.
+    pub async fn settings(&self) -> Result<SettingsStore, StoreUnavailable> {
+        let mut slot = self.settings.lock().await;
+        if let Some(settings) = slot.as_ref() {
+            return Ok(settings.clone());
+        }
+        self.hold_lock().await?;
+        Ok(slot
+            .insert(SettingsStore::open(self.root.clone()).await)
+            .clone())
     }
 
     async fn hold_lock(&self) -> Result<(), StoreUnavailable> {

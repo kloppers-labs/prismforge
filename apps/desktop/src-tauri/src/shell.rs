@@ -36,7 +36,7 @@ impl Default for ShellConfig {
 /// Owns at most one session; a new session starts only after the previous one has fully stopped.
 pub struct Shell<S: ViewSink> {
     config: ShellConfig,
-    publisher: Arc<Publisher<S>>,
+    pub(crate) publisher: Arc<Publisher<S>>,
     // Lock order: active, apply slot, output gate, on-connect report, store; a session handle holder never waits for active.
     active: Mutex<Option<Active<S>>>,
     pub(crate) stores: Stores,
@@ -67,6 +67,32 @@ impl<S: ViewSink> Shell<S> {
 
     pub fn view(&self) -> ShellView {
         self.publisher.current()
+    }
+
+    pub fn changes(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.publisher.changes()
+    }
+
+    /// The profile applied or saved in this session, from a store that is already open.
+    pub async fn active_profile_name(&self) -> Option<String> {
+        let (handle, kind) = self.current().await;
+        let profiles = self.stores.opened(kind).await?;
+        profiles.active_name(&handle?).await
+    }
+
+    /// The session's latest snapshot, which may be newer than the last published view.
+    pub async fn snapshot(&self) -> Option<SessionSnapshot> {
+        self.current().await.0.map(|handle| handle.snapshot())
+    }
+
+    pub fn folder(&self) -> String {
+        self.stores.root().display().to_string()
+    }
+
+    pub async fn settings(
+        &self,
+    ) -> Result<crate::settings::SettingsStore, crate::stores::StoreUnavailable> {
+        self.stores.settings().await
     }
 
     /// Seeds the backend with the stored registry and keeps it beside the session, then connects.

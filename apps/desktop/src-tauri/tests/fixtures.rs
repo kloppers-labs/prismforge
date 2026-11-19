@@ -1,5 +1,6 @@
 mod effect_fixtures;
 mod generated;
+mod lifecycle_fixtures;
 mod profile_fixtures;
 mod support;
 
@@ -344,6 +345,8 @@ async fn committed_fixtures_match_real_sessions() {
     effect_fixtures::previews(&mut previews);
     let mut profiles = profile_fixtures::ProfileModules::new();
     profile_fixtures::generate(&mut profiles, &mut errors).await;
+    let mut lifecycles = Module::new("LifecycleView");
+    lifecycle_fixtures::generate(&mut lifecycles, &mut errors).await;
 
     generated.write("sessions.ts", &sessions.render());
     generated.write("outcomes.ts", &outcomes.render());
@@ -357,5 +360,6 @@ async fn committed_fixtures_match_real_sessions() {
     generated.write("applies.ts", &profiles.applies.render());
     generated.write("imports.ts", &profiles.imports.render());
     generated.write("views.ts", &profiles.views.render());
+    generated.write("lifecycles.ts", &lifecycles.render());
     generated.compare_or_update();
 }
