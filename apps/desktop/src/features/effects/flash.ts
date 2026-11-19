@@ -14,7 +14,6 @@ function linear(channel: number): number {
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
-/** The mean relative luminance of a row of LEDs, from 0 to 1. */
 export function luminance(leds: Rgb[]): number {
   if (leds.length === 0) {
     return 0;

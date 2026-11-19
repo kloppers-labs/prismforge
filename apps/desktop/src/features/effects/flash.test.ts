@@ -5,7 +5,6 @@ import { FlashLimiter, MAX_FLASHES_PER_SECOND, luminance } from "./flash";
 const BLACK: Rgb = { r: 0, g: 0, b: 0 };
 const WHITE: Rgb = { r: 255, g: 255, b: 255 };
 
-/** Luminance of each drawn frame with its time, for a stream of frames offered at `hertz`. */
 function play(frames: (index: number) => Rgb[][], hertz: number, seconds: number, limiter = new FlashLimiter()) {
   const drawn: { at: number; light: number }[] = [];
   const period = 1000 / hertz;

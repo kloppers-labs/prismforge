@@ -70,7 +70,6 @@ export class GroupsState {
   view = $state<GroupsView | null>(null);
   problem = $state<Failure | null>(null);
   working = $state(false);
-  /** What the last Select did, said once in the panel's status line. */
   note = $state<string | null>(null);
   asked = $state<GroupAsk | null>(null);
   private key = "";
@@ -87,7 +86,6 @@ export class GroupsState {
     this.take(await api.groups());
   }
 
-  /** The members that resolve and can take an effect now, and the ones left out. */
   pick(group: GroupView | typeof EVERYTHING, session: SessionSnapshot): Picked {
     if (group === EVERYTHING) {
       return { targets: selectAll(session), left: [] };

@@ -55,7 +55,6 @@ export function isSelected(selection: OutputTarget[], target: OutputTarget): boo
   return selection.some((each) => sameTarget(each, target) || (target.zone !== null && each.device === target.device && each.zone === null));
 }
 
-/** Some zones of the device are selected, not the whole device. */
 export function isMixed(selection: OutputTarget[], device: string): boolean {
   return selection.some((each) => each.device === device && each.zone !== null);
 }
@@ -108,7 +107,6 @@ export function selectAll(session: SessionSnapshot): OutputTarget[] {
     .map((option) => option.target);
 }
 
-/** Adds every choosable row from `from` to `to` in list order. */
 export function addRange(selection: OutputTarget[], from: OutputTarget, to: OutputTarget, session: SessionSnapshot): OutputTarget[] {
   const order = options(session);
   const start = order.findIndex((option) => sameTarget(option.target, from));

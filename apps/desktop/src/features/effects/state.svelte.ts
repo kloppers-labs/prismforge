@@ -88,7 +88,6 @@ export class EffectsState {
     }
     return applyingText(this.view()) ?? applyBlocked(session, device, this.target.zone);
   });
-  /** Every target runs the chosen effect now. */
   allRun = $derived.by(() => {
     const session = this.view().session;
     return (
@@ -185,7 +184,6 @@ export class EffectsState {
     }
   }
 
-  /** Selects exactly `targets`, as a group does. */
   selectOnly(targets: OutputTarget[]) {
     this.change(targets);
   }

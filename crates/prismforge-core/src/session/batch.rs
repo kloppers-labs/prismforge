@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use crate::scene::OutputTarget;
 use crate::session::{OutputError, RestoreOutcome};
 
-/// Most targets one batch command takes.
 pub const MAX_BATCH_TARGETS: usize = 256;
 
 /// What a batch did with each target it was given, in the order given; a partial result is kept.
