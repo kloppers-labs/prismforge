@@ -223,6 +223,17 @@
     font-size: var(--font-s);
   }
 
+  @media (max-height: 519px) {
+    .page {
+      display: block;
+      height: auto;
+    }
+
+    .scroll {
+      overflow: visible;
+    }
+  }
+
   @container (max-width: 760px) {
     .workspace {
       grid-template-columns: minmax(0, 1fr);

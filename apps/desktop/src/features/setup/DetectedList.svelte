@@ -101,6 +101,11 @@
 </section>
 
 <style>
+  select {
+    width: 100%;
+    min-width: 0;
+  }
+
   .detected {
     display: grid;
     gap: var(--space-2);
@@ -137,6 +142,10 @@
 
   .name {
     font-weight: var(--weight-strong);
+  }
+
+  .meta {
+    white-space: nowrap;
   }
 
   .meta,

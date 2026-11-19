@@ -273,7 +273,7 @@ export const setupDemoTower: SetupStoreView = {
           },
           {
             "component": "c-rear-fan",
-            "x": 860,
+            "x": 910,
             "y": 130,
             "size": 100,
             "rotation": 0,
@@ -305,7 +305,7 @@ export const setupDemoTower: SetupStoreView = {
           },
           {
             "component": "c-memory-2",
-            "x": 820,
+            "x": 800,
             "y": 270,
             "size": 130,
             "rotation": 90,
@@ -672,7 +672,7 @@ export const setupRealTower: SetupStoreView = {
           },
           {
             "component": "c-rear-fan",
-            "x": 860,
+            "x": 910,
             "y": 130,
             "size": 100,
             "rotation": 0,

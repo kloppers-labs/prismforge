@@ -152,7 +152,7 @@ test("several_selected_components_move_together_with_the_buttons", async () => {
 
   await waitFor(() => expect(shell.commands()).toContain("save_setup"));
   expect(placementIn(savedSetup(shell), "v-pc", "c-front-fan-1")).toMatchObject({ x: 160, y: 140 });
-  expect(placementIn(savedSetup(shell), "v-pc", "c-rear-fan")).toMatchObject({ x: 860, y: 140 });
+  expect(placementIn(savedSetup(shell), "v-pc", "c-rear-fan")).toMatchObject({ x: 910, y: 140 });
 });
 
 test("number_fields_set_the_place_and_each_change_is_one_undo_step", async () => {
@@ -250,4 +250,17 @@ test("a_second_component_on_a_zone_asks_whether_it_mirrors_or_continues_the_chai
 
   await waitFor(() => expect(shell.commands()).toContain("save_setup"));
   expect(savedSetup(shell).outputs.find((output) => output.id === "o-cooler")!.branches).toEqual([["c-cooler-left", "c-cooler-right"], ["c-1"]]);
+});
+
+test("an_output_with_nothing_in_this_view_is_left_as_it_is_and_never_called_dark", async () => {
+  fakeShell(demoConnected, setupHandlers());
+  render(App);
+  await openSetup();
+
+  const outputs = screen.getByRole("list", { name: "Outputs in the setup" });
+  const bar = within(outputs).getByText(/^Demo Light Bar/).closest("li")!;
+
+  expect(bar.textContent).toContain("Holds Desk light bar.");
+  expect(bar.textContent).toContain("Not in the PC view, so an effect across it leaves this output as it is.");
+  expect(bar.textContent).not.toContain("dark");
 });

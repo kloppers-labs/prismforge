@@ -83,14 +83,15 @@ export function firstLedText(geometry: Geometry, placement: Placement): string {
   const centre = centreOf(points);
   const [first, second] = [points[0]!, points[1]!];
   const side = SIDES[sector(centre, first)]!;
+  const corner = `${first.y < centre.y ? "top" : "bottom"} ${first.x < centre.x ? "left" : "right"}`;
   if ("Ring" in geometry || "Perimeter" in geometry) {
     const cross = (first.x - centre.x) * (second.y - centre.y) - (first.y - centre.y) * (second.x - centre.x);
-    const where = "Ring" in geometry ? `at the ${side}` : `in the ${side} corner`;
+    const where = "Ring" in geometry ? `at the ${side}` : `in the ${corner} corner`;
     return `LED 1 ${where}, runs ${cross > 0 ? "clockwise" : "counter-clockwise"}`;
   }
   if ("Matrix" in geometry) {
     const { runs, serpentine } = geometry.Matrix;
-    return `LED 1 in the ${side} corner, ${runs === "AlongRows" ? "row by row" : "column by column"}${serpentine ? ", turning back on each line" : ""}`;
+    return `LED 1 in the ${corner} corner, ${runs === "AlongRows" ? "row by row" : "column by column"}${serpentine ? ", turning back on each line" : ""}`;
   }
   return `LED 1 at the ${side} end, runs ${WAYS[sector(first, second)]}`;
 }
@@ -139,6 +140,10 @@ export function wiringTexts(setup: Setup, id: ComponentId, names: Names, session
   return texts;
 }
 
+function viewName(setup: Setup, view: ViewId): string {
+  return setup.views.find((each) => each.id === view)?.name ?? "";
+}
+
 /** LEDs of the output that a component placed in `view` covers. */
 export function placedLeds(setup: Setup, output: SetupOutput, view: ViewId): number {
   const covered = new Set<number>();
@@ -162,15 +167,20 @@ export function outputLines(setup: Setup, output: SetupOutput, view: ViewId, ses
   if (chained.length > 0) {
     lines.push(`${chained[0]!.length} parts in a daisy chain, one after the other on the wire`);
   }
+  lines.push(`Holds ${listText(components.map((component) => component.name))}.`);
   const room = session ? capacity(session, output) : null;
   const total = room?.available ?? output.first_led + span(setup, output);
   const placed = placedLeds(setup, output, view);
   const left = total - placed;
-  lines.push(
-    left > 0
-      ? `${placed} of ${total} LEDs have a place. ${left} ${left === 1 ? "is" : "are"} not placed and stay${left === 1 ? "s" : ""} dark while an effect runs across the setup.`
-      : `All ${total} LEDs have a place.`,
-  );
+  if (placed === 0) {
+    lines.push(`Not in the ${viewName(setup, view)} view, so an effect across it leaves this output as it is.`);
+  } else {
+    lines.push(
+      left > 0
+        ? `${placed} of ${total} LEDs have a place. ${left} ${left === 1 ? "is" : "are"} not placed and stay${left === 1 ? "s" : ""} dark while an effect runs across the setup.`
+        : `All ${total} LEDs have a place.`,
+    );
+  }
   if (session && !deviceFor(session, output)) {
     lines.push("Not found today. PrismForge sends it nothing until it is back.");
   } else if (session && room === null) {

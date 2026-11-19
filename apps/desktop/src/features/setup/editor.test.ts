@@ -60,9 +60,9 @@ describe("editing a component", () => {
   test("moving_several_components_moves_them_together_and_keeps_their_spacing", () => {
     const moved = moveBy(tower(), PC, ["c-front-fan-1", "c-rear-fan"], 400, -10);
 
-    expect(at(moved, "c-front-fan-1")).toMatchObject({ x: 300, y: 120 });
+    expect(at(moved, "c-front-fan-1")).toMatchObject({ x: 250, y: 120 });
     expect(at(moved, "c-rear-fan")).toMatchObject({ x: 1000, y: 120 });
-    expect(at(moved, "c-rear-fan").x - at(moved, "c-front-fan-1").x).toBe(700);
+    expect(at(moved, "c-rear-fan").x - at(moved, "c-front-fan-1").x).toBe(750);
   });
 
   test("rotation_turns_in_fifteen_degree_steps_and_wraps", () => {

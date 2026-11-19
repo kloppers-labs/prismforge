@@ -50,6 +50,11 @@
 </div>
 
 <style>
+  select {
+    width: 100%;
+    min-width: 0;
+  }
+
   .wire,
   .field,
   .choices {

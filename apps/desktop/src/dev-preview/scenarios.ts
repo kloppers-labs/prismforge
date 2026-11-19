@@ -1,6 +1,8 @@
 import type { GroupsView } from "../lib/api/bindings/GroupsView";
 import type { SetupStoreView } from "../lib/api/bindings/SetupStoreView";
-import { setupDemoTower } from "../test/fixtures/setups";
+import { acrossDemoSkipped } from "../test/fixtures/acrossReports";
+import { liveRealAcross } from "../test/fixtures/live";
+import { setupDemoEmpty, setupDemoTower, setupRealEmpty, setupRealTower } from "../test/fixtures/setups";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
 import { batchDuringIdentify } from "../test/fixtures/batches";
@@ -38,6 +40,13 @@ export type Scenario = {
   live?: LiveOutput;
   rescan?: boolean;
   setup?: SetupStoreView;
+  /** What the Setup area shows: a tab, a template added, components selected, an effect drafted, applied or live. */
+  setupTab?: "PC" | "Desk";
+  setupTemplate?: string;
+  setupSelect?: string[];
+  setupEffect?: string;
+  setupApply?: boolean;
+  scrollTo?: string;
 };
 
 function onConnect(session: SessionSnapshot | null): ShellView["on_connect"] {
@@ -179,7 +188,69 @@ export const SCENARIOS: Record<string, Scenario> = {
 };
 
 Object.assign(SCENARIOS, {
-  "setup-tower": { ...base, label: "Setup, the PC view of the demo tower", view: view(sessions.demoConnected), area: "Setup", setup: setupDemoTower },
+  "setup-empty": { ...openRgb, label: "Setup, an empty PC view", view: view(sessions.openRgbSetupDevices), area: "Setup", setup: setupRealEmpty },
+  "setup-template": {
+    ...base,
+    label: "Setup, the Tower PC template being mapped",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoEmpty,
+    setupTemplate: "Tower PC",
+    scrollTo: "Not wired yet",
+  },
+  "setup-live": {
+    ...openRgb,
+    label: "Setup, a finished PC view with live colours",
+    view: view(sessions.openRgbAcrossRunning),
+    area: "Setup",
+    setup: setupRealTower,
+    stage: "live",
+    live: liveRealAcross,
+  },
+  "setup-mirror": {
+    ...base,
+    label: "Setup, a mirrored fan hub and a two-part cooler",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoTower,
+    setupSelect: ["c-front-fan-2"],
+    scrollTo: "Outputs",
+  },
+  "setup-desk": {
+    ...openRgb,
+    label: "Setup, the desk view",
+    view: view(sessions.openRgbAcrossRunning),
+    area: "Setup",
+    setup: setupRealTower,
+    setupTab: "Desk",
+  },
+  "setup-draft": {
+    ...base,
+    label: "Setup, the draft preview across the setup",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoTower,
+    setupEffect: "rainbow-wave",
+  },
+  "setup-excluded": {
+    ...base,
+    label: "Setup, an apply with outputs that got nothing",
+    view: view(sessions.demoAcrossSkipped),
+    area: "Setup",
+    setup: setupDemoTower,
+    setupEffect: "rainbow-wave",
+    setupApply: true,
+    handlers: { apply_across: () => acrossDemoSkipped },
+    scrollTo: "Results for each target",
+  },
+  "setup-list": {
+    ...base,
+    label: "Setup, the list twin with two components selected",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoTower,
+    setupSelect: ["c-cooler-left", "c-cooler-right"],
+  },
 });
 
 export const DEFAULT_SCENARIO = "demo";

@@ -44,6 +44,9 @@ async function arrange() {
   if (rail && scenario.area === "Effects") {
     await effects();
   }
+  if (rail && scenario.area === "Setup") {
+    await setup();
+  }
   if (params.has("open")) {
     await wait(100);
     document.querySelector<HTMLButtonElement>(`button[aria-controls='${params.get("open")}-panel']`)?.click();
@@ -84,6 +87,47 @@ async function effects() {
   if (scenario.select && !scenario.apply && !scenario.groupOpen) {
     await wait(100);
     document.getElementById("preview-title")?.scrollIntoView({ block: "start" });
+  }
+}
+
+/** Picks the tab, adds a template, selects components, drafts or applies an effect, as the scenario asks. */
+async function setup() {
+  await wait(200);
+  if (scenario.setupTab) {
+    [...document.querySelectorAll<HTMLElement>("[role='tab']")].find((tab) => tab.textContent?.trim() === scenario.setupTab)?.click();
+    await wait(50);
+  }
+  if (scenario.setupTemplate) {
+    button(document, `Add the ${scenario.setupTemplate} template`)?.click();
+    await wait(50);
+  }
+  for (const [index, id] of (scenario.setupSelect ?? []).entries()) {
+    document.querySelector<HTMLElement>(`[data-row="${id}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: index > 0 }));
+    await tick();
+  }
+  if (scenario.setupSelect?.length) {
+    document.querySelector<HTMLElement>(`[data-row="${scenario.setupSelect[0]}"]`)?.scrollIntoView({ block: "start" });
+  }
+  if (scenario.setupEffect) {
+    const select = document.getElementById("across-effect") as HTMLSelectElement | null;
+    if (select) {
+      select.value = scenario.setupEffect;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    await wait(100);
+  }
+  if (scenario.stage === "live") {
+    button(document, "Live output")?.click();
+  }
+  if (scenario.setupApply) {
+    [...document.querySelectorAll<HTMLButtonElement>("button.primary")].find((candidate) => candidate.textContent?.startsWith("Apply across"))?.click();
+    await wait(100);
+  }
+  if (scenario.scrollTo) {
+    await wait(100);
+    const name = scenario.scrollTo;
+    const region = [...document.querySelectorAll<HTMLElement>("section, aside, [role='status']")].find((each) => each.getAttribute("aria-label") === name || each.querySelector("h2")?.textContent === name);
+    region?.scrollIntoView({ block: "start" });
   }
 }
 

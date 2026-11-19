@@ -25,7 +25,10 @@
 
   let at = $derived({ ...placement, x: placement.x + offset.x, y: placement.y + offset.y });
   let points = $derived(viewLeds(component.geometry, at));
-  let box = $derived(outlineBox(component.geometry));
+  let box = $derived.by(() => {
+    const outline = outlineBox(component.geometry);
+    return "Strip" in component.geometry ? { width: outline.width, height: (radius * 2 + 10) / at.size } : outline;
+  });
   let gap = $derived(
     points.length > 1 ? Math.min(...points.slice(1).map((point, index) => Math.hypot(point.x - points[index]!.x, point.y - points[index]!.y))) : at.size / 3,
   );
@@ -41,6 +44,7 @@
       bottom: Math.max(...ys, at.y + half.y) + radius,
     };
   });
+  let pad = $derived(6 / Math.max(at.size, 1));
   let first = $derived(points[0] ?? null);
   let arrow = $derived.by(() => {
     const [start, next] = [points[0], points[1]];
@@ -94,7 +98,7 @@
     {:else if line}
       <polyline class="path" points={line} />
     {:else}
-      <rect class="outline" x={-box.width / 2 - 0.06} y={-box.height / 2 - 0.06} width={box.width + 0.12} height={box.height + 0.12} rx="0.04" />
+      <rect class="outline" x={-box.width / 2 - pad} y={-box.height / 2 - pad} width={box.width + 2 * pad} height={box.height + 2 * pad} rx={pad} />
       {#if "Perimeter" in component.geometry}
         <rect class="inner" x={-box.width / 2 + 0.08} y={-box.height / 2 + 0.08} width={Math.max(box.width - 0.16, 0.01)} height={Math.max(box.height - 0.16, 0.01)} />
       {/if}

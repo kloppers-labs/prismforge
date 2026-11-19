@@ -306,6 +306,11 @@
 {/if}
 
 <style>
+  select {
+    width: 100%;
+    min-width: 0;
+  }
+
   .inspector {
     display: grid;
     gap: var(--space-3);
