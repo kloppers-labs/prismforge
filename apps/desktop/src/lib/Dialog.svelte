@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy, onMount, type Snippet } from "svelte";
+  import { onDestroy, onMount, tick, type Snippet } from "svelte";
+  import { overlays } from "./overlays.svelte";
 
   let {
     title,
@@ -22,8 +23,15 @@
     return box ? [...box.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), [tabindex='0']")] : [];
   }
 
-  onMount(() => focusable()[0]?.focus());
-  onDestroy(() => opener?.focus());
+  onMount(async () => {
+    overlays.dialogs += 1;
+    await tick();
+    focusable()[0]?.focus();
+  });
+  onDestroy(() => {
+    overlays.dialogs -= 1;
+    opener?.focus();
+  });
 
   function onkeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {

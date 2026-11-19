@@ -22,9 +22,9 @@
     <div class="actions">
       {#if status.saveable}
         {@const id = status.saveable}
-        <button type="button" onclick={() => (close(), app.saveActiveChanges(id))}>Save changes…</button>
+        <button type="button" onclick={() => (close(), app.uncover(), app.saveActiveChanges(id))}>Save changes…</button>
       {/if}
-      <button type="button" onclick={() => (close(), app.openProfiles())}>Open Profiles</button>
+      <button type="button" onclick={() => (close(), app.uncover(), app.openProfiles())}>Open Profiles</button>
     </div>
   {/snippet}
 </Popover>

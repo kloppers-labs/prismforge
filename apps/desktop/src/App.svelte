@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import ConnectionScreen from "./features/connection/ConnectionScreen.svelte";
   import WaitingPanel from "./features/connection/WaitingPanel.svelte";
   import DiagnosticsDrawer from "./features/diagnostics/DiagnosticsDrawer.svelte";
@@ -14,7 +14,10 @@
   import Rail from "./lib/shell/Rail.svelte";
   import { ended } from "./lib/shell/status";
   import StatusStrip from "./lib/shell/StatusStrip.svelte";
+  import { overlays } from "./lib/overlays.svelte";
   import { AppState, type Screen } from "./lib/state/app.svelte";
+
+  const COVER_QUERY = "(max-width: 1399px)";
 
   const app = new AppState();
 
@@ -35,18 +38,23 @@
   let drawer: HTMLElement | undefined = $state();
   let diagnosticsButton: HTMLButtonElement | undefined = $state();
   let lastPageFocus: HTMLElement | null = null;
-  let narrow = $state(false);
-  let covered = $derived(app.diagnosticsOpen && narrow);
+  let covered = $derived(app.covering && overlays.dialogs === 0);
 
   $effect(() => {
-    const query = window.matchMedia?.("(max-width: 1099px)");
+    const query = window.matchMedia?.(COVER_QUERY);
     if (!query) {
       return;
     }
-    narrow = query.matches;
-    const change = (event: MediaQueryListEvent) => (narrow = event.matches);
+    app.layoutCovers = query.matches;
+    const change = (event: MediaQueryListEvent) => (app.layoutCovers = event.matches);
     query.addEventListener("change", change);
     return () => query.removeEventListener("change", change);
+  });
+
+  $effect(() => {
+    if (overlays.dialogs > 0) {
+      untrack(() => app.uncover());
+    }
   });
 
   onMount(() => {
@@ -77,15 +85,8 @@
     }
   }
 
-  function navigate(screen: Screen) {
-    if (covered) {
-      app.diagnosticsOpen = false;
-    }
-    return app.go(screen);
-  }
-
   async function goAndFocus(screen: Screen) {
-    void navigate(screen);
+    void app.go(screen);
     await tick();
     main?.focus();
   }
@@ -115,9 +116,7 @@
   }
 
   function skipToContent() {
-    if (covered) {
-      closeDiagnostics();
-    }
+    app.uncover();
     main?.focus();
   }
 
@@ -135,7 +134,7 @@
   <Rail
     screen={app.screen}
     diagnosticsOpen={app.diagnosticsOpen}
-    ongo={navigate}
+    ongo={(screen) => app.go(screen)}
     ondiagnostics={toggleDiagnostics}
     bind:region={rail}
     bind:diagnosticsButton
@@ -231,18 +230,17 @@
   }
 
   .drawer {
-    grid-column: 2;
+    grid-column: 1 / -1;
     grid-row: 2 / 4;
     min-height: 0;
     display: flex;
-    width: clamp(320px, 34vw, 440px);
+    z-index: var(--z-drawer);
   }
 
-  @media (max-width: 1099px) {
+  @media (min-width: 1400px) {
     .drawer {
-      grid-column: 1 / -1;
-      width: auto;
-      z-index: var(--z-drawer);
+      grid-column: 2;
+      width: var(--drawer-w);
     }
   }
 </style>

@@ -27,6 +27,8 @@ export class AppState {
   identifiedOnce = $state(false);
   selected = $state<string | null>(null);
   diagnosticsOpen = $state(false);
+  /** True when the window is too narrow to dock Diagnostics, so an open drawer covers the page. */
+  layoutCovers = $state(false);
   screen = $state<Screen>("devices");
   connectApplyDismissed = $state(false);
   readonly profiles = new ProfilesState();
@@ -45,6 +47,16 @@ export class AppState {
 
   get session() {
     return this.view.session;
+  }
+
+  get covering() {
+    return this.diagnosticsOpen && this.layoutCovers;
+  }
+
+  uncover() {
+    if (this.covering) {
+      this.diagnosticsOpen = false;
+    }
   }
 
   async attach(): Promise<() => void> {
@@ -88,10 +100,12 @@ export class AppState {
   }
 
   go(screen: Screen) {
+    this.uncover();
     return screen === "profiles" ? this.openProfiles() : (this.screen = screen);
   }
 
   openProfiles() {
+    this.uncover();
     this.screen = "profiles";
     return this.profiles.refresh();
   }
