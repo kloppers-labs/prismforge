@@ -5,7 +5,6 @@ import { setupDemoTower } from "./fixtures/setups";
 
 type Handler = (args: Record<string, unknown>) => unknown;
 
-/** A setup store that keeps what is saved, so a test can read back what the screen sent. */
 export function setupHandlers(start: SetupStoreView = setupDemoTower, extra: Record<string, Handler> = {}): Record<string, Handler> {
   let stored = structuredClone(start);
   return {

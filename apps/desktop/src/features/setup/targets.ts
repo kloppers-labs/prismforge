@@ -7,7 +7,6 @@ import { hasDirectMode, reference } from "../devices/present";
 import type { OutputChoice } from "./edits";
 import { outputFor } from "./wiring";
 
-/** A detected device or zone a component can be wired to, with the names shown now. */
 export type Detected = {
   key: string;
   choice: OutputChoice;

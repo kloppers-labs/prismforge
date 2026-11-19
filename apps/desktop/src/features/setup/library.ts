@@ -58,7 +58,6 @@ export function sizeOf(shape: Shape): number {
   return SHAPES.find((each) => each.value === shape)?.size ?? 120;
 }
 
-/** The first spot on a coarse grid that no placed component sits close to; the middle when the view is full. */
 export function freeSpot(setup: Setup, view: ViewId): { x: number; y: number } {
   const taken = setup.views.find((each) => each.id === view)?.placements ?? [];
   for (let y = 120; y <= CANVAS.height - 100; y += 130) {

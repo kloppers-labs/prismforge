@@ -1,6 +1,5 @@
 type Entry<T> = { state: T; label: string };
 
-/** Undo and redo of the drawing; one entry per finished edit, at most `limit`. */
 export class History<T> {
   private past: Entry<T>[] = [];
   private future: Entry<T>[] = [];

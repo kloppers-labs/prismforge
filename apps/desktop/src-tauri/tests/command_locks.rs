@@ -114,7 +114,6 @@ fn preview(name: &str) -> PreviewRequest {
     }
 }
 
-/// The graphics card's logo as one ring placed in the PC view.
 fn logo_setup() -> Setup {
     setup(
         vec![fan("c-logo", "Logo", 12)],

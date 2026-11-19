@@ -30,7 +30,6 @@ const DEVICE_TYPE_GPU: i32 = 2;
 const DEVICE_TYPE_KEYBOARD: i32 = 5;
 const ALONG: Flow = Flow::Along { angle: 0 };
 
-/// The modules this generator fills, beside the shared session, live and error modules.
 pub struct SetupModules {
     pub setups: Module,
     pub reports: Module,
@@ -344,7 +343,10 @@ async fn demo(modules: &mut SetupModules, sessions: &mut Module, errors: &mut Mo
     too_long.components[4] = strip("c-cooler-left", "Cooler left strip", 9);
     errors.add(
         "errorSetupExceedsOutput",
-        &shell.save_setup(too_long).await.expect_err("chain too long"),
+        &shell
+            .save_setup(too_long)
+            .await
+            .expect_err("chain too long"),
     );
     let mut too_many = demo_tower();
     too_many.components[0] = fan("c-front-fan-1", "Front fan 1", 121);

@@ -44,7 +44,6 @@ export function nameOf(setup: Setup, id: ComponentId): string {
   return setup.components.find((component) => component.id === id)?.name ?? id;
 }
 
-/** "Front fan 1" for one, "3 components" for several. */
 export function selectionName(setup: Setup, ids: ComponentId[]): string {
   return ids.length === 1 ? nameOf(setup, ids[0]!) : `${ids.length} components`;
 }
@@ -144,7 +143,6 @@ function viewName(setup: Setup, view: ViewId): string {
   return setup.views.find((each) => each.id === view)?.name ?? "";
 }
 
-/** LEDs of the output that a component placed in `view` covers. */
 export function placedLeds(setup: Setup, output: SetupOutput, view: ViewId): number {
   const covered = new Set<number>();
   for (const part of parts(setup, output)) {

@@ -34,7 +34,6 @@ export function liveColors(live: LiveOutput, target: OutputTarget): Rgb[] | null
   return device.zones.find((zone) => zone.zone === target.zone)?.colors ?? null;
 }
 
-/** The outputs with a component placed in `view`, each once. */
 export function viewTargets(setup: Setup, view: ViewId): OutputTarget[] {
   const targets: OutputTarget[] = [];
   for (const output of setup.outputs) {

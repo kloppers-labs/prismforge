@@ -10,7 +10,6 @@ import { demoAcrossRunning, demoConnected } from "../../test/fixtures/sessions";
 import { setupDemoEmpty } from "../../test/fixtures/setups";
 import { openSetup, setupHandlers } from "../../test/setup";
 
-/** The Rust side of the same journey, through the shell to a profile applied again, is in `src-tauri/tests/setup.rs`. */
 test("a_detected_zone_becomes_a_placed_fan_runs_an_effect_across_the_setup_and_is_saved_in_a_profile", async () => {
   const shell = fakeShell(
     demoConnected,

@@ -90,7 +90,6 @@ async function effects() {
   }
 }
 
-/** Picks the tab, adds a template, selects components, drafts or applies an effect, as the scenario asks. */
 async function setup() {
   await wait(200);
   if (scenario.setupTab) {

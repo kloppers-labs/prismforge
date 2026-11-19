@@ -17,7 +17,6 @@ export const SIZE_LIMITS = { min: 10, max: 1000 } as const;
 export const VIEWS = { pc: "v-pc", desk: "v-desk" } as const satisfies Record<string, ViewId>;
 const VIEW_NAMES: Record<ViewId, string> = { [VIEWS.pc]: "PC", [VIEWS.desk]: "Desk" };
 
-/** Where a detected device or zone is, with the names it has now, for a new output. */
 export type OutputChoice = { device: DeviceRef; zone: number | null; label: string; zoneName: string | null };
 
 /** How a component joins an output: alone, beside the others with the same colours, or after the last part on the wire. */
