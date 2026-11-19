@@ -2,10 +2,10 @@ use std::collections::BTreeSet;
 use std::ops::Range;
 
 use crate::profile::{NameProblem, clean_name};
+use crate::resolution::{MemberState, target_state};
 use crate::session::{MAX_BATCH_TARGETS, SessionDevice};
 use crate::setup::model::{Setup, SetupOutput};
 use crate::setup::problem::{SetupPart, SetupProblem};
-use crate::store::{MemberState, target_state};
 
 /// Most components one setup holds.
 pub const COMPONENT_LIMIT: usize = 512;

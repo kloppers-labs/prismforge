@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+use crate::resolution::{MemberState, target_state};
 use crate::scene::OutputTarget;
 use crate::session::SessionDevice;
 use crate::setup::ids::OutputId;
 use crate::setup::model::Setup;
 use crate::setup::problem::SetupProblem;
-use crate::store::{MemberState, target_state};
 
 /// One output against the devices of today, matched by its stored reference only; `problem` says why its parts do not fit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

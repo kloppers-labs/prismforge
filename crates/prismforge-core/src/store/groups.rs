@@ -16,9 +16,9 @@ use crate::store::files::FileOps;
 use crate::store::notice::{NoticeEvent, StoreNotice};
 use crate::store::{StoreError, mix};
 
+pub use crate::resolution::MemberState;
 pub use model::{GROUP_LIMIT, Group, GroupId, GroupMember, MEMBER_LIMIT};
-pub(crate) use resolve::target_state;
-pub use resolve::{MemberState, MemberStatus, resolve_members};
+pub use resolve::{MemberStatus, resolve_members};
 
 use model::GroupsBody;
 

@@ -7,6 +7,7 @@ mod identity;
 mod inventory;
 mod ownership;
 pub mod profile;
+mod resolution;
 mod scene;
 pub mod session;
 pub mod setup;
