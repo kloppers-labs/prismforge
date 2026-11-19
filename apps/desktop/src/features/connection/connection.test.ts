@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
+import { connectionChip, findDemoMarker, openConnection, waitForConnection } from "../../test/shell";
 import {
   demoConnected,
   openRgbAllRejected,
@@ -39,13 +40,13 @@ test("labels_demo_mode", async () => {
   fakeShell(demoConnected);
   render(App);
 
-  const banner = await screen.findByRole("complementary", { name: "Demo mode" });
-  expect(banner.textContent).toContain("These devices are simulated. Nothing is sent to hardware.");
+  const marker = await findDemoMarker();
+  expect(marker.textContent).toContain("simulated devices. Nothing is sent to hardware.");
   expect(screen.getByText("Simulated device. There is no hardware behind it.")).toBeTruthy();
-  expect(screen.getByText("the demo backend")).toBeTruthy();
+  expect(within(connectionChip()).getByText("Demo backend")).toBeTruthy();
 
   await fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-  expect(screen.getByRole("complementary", { name: "Demo mode" })).toBeTruthy();
+  expect(await findDemoMarker()).toBeTruthy();
   const diagnostics = screen.getByRole("complementary", { name: "Diagnostics" });
   expect(within(diagnostics).getByText("Simulated (demo mode)")).toBeTruthy();
 });
@@ -54,10 +55,11 @@ test("shows_retry_attempt_and_cause", async () => {
   fakeShell(openRgbRefused);
   render(App);
 
-  expect(await screen.findByText("Retrying, retry 3 next")).toBeTruthy();
+  await waitForConnection("Retrying, retry 3 next");
   expect(screen.getByText("Nothing answered at the OpenRGB server at 127.0.0.1:6742.")).toBeTruthy();
   expect(screen.getByText(/PrismForge tries again on its own\. Retry 3 comes next/)).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Stop retrying" })).toBeTruthy();
+  const panel = await openConnection();
+  expect(within(panel).getByRole("button", { name: "Stop retrying" })).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/Attempt \d+ failed/);
 });
 
@@ -122,7 +124,7 @@ test("ignores_a_view_older_than_the_one_shown", async () => {
   await shell.pushView({ revision: 10, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable" });
   await shell.pushView({ revision: 9, session: openRgbRefused, applying: null, connect_apply: null, on_connect: "NotApplicable" });
 
-  expect(await screen.findByRole("complementary", { name: "Demo mode" })).toBeTruthy();
+  expect(await findDemoMarker()).toBeTruthy();
   expect(screen.queryByText(/^Retrying/)).toBeNull();
 });
 

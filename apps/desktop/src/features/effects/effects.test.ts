@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { RestoreOutcome } from "../../lib/api/bindings/RestoreOutcome";
 import { fakeShell, refuse } from "../../test/backend";
+import { findDemoMarker } from "../../test/shell";
 import { button, chooseTarget, effectHandlers, openEffects, wait } from "../../test/effects";
 import * as errors from "../../test/fixtures/errors";
 import {
@@ -267,13 +268,13 @@ test("says_effects_stop_when_prismforge_closes_and_nothing_is_saved_where_the_us
   expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
 });
 
-test("keeps_the_demo_banner_on_the_effects_screen", async () => {
+test("keeps_the_demo_marker_on_the_effects_screen", async () => {
   fakeShell(demoConnected, effectHandlers());
   render(App);
 
   await openEffects();
 
-  expect(screen.getByRole("complementary", { name: "Demo mode" })).toBeTruthy();
+  expect(await findDemoMarker()).toBeTruthy();
 });
 
 test("shows_busy_without_retrying", async () => {

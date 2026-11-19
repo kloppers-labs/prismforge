@@ -1,13 +1,16 @@
 <script lang="ts">
   import type { Tone } from "../features/connection/wording";
 
-  let { tone }: { tone: Tone } = $props();
+  let { tone }: { tone: Tone | "idle" } = $props();
 </script>
 
 <svg class="tone {tone}" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
   {#if tone === "ok"}
     <circle cx="8" cy="8" r="6.5" />
     <path d="M5 8.2 L7.2 10.3 L11 6" />
+  {:else if tone === "idle"}
+    <circle cx="8" cy="8" r="6.5" />
+    <path d="M5.5 8 L10.5 8" />
   {:else if tone === "working"}
     <circle cx="8" cy="8" r="6.5" stroke-dasharray="3 2.2" />
   {:else if tone === "warning"}
@@ -44,5 +47,9 @@
 
   .problem {
     stroke: var(--problem);
+  }
+
+  .idle {
+    stroke: var(--text-dim);
   }
 </style>

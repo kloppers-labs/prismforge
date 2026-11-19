@@ -29,7 +29,7 @@
   onMount(() => heading?.focus());
 
   function onkeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("[aria-modal='true']")) {
       onclose();
     }
   }
@@ -37,9 +37,9 @@
 
 <svelte:window {onkeydown} />
 
-<aside class="drawer" aria-labelledby="diagnostics-title">
+<aside id="diagnostics-drawer" class="drawer" aria-labelledby="diagnostics-title">
   <header>
-    <h2 id="diagnostics-title" tabindex="-1" bind:this={heading}>Diagnostics</h2>
+    <h2 id="diagnostics-title" tabindex="-1" data-region-focus bind:this={heading}>Diagnostics</h2>
     <button type="button" onclick={onclose}>Close</button>
   </header>
 
@@ -160,21 +160,17 @@
 
 <style>
   .drawer {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(480px, 92vw);
-    background: var(--ink-1);
-    border-left: 1px solid var(--line);
-    box-shadow: -18px 0 40px rgb(0 0 0 / 0.35);
+    flex: 1;
+    min-width: 0;
+    background: var(--surface-1);
+    border-left: 1px solid var(--line-subtle);
+    box-shadow: var(--shadow-3);
     overflow-y: auto;
-    padding: 20px 24px 40px;
+    padding: var(--space-4) var(--space-5) var(--space-7);
     display: grid;
-    gap: 24px;
+    gap: var(--space-5);
     align-content: start;
-    z-index: 10;
-    animation: enter 160ms ease-out;
+    animation: enter var(--dur-base) var(--ease-out);
   }
 
   @keyframes enter {
@@ -201,7 +197,7 @@
 
   dl {
     display: grid;
-    grid-template-columns: 150px 1fr;
+    grid-template-columns: minmax(0, 150px) minmax(0, 1fr);
     gap: 4px 12px;
     margin: 0;
   }
@@ -216,8 +212,8 @@
   }
 
   .code {
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
   }
 
   .plain {

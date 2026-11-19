@@ -48,6 +48,7 @@
           <label class="host">
             <span>Host</span>
             <input
+              id="connect-host"
               bind:value={host}
               autocomplete="off"
               spellcheck="false"
@@ -87,7 +88,7 @@
     <section class="choice demo" aria-labelledby="demo-title">
       <h2 id="demo-title">Explore demo mode</h2>
       <p>Try PrismForge with five simulated devices. Demo mode does not connect to OpenRGB and sends nothing to hardware.</p>
-      <p>A striped banner stays at the top of the window while demo mode runs.</p>
+      <p>While demo mode runs, a striped “Demo mode” marker stays in the status bar at the top of every screen.</p>
       <button type="button" onclick={() => app.startDemo()} disabled={app.working !== null}>
         {app.working === "demo" ? "Starting demo mode" : "Start demo mode"}
       </button>
@@ -119,9 +120,9 @@
     display: flex;
     gap: 12px;
     padding: 14px 16px;
-    border: 1px solid #6a3a35;
+    border: 1px solid var(--problem-line);
     border-radius: var(--radius-m);
-    background: #2a1d1f;
+    background: var(--problem-surface);
   }
 
   .stopped div {
@@ -130,7 +131,7 @@
   }
 
   .headline {
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 
   .choices {
@@ -144,9 +145,9 @@
     display: grid;
     gap: 16px;
     padding: 24px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--radius-m);
-    background: var(--ink-1);
+    background: var(--surface-1);
   }
 
   .choice p {
@@ -155,7 +156,7 @@
 
   .demo {
     border-style: dashed;
-    border-color: #6b5a33;
+    border-color: var(--warning-line);
   }
 
   .demo button {
@@ -180,7 +181,7 @@
 
   label span {
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   input[aria-invalid="true"] {
@@ -188,7 +189,7 @@
   }
 
   .help {
-    font-size: 13px;
+    font-size: var(--font-s);
     color: var(--text-faint);
   }
 
