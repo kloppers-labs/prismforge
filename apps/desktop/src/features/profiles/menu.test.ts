@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { StoreView } from "../../lib/api/bindings/StoreView";
 import { fakeShell } from "../../test/backend";
-import { effectHandlers } from "../../test/effects";
+import { effectHandlers, wait } from "../../test/effects";
 import { appliedFully } from "../../test/fixtures/applies";
 import { detailsEvening, detailsImported, detailsOffline } from "../../test/fixtures/profileDetails";
 import { previewChanges } from "../../test/fixtures/saves";
@@ -168,4 +168,65 @@ test("apply_that_is_off_stays_in_the_menu_with_the_article's_reason", async () =
   expect(document.activeElement).not.toBe(apply);
   await fireEvent.click(apply);
   expect(args(shell, "apply_profile")).toEqual([]);
+});
+
+test("a_menu_request_is_dropped_when_another_row_is_chosen_before_the_details_load", async () => {
+  let release: () => void = () => {};
+  const later = new Promise<void>((resolve) => (release = resolve));
+  let slow = true;
+  const shell = fakeShell(
+    demoConnected,
+    handlers(storeTwo, {
+      delete_profile: () => null,
+      profile_details: async (call) => {
+        if (call.id === OLDER && slow) {
+          await later;
+        }
+        return call.id === OLDER ? detailsImported : detailsEvening;
+      },
+    }),
+  );
+  render(App);
+
+  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Delete…");
+  await fireEvent.click(await row("Evening"));
+  await screen.findByRole("article", { name: "Evening" });
+  slow = false;
+  release();
+  await wait(50);
+  expect(screen.queryByRole("dialog")).toBeNull();
+
+  await fireEvent.click(await row("Evening (2)"));
+  await screen.findByRole("article", { name: "Evening (2)" });
+  await wait(50);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(args(shell, "delete_profile")).toEqual([]);
+});
+
+test("a_menu_request_is_dropped_when_the_details_fail_to_load", async () => {
+  let fail = true;
+  fakeShell(
+    demoConnected,
+    handlers(storeTwo, {
+      profile_details: (call) => {
+        if (call.id === OLDER && fail) {
+          return Promise.reject({ Session: "Busy" });
+        }
+        return call.id === OLDER ? detailsImported : detailsEvening;
+      },
+    }),
+  );
+  render(App);
+
+  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Export…");
+  await wait(50);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fail = false;
+
+  await fireEvent.click(await row("Evening"));
+  await screen.findByRole("article", { name: "Evening" });
+  await fireEvent.click(await row("Evening (2)"));
+  await screen.findByRole("article", { name: "Evening (2)" });
+  await wait(50);
+  expect(screen.queryByRole("dialog")).toBeNull();
 });

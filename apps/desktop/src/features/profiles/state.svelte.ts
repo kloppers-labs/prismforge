@@ -80,6 +80,7 @@ export class ProfilesState {
 
   endScope() {
     this.scope += 1;
+    this.asked = null;
     this.outcome = null;
     this.imported = null;
     this.importProblem = null;
@@ -93,9 +94,11 @@ export class ProfilesState {
     this.selected = null;
     this.details = null;
     this.pendingUpdate = null;
+    this.asked = null;
   }
 
   async select(id: ProfileId) {
+    this.asked = null;
     this.selected = id;
     this.details = null;
     await this.loadDetails(id);
@@ -109,7 +112,9 @@ export class ProfilesState {
 
   async ask(id: ProfileId, action: ProfileAsk["action"], from: HTMLElement | null) {
     await this.show(id);
-    this.asked = { id, action, from };
+    if (this.selected === id && this.details?.id === id) {
+      this.asked = { id, action, from };
+    }
   }
 
   nameOf(id: ProfileId): string {
