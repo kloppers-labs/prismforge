@@ -182,7 +182,7 @@
 
     {#if app.diagnosticsOpen}
       <div class="drawer" class:docked class:narrow={narrowDock} bind:this={drawer}>
-        <DiagnosticsDrawer {session} {store} onclose={closeDiagnostics} />
+        <DiagnosticsDrawer {session} {store} names={app.names} onclose={closeDiagnostics} />
       </div>
     {/if}
   </div>
