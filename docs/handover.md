@@ -18,7 +18,7 @@ The desktop app saves profiles (Task 3b). The shell opens a real store and a sep
 
 The desktop app keeps running in the background when the user chooses it (Task 6a). It has a tray icon with the connection, the PrismForge effects and the active profile, Show or Hide, Stop all PrismForge effects and Quit. The first close of the window asks whether to keep running in the tray or to quit, and remembers the answer. Settings holds the close choice and the start-up path in four steps, each off by default: start with the system, start hidden in the tray, connect to OpenRGB at start, and the profile marked to apply on connect, named on the screen. A second start shows the running PrismForge. The app settings are a durable file beside the stores. See `docs/decisions/0004-lifecycle.md`.
 
-The window has a new shell (plan 2, Task 7). A rail on the left holds Devices, Effects and Profiles, with Diagnostics and Settings at its foot, in every connection state. A status strip at the top of the page shows the connection, the active profile with its unsaved changes, a running profile apply, the profile set to apply on connect and a striped demo marker; its chips open panels with the actions of each state. One notice slot under the strip replaces the stacked strips. Effects without a connection shows how to connect. Diagnostics docks beside the page, or covers it below 1100 px. Ctrl+1 to Ctrl+3, Ctrl+, and F6 work from the keyboard. The design tokens are in `apps/desktop/src/lib/tokens.css`. `pnpm preview:ui` shows the real interface in a browser with simulated data. See `docs/decisions/0005-shell-and-design-tokens.md`.
+The window has a new shell (plan 2, Task 7). A rail on the left holds Devices, Effects and Profiles, with Diagnostics and Settings at its foot, in every connection state. A status strip at the top of the page shows the connection, the active profile with its unsaved changes, a running profile apply, the profile set to apply on connect and a striped demo marker; its chips open panels with the actions of each state. One notice slot under the strip replaces the stacked strips. Effects without a connection shows how to connect. Diagnostics docks beside the page from 1400 px wide and covers it below that. Ctrl+1, Ctrl+2, Ctrl+4, Ctrl+, and F6 work from the keyboard; Ctrl+3 and Ctrl+5 are kept for Setup and Automation. The design tokens are in `apps/desktop/src/lib/tokens.css`. `pnpm preview:ui` shows the real interface in a browser with simulated data. See `docs/decisions/0005-shell-and-design-tokens.md`.
 
 All tests pass on macOS. The Task 7 commits have no Windows CI result yet. The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
@@ -76,20 +76,20 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Task 7 run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `66e319b`, the last code commit of Task 7.
+Task 7 run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `e52213c`, the last code commit of Task 7 fix round 1.
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 329 tests. 97 in `prismforge-desktop`, with 5 exit tests: a user quit now ends after at most 10 seconds when the stop hangs. |
+| `cargo test --workspace` | Pass: 330 tests. 98 in `prismforge-desktop`, with 6 exit tests: a user quit ends after at most 10 seconds when the stop hangs, and the stop at `Exit` does not wait again after it. |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 179 interface tests (38 for the shell in `src/lib/shell/shell.test.ts`) |
-| `pnpm check:build` in `apps/desktop` | Pass: "The production build holds no preview code and no fixture data (3 files checked)". With a preview import added to `src/main.ts` it fails and names four fixture strings. |
-| `pnpm tauri:build` in `apps/desktop` | Pass: `PrismForge.app` (15.41 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.46 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The binary holds none of the preview or fixture strings. |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 201 interface tests (53 for the shell in `src/lib/shell/shell.test.ts`, 3 for panel placement) |
+| `pnpm check:build` in `apps/desktop` | Pass: "The production build in dist holds no module from src/dev-preview or src/test (247 modules, 3 files checked)". With `import { catalog } from "./test/fixtures/catalog"` added to `src/main.ts` it fails and names `src/test/fixtures/catalog.ts`. |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `e52213c`: `PrismForge.app` (15.40 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.46 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. |
 
-The shell was looked at in the interface preview in Orca's browser (Chromium on macOS) at 1280 × 800, 920 × 600 and the 200 % equivalents 640 × 400 and 460 × 300. Nothing overlapped. A real Tab pass in the preview reached: Skip to content, the five rail items, the two chips, then the page. F6 went to the rail, the strip and the page. These are browser checks, not native-app or Windows checks. The native app was not started for Task 7.
+The shell was looked at in the interface preview in Orca's browser (Chromium on macOS) at 1280 × 800, 1200 × 780, 920 × 600 and the 200 % equivalents 640 × 400 and 460 × 300, also with a long server address and profile name. The first pass missed three faults that the review found: a chip panel that left the window at 200 %, "Diagnostics" cut in the rail at 460 × 300, and a second scroll area on Devices. Fix round 1 removed them, and a measurement in the same preview found every panel inside the window, no cut rail label and one scroll area for the page. A real Tab pass in the preview reached: Skip to content, the five rail items, the two chips, then the page. F6 went to the rail, the strip and the page. These are browser checks, not native-app or Windows checks. The native app was not started for Task 7.
 
 Task 6a run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `518f2db`, the last product code commit of Task 6a fix round 1, including `pnpm tauri:build`.
 
@@ -221,10 +221,8 @@ Not done:
 - **Shutdown restore stops after 5 seconds.** Devices not restored by then keep the last effect frame. The session keeps their remembered state for the next take-over until the inventory reports another mode than Direct Mode. Until then, identify reports "previous state unknown" for them.
 - **External control is only the user's statement.** PrismForge cannot see the Effects plugin or any other writer. While the user declares a device external, PrismForge sends it nothing: effects, identify and hardware-mode selection are refused.
 - **The shell is not seen in the native window.** Task 7 was checked in the browser preview only: no native window chrome, no WebView2, no forced colours, no screen reader. Focus rings were not visible in the preview screenshots, because the preview tab does not hold system focus.
-- **Docked Diagnostics narrows the page.** From 1100 px up, Diagnostics docks beside the page. On two-pane screens the detail pane then scrolls sideways at about 1280 px, because the pane has fixed widths inside (audit D2, Task 8).
 - **The strip divider can stand alone.** When the strip wraps at 200 % text, the divider between the chips ends the first row.
-- **Area shortcuts follow the rail order.** When Setup arrives, Profiles moves from Ctrl+3 to Ctrl+4.
-- **Screen copy is still long.** The audit's per-screen findings (E1 to E16, P1 to P10, C1 to C9, D1 to D10) are for Task 8. The Effects paragraph that says closing the window quits PrismForge is one of them (E2).
+- **Screen copy is still long.** The audit's per-screen findings (E1 to E16, P1 to P10, C1 to C9, D2 to D10) are for Task 8. The Effects paragraph now states the stored close choice, but its full rewrite (E2) is Task 8.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## Missing information from the owner

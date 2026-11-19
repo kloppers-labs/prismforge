@@ -53,7 +53,7 @@ pnpm tauri:dev
 
 `pnpm tauri:build` builds the native app and its installers into `target/release/bundle`. The build is not signed. `apps/desktop/README.md` lists every command, the generated files and the security settings.
 
-The window has a rail on the left with Devices, Effects and Profiles, and Diagnostics and Settings at its foot. These stay the same whether PrismForge is connected or not. A status strip at the top shows the connection, the active profile with its unsaved changes, a profile that is being applied, and demo mode. Click a part of the strip for its details and actions, such as Rescan devices, Disconnect and Save changes. Messages that need your attention appear in one place under the strip. Ctrl+1 to Ctrl+3 (Command on macOS) open the areas, and Ctrl+, opens Settings.
+The window has a rail on the left with Devices, Effects and Profiles, and Diagnostics and Settings at its foot. These stay the same whether PrismForge is connected or not. A status strip at the top shows the connection, the active profile with its unsaved changes, a profile that is being applied, and demo mode. Click a part of the strip for its details and actions, such as Rescan devices, Disconnect and Save changes. Messages that need your attention appear in one place under the strip. Ctrl+1, Ctrl+2 and Ctrl+4 (Command on macOS) open Devices, Effects and Profiles, and Ctrl+, opens Settings.
 
 The app starts on Devices, which shows the connection form. Nothing connects until you choose:
 

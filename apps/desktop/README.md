@@ -21,7 +21,7 @@ Run these in `apps/desktop`.
 | `pnpm typecheck` | Runs `svelte-check` and `tsc`. |
 | `pnpm test` | Runs the interface tests in jsdom. |
 | `pnpm build` | Builds the web interface into `dist`. |
-| `pnpm check:build` | Builds the web interface as `pnpm build` does, into a temporary folder, and fails if the output holds preview code or fixture data. CI runs it. |
+| `pnpm check:build` | Builds the web interface as `pnpm build` does, into the folder that the Tauri bundle takes (`dist`), and fails if the bundler used any module from `src/dev-preview` or `src/test`, or if the output holds preview text. CI runs it. |
 | `pnpm tauri:build` | Builds the native app and its installers into `target/release/bundle` at the repository root. The build is not signed. |
 
 ## Generated files
@@ -86,14 +86,14 @@ Effect commands return `CommandError`. `InvalidEffect` carries the structured va
 The window has three parts. `src/lib/shell` holds them. `docs/decisions/0005-shell-and-design-tokens.md` explains the choices.
 
 - **The rail** on the left lists the areas: Devices, Effects and Profiles, then Diagnostics and Settings at its foot. The list is the same in every connection state. The current area has a filled background, an accent bar and a bold label. Below 1100 px the rail is 72 px wide and shows each label under its icon.
-- **The status strip** at the top of the page shows the connection, the active profile and demo mode. The connection chip opens a panel with the reason in words and the actions for that state: Rescan devices and Disconnect, Stop retrying, or Connect to OpenRGB and Start demo mode. The profile chip shows unsaved changes, a profile that is being applied, and the profile set to apply on connect; its panel has Save changes and Open Profiles. In demo mode a striped "Demo mode" marker and a striped edge stay on every screen.
-- **The notice slot** under the strip holds command problems, a failed close or quit, connection problems, repaired files, the tray stop report and the apply-on-connect result. Problems come first. With more than one notice only the first shows, with "Show all N notices". A connection problem stays until the connection changes.
+- **The status strip** at the top of the page shows the connection, demo mode and the active profile. The connection chip opens a panel with the reason in words and the actions for that state: Rescan devices, or Connect to OpenRGB and Start demo mode; Disconnect or Stop retrying sit apart below a line. A panel whose only action ends the session opens with focus on the panel, not on that action. The profile chip shows unsaved changes, a profile that is being applied, and the profile set to apply on connect; its panel has Save changes and Open Profiles. In demo mode a striped "Demo mode" marker and a striped edge stay on every screen.
+- **The notice slot** under the strip holds command problems, a failed close or quit, connection problems, repaired files, the tray stop report and the apply-on-connect result. Problems come first, then cautions, then the rest; within a tone the newest is first. With more than one notice only the first shows, with "Show all N notices", and a notice that arrives behind the count is announced. A connection notice stays until the connection changes.
 
-Without a connection, Devices shows the connection form, and Effects shows how to connect. Diagnostics opens beside the page. Below 1100 px it covers the page, which cannot take focus until Diagnostics closes or you choose an area.
+Without a connection, Devices shows the connection form, and Effects shows how to connect. From 1400 px wide, Diagnostics opens beside the page. Below that it covers the page, which cannot take focus until Diagnostics closes; choosing an area, any action in the status strip and any dialog close it first.
 
 | Keys | What they do |
 |---|---|
-| Ctrl+1, Ctrl+2, Ctrl+3 (Command on macOS) | Open Devices, Effects or Profiles. Not while you type in a field or while a dialog is open. |
+| Ctrl+1, Ctrl+2, Ctrl+4 (Command on macOS) | Open Devices, Effects or Profiles. Ctrl+3 and Ctrl+5 are kept for Setup and Automation. The keys count by position, so they work on layouts where digits need Shift. Not while you type in a field or while a dialog is open. |
 | Ctrl+, (Command-, on macOS) | Opens Settings. |
 | F6, Shift+F6 | Move between the rail, the status strip, the notices, the page and Diagnostics. |
 | Tab, as the first key | Reaches "Skip to content". |
@@ -106,11 +106,11 @@ The design tokens are in `src/lib/tokens.css`: colour roles, type, spacing, radi
 
 `pnpm preview:ui` serves the real `App` at `http://localhost:1430` with a fake Tauri transport and the fixtures in `src/test/fixtures`. It is for design work, screenshots and contributors without hardware. It never starts Rust and never reaches hardware. A badge in the corner says "Interface preview: simulated data" and opens a list of states.
 
-- `?state=<name>` picks a state. The names are in `src/dev-preview/scenarios.ts`, for example `first-run`, `retrying`, `lost`, `demo-unsaved`, `effects-running`, `profiles-unresolved`, `applying`, `notices`, `settings` and `diagnostics`.
+- `?state=<name>` picks a state. The names are in `src/dev-preview/scenarios.ts`, for example `first-run`, `retrying`, `lost`, `demo-unsaved`, `effects-running`, `profiles-unresolved`, `applying`, `notices`, `settings`, `diagnostics` and `long-names`.
 - `&area=Effects` opens an area. `&open=connection` or `&open=profile` opens a chip panel. `&diagnostics` opens Diagnostics.
 - Commands that the preview does not simulate fail with a plain message.
 
-The preview has its own Vite config (`vite.preview.config.ts`) and entry (`src/dev-preview`). `pnpm build`, and so the Tauri bundle, never includes it. `pnpm check:build` proves that on each CI run.
+The preview has its own Vite config (`vite.preview.config.ts`) and entry (`src/dev-preview`). `pnpm build`, and so the Tauri bundle, never includes it. `pnpm check:build` proves that from the bundler's own module list on each CI run.
 
 ## Profiles in the shell
 
