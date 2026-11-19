@@ -69,7 +69,8 @@ pub struct ApplyingProfile {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ConnectApply {
     pub id: ProfileId,
-    pub name: String,
+    /// `None` when the marked profile could not be read.
+    pub name: Option<String>,
     pub outcome: ConnectOutcome,
 }
 

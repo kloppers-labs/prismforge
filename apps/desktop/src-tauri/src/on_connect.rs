@@ -113,7 +113,7 @@ pub(crate) async fn apply_on_connect<S: ViewSink>(
     }
 }
 
-/// An unreadable profile gets an empty name; its apply fails before anything is sent.
+/// An unreadable profile has no name and no `applying` state; its apply fails before anything is sent.
 async fn apply_marked<S: ViewSink>(
     report: &Report<S>,
     handle: &SessionHandle,
@@ -121,16 +121,15 @@ async fn apply_marked<S: ViewSink>(
     publisher: &Publisher<S>,
 ) -> Option<ConnectApply> {
     let (id, name) = match report.mark().await? {
-        Mark::Ready(id, name) => (id, name),
-        Mark::Unreadable(id, _) => (id, String::new()),
+        Mark::Ready(id, name) => (id, Some(name)),
+        Mark::Unreadable(id, _) => (id, None),
     };
-    let _guard = lock
-        .begin(ApplyingProfile {
-            id: id.clone(),
-            name: name.clone(),
-            automatic: true,
-        })
-        .await;
+    let applying = name.clone().map(|name| ApplyingProfile {
+        id: id.clone(),
+        name,
+        automatic: true,
+    });
+    let _guard = lock.begin(applying).await;
     let outcome = match report.profiles.apply_marked(handle).await {
         Ok(Some(report)) => ConnectOutcome::Applied { report },
         Ok(None) => return None,

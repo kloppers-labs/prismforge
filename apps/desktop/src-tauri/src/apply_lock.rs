@@ -58,18 +58,24 @@ impl<S: ViewSink> ApplyLock<S> {
             .clone()
             .try_lock_owned()
             .map_err(|_| CommandError::ProfileApplying)?;
-        Ok(self.hold(slot, applying).await)
+        Ok(self.hold(slot, Some(applying)).await)
     }
 
-    /// For apply on connect: waits for a user's apply to end first.
-    pub async fn begin(&self, applying: ApplyingProfile) -> ApplyGuard<S> {
+    /// For apply on connect: waits for a user's apply to end first; `None` publishes no `applying`.
+    pub async fn begin(&self, applying: Option<ApplyingProfile>) -> ApplyGuard<S> {
         let slot = self.slot.clone().lock_owned().await;
         self.hold(slot, applying).await
     }
 
-    async fn hold(&self, slot: OwnedMutexGuard<()>, applying: ApplyingProfile) -> ApplyGuard<S> {
+    async fn hold(
+        &self,
+        slot: OwnedMutexGuard<()>,
+        applying: Option<ApplyingProfile>,
+    ) -> ApplyGuard<S> {
         self.running.store(true, Ordering::SeqCst);
-        self.publisher.set_applying(Some(applying));
+        if applying.is_some() {
+            self.publisher.set_applying(applying);
+        }
         let mut guard = ApplyGuard {
             running: self.running.clone(),
             publisher: self.publisher.clone(),

@@ -184,8 +184,8 @@ function markProblemText(problem: MarkProblem): string {
   return problem === "NewerVersion" ? "needs a newer PrismForge, so this version cannot read it" : "is not in the store any more";
 }
 
-function profileLabel(name: string): string {
-  return name || "the profile marked to apply on connect";
+function profileLabel(name: string | null): string {
+  return name ?? "the profile marked to apply on connect";
 }
 
 /** The one text for what apply on connect did; the notice and the status line both use it. */

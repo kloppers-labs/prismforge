@@ -204,7 +204,7 @@ async fn apply_on_connect_is_off_by_default_and_applies_the_marked_profile_once_
     assert_eq!(after_stop, None);
     assert_eq!(mode_calls(&next, LIGHT_BAR), 1);
     let applied = view.connect_apply.expect("report");
-    assert_eq!(applied.name, "Bar");
+    assert_eq!(applied.name.as_deref(), Some("Bar"));
     assert!(matches!(applied.outcome, ConnectOutcome::Applied { .. }));
     assert_eq!(
         shell.store_view().await.expect("store").summary.active,

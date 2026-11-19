@@ -2,4 +2,8 @@
 import type { ConnectOutcome } from "./ConnectOutcome";
 import type { ProfileId } from "./ProfileId";
 
-export type ConnectApply = { id: ProfileId, name: string, outcome: ConnectOutcome, };
+export type ConnectApply = { id: ProfileId, 
+/**
+ * `None` when the marked profile could not be read.
+ */
+name: string | null, outcome: ConnectOutcome, };

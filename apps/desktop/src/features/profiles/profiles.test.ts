@@ -556,7 +556,7 @@ test("a_result_that_arrives_after_the_session_ended_is_dropped", async () => {
   expect(result().textContent?.trim()).toBe("");
 });
 
-function firedWith(outcome: ConnectOutcome, name = "Desk"): ShellView {
+function firedWith(outcome: ConnectOutcome, name: string | null = "Desk"): ShellView {
   const view = structuredClone(viewFiredRetrying);
   const state = view.on_connect;
   if (typeof state !== "object" || !("Fired" in state) || !state.Fired.ran) {
@@ -615,7 +615,7 @@ test("a_failed_apply_on_connect_reads_the_same_in_the_status_and_the_notice", as
   const { status, notice } = await statusAndNotice(
     firedWith(
       { Failed: { error: { Store: { NewerFile: { file: "profiles/p-0000000000000003.json", problem: { NewerVersion: { found: 2, supported: 1 } } } } } } },
-      "",
+      null,
     ),
   );
 

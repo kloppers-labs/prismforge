@@ -115,7 +115,10 @@ async fn a_connect_whose_first_device_scan_fails_stays_armed_until_the_devices_a
 
     assert_eq!(stopped, OnConnect::NotApplicable);
     assert!(retrying.connect_apply.is_none());
-    assert_eq!(applied.connect_apply.expect("result").name, "Desk");
+    assert_eq!(
+        applied.connect_apply.expect("result").name.as_deref(),
+        Some("Desk")
+    );
     let OnConnect::Fired {
         ran: Some(ran),
         next,
@@ -123,7 +126,7 @@ async fn a_connect_whose_first_device_scan_fails_stays_armed_until_the_devices_a
     else {
         panic!("not fired: {:?}", shell.view().on_connect);
     };
-    assert_eq!(ran.name, "Desk");
+    assert_eq!(ran.name.as_deref(), Some("Desk"));
     assert_eq!(next, Some(ready("Desk")));
 }
 
@@ -420,4 +423,46 @@ async fn a_failed_delete_of_the_marked_profile_publishes_the_cleared_mark() {
     assert!(deleted.is_err(), "{deleted:?}");
     assert_eq!(shell.view().on_connect, OnConnect::NotArmed);
     drop(controls);
+}
+
+async fn fired_unreadable(dir: &TempDir) -> (OnConnect, Recorder) {
+    let server = FakeServer::new();
+    server.add_device(0, strip("alpha"));
+    let (shell, recorder) = shell_on(dir);
+    shell.start(openrgb(&server)).await.expect("start");
+    let fired = recorder
+        .wait_view(|view| matches!(view.on_connect, OnConnect::Fired { .. }))
+        .await
+        .on_connect;
+    settle().await;
+    shell.stop().await;
+    (fired, recorder)
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unreadable_or_missing_marked_profile_publishes_no_apply_and_no_empty_name() {
+    let newer = TempDir::new("unreadable-newer-quiet");
+    marked_profile(&newer, &["alpha"]).await;
+    let file = profile_file(&newer);
+    let text = std::fs::read_to_string(&file).expect("profile");
+    std::fs::write(&file, text.replacen("\"major\": 1", "\"major\": 2", 1)).expect("newer");
+    let missing = TempDir::new("unreadable-missing-quiet");
+    marked_profile(&missing, &["alpha"]).await;
+    let file = profile_file(&missing);
+    std::fs::write(&file, b"damaged").expect("damage");
+    let _ = std::fs::remove_file(file.with_extension("json.bak"));
+
+    for dir in [&newer, &missing] {
+        let (fired, recorder) = fired_unreadable(dir).await;
+
+        let OnConnect::Fired { ran: Some(ran), .. } = fired else {
+            panic!("{fired:?}");
+        };
+        assert!(matches!(ran.outcome, ConnectOutcome::Failed { .. }));
+        assert_eq!(ran.name, None);
+        assert!(
+            recorder.views().iter().all(|view| view.applying.is_none()),
+            "an unreadable profile was published as applying"
+        );
+    }
 }
