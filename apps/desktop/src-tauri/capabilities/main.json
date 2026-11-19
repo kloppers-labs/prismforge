@@ -18,6 +18,7 @@
     "allow-apply-effect-batch",
     "allow-stop-effect-batch",
     "allow-stop-all-effects",
+    "allow-watch-live-output",
     "allow-select-mode",
     "allow-declare-external",
     "allow-clear-external",

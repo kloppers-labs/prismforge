@@ -2,6 +2,7 @@ mod batch;
 mod diagnostics;
 mod identify;
 mod intent;
+mod live;
 mod output;
 mod previous;
 mod reconnect;
@@ -31,6 +32,8 @@ pub use diagnostics::{
 };
 pub use identify::{IDENTIFY_COLOR, IdentifyOutcome, RestoreFailure, RestoreOutcome};
 pub(crate) use intent::{Intent, IntentLog, IntentRecord, Origin, Slot};
+use live::LiveChannels;
+pub use live::{LIVE_OUTPUT_RATE, LiveDevice, LiveFeed, LiveOutput, LiveZone};
 pub use output::{MAX_FRAME_RATE, MIN_FRAME_RATE};
 pub use reconnect::ReconnectPolicy;
 pub use runner::Session;
@@ -174,6 +177,7 @@ pub struct SessionHandle {
     snapshot: Arc<watch::Sender<SessionSnapshot>>,
     known: Arc<watch::Sender<Vec<KnownDevice>>>,
     refused_busy: Arc<AtomicU64>,
+    live: LiveChannels,
     id: u64,
 }
 
@@ -221,6 +225,13 @@ impl SessionHandle {
             duration,
         };
         self.send(|reply| Command::Identify { request, reply })
+    }
+
+    /// The colours PrismForge last wrote to `targets`; reading them sends nothing and never changes the output cadence.
+    pub fn live_output(&self, targets: Vec<OutputTarget>) -> LiveFeed {
+        static FEEDS: AtomicU64 = AtomicU64::new(1);
+        self.live
+            .feed(FEEDS.fetch_add(1, Ordering::Relaxed), targets)
     }
 
     pub fn effect_definitions(&self) -> Vec<EffectDefinition> {
@@ -421,12 +432,20 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         let (commands, receiver) = mpsc::channel(config.command_capacity.max(1));
         let refused_busy = Arc::new(AtomicU64::new(0));
         static SESSIONS: AtomicU64 = AtomicU64::new(0);
-        let session = Self::start(backend, config, receiver, refused_busy.clone());
+        let live = LiveChannels::new();
+        let session = Self::start(
+            backend,
+            config,
+            receiver,
+            refused_busy.clone(),
+            live.clone(),
+        );
         let handle = SessionHandle {
             commands,
             snapshot: session.publisher(),
             known: session.registry(),
             refused_busy,
+            live,
             id: SESSIONS.fetch_add(1, Ordering::Relaxed),
         };
         (handle, session)

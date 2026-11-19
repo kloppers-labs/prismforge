@@ -1,12 +1,14 @@
 use std::sync::Mutex;
 
-use prismforge_core::session::SessionSnapshot;
+use prismforge_core::session::{LiveOutput, SessionSnapshot};
 use tokio::sync::watch;
 
 use crate::view::{ApplyingProfile, ConnectApply, OnConnect, ShellView};
 
 pub trait ViewSink: Send + Sync + 'static {
     fn deliver(&self, view: &ShellView);
+
+    fn deliver_live(&self, _live: &LiveOutput) {}
 }
 
 /// Numbers each view and delivers views in the order of their numbers.
@@ -29,6 +31,11 @@ impl<S: ViewSink> Publisher<S> {
             }),
             changes: watch::channel(0).0,
         }
+    }
+
+    /// Live output goes straight to the window; it is not part of the numbered view.
+    pub fn deliver_live(&self, live: &LiveOutput) {
+        self.sink.deliver_live(live);
     }
 
     pub fn current(&self) -> ShellView {

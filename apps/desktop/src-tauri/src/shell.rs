@@ -3,9 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use prismforge_core::session::{
-    IdentifyOutcome, Session, SessionConfig, SessionError, SessionHandle, SessionSnapshot,
+    IdentifyOutcome, MAX_BATCH_TARGETS, Session, SessionConfig, SessionError, SessionHandle,
+    SessionSnapshot,
 };
-use prismforge_core::{ConnectionState, DeviceRef, RgbBackend};
+use prismforge_core::{ConnectionState, DeviceRef, OutputTarget, RgbBackend};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
@@ -51,6 +52,7 @@ struct Active<S> {
     forwarder: JoinHandle<()>,
     keeper: Option<JoinHandle<()>>,
     watcher: Option<JoinHandle<()>>,
+    live: Option<JoinHandle<()>>,
 }
 
 impl<S: ViewSink> Shell<S> {
@@ -170,6 +172,7 @@ impl<S: ViewSink> Shell<S> {
             forwarder,
             keeper,
             watcher,
+            live: None,
         });
         Ok(view)
     }
@@ -193,6 +196,31 @@ impl<S: ViewSink> Shell<S> {
         if let Some(report) = report {
             report.publish().await;
         }
+    }
+
+    /// Sends the live output of `targets` to the window until the next call; an empty list stops it.
+    pub async fn watch_live(&self, targets: Vec<OutputTarget>) -> Result<(), CommandError> {
+        if targets.len() > MAX_BATCH_TARGETS {
+            return Err(CommandError::TooManyTargets {
+                limit: MAX_BATCH_TARGETS,
+            });
+        }
+        let mut active = self.active.lock().await;
+        let active = active.as_mut().ok_or(CommandError::NoSession)?;
+        if let Some(task) = active.live.take() {
+            task.abort();
+        }
+        if targets.is_empty() {
+            return Ok(());
+        }
+        let mut feed = active.handle.live_output(targets);
+        let publisher = self.publisher.clone();
+        active.live = Some(tokio::spawn(async move {
+            while let Some(live) = feed.next().await {
+                publisher.deliver_live(&live);
+            }
+        }));
+        Ok(())
     }
 
     pub async fn refresh(&self) -> Result<(), CommandError> {
@@ -264,6 +292,7 @@ async fn end<S: ViewSink>(active: Option<Active<S>>) {
         forwarder,
         keeper,
         watcher,
+        live,
         ..
     }) = active
     else {
@@ -271,6 +300,7 @@ async fn end<S: ViewSink>(active: Option<Active<S>>) {
     };
     forwarder.abort();
     let _ = forwarder.await;
+    stop_beside(live).await;
     stop_beside(watcher).await;
     if let Some(report) = report {
         report.close().await;

@@ -326,3 +326,31 @@ async fn a_batch_reaches_the_session_and_reports_each_target() {
         })
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn the_live_output_reaches_the_window_only_while_it_is_watched() {
+    let (shell, recorder, controls, _dir) = demo().await;
+    shell
+        .apply_effect(whole(GPU), instance("rainbow-wave", &[]))
+        .await
+        .expect("apply");
+    let before = controls.outputs().len();
+
+    shell.watch_live(vec![whole(GPU)]).await.expect("watch");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    shell.watch_live(Vec::new()).await.expect("unwatch");
+    let watched = recorder.live();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let after = recorder.live();
+    shell.stop().await;
+    let ended = shell.watch_live(vec![whole(GPU)]).await;
+
+    assert!((20..=26).contains(&watched.len()), "{}", watched.len());
+    assert!(watched.iter().all(|live| live.devices.len() == 1
+        && live.devices[0].device.as_str() == GPU
+        && live.devices[0].zones[0].colors.len() == 12));
+    assert_eq!(after.len(), watched.len());
+    assert_eq!(ended, Err(CommandError::NoSession));
+    let frames_per_second = 30;
+    assert!(controls.outputs().len() - before >= 2 * frames_per_second - 2);
+}

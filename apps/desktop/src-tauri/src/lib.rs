@@ -46,6 +46,7 @@ pub use view::{
 };
 
 pub const VIEW_EVENT: &str = "session-view";
+pub const LIVE_EVENT: &str = "live-output";
 
 type DesktopShell = Shell<WindowSink>;
 type DesktopLifecycle = Lifecycle<native::LifecycleWindowSink>;
@@ -55,6 +56,10 @@ pub struct WindowSink(AppHandle);
 impl ViewSink for WindowSink {
     fn deliver(&self, view: &ShellView) {
         let _ = self.0.emit(VIEW_EVENT, view);
+    }
+
+    fn deliver_live(&self, live: &prismforge_core::session::LiveOutput) {
+        let _ = self.0.emit(LIVE_EVENT, live);
     }
 }
 
@@ -118,6 +123,7 @@ pub fn run() {
             commands::apply_effect_batch,
             commands::stop_effect_batch,
             commands::stop_all_effects,
+            commands::watch_live_output,
             commands::select_mode,
             commands::declare_external,
             commands::clear_external,

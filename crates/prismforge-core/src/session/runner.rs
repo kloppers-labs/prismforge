@@ -17,6 +17,7 @@ use crate::session::diagnostics::{
 };
 use crate::session::identify::{IdentifyOutcome, IdentifyPlan, RestoreFailure, RestoreOutcome};
 use crate::session::intent::Intents;
+use crate::session::live::{self, LiveChannels, LiveRequest};
 use crate::session::output::Output;
 use crate::session::snapshot::{OutputStatus, SessionSnapshot};
 use crate::session::{Command, Reply, SessionConfig, SessionError};
@@ -50,6 +51,9 @@ pub struct Session<B> {
     events: EventRing,
     output: Output,
     intents: Intents,
+    live: LiveChannels,
+    live_requests: watch::Receiver<LiveRequest>,
+    live_open: bool,
 }
 
 enum Link {
@@ -77,6 +81,7 @@ enum Wake {
     Event(Option<BackendEvent>),
     Command(Command),
     Frame,
+    LiveRequest(bool),
     Closed,
 }
 
@@ -86,6 +91,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         config: SessionConfig,
         commands: mpsc::Receiver<Command>,
         refused_busy: Arc<AtomicU64>,
+        live: LiveChannels,
     ) -> Self {
         let output = Output::new(config.frame_rate);
         let snapshot = SessionSnapshot {
@@ -121,6 +127,9 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             counters: Counters::default(),
             output,
             intents: Intents::default(),
+            live_requests: live.requests.subscribe(),
+            live,
+            live_open: true,
         }
     }
 
@@ -154,6 +163,9 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 () = sleep_until(frame.unwrap_or_else(Instant::now)), if frame_first => Wake::Frame,
                 command = self.commands.recv() => command.map_or(Wake::Closed, Wake::Command),
                 event = self.backend.next_event(), if listening => Wake::Event(event),
+                changed = self.live_requests.changed(), if self.live_open => {
+                    Wake::LiveRequest(changed.is_ok())
+                }
                 () = sleep_until(auto_refresh.unwrap_or_else(Instant::now)), if auto_refresh.is_some() => {
                     Wake::StaleInventory
                 }
@@ -173,12 +185,31 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                     self.on_command(command).await;
                 }
                 Wake::Frame => self.on_frame().await,
+                Wake::LiveRequest(open) => self.live_open = open,
                 Wake::Closed => break,
             }
             self.publish();
+            self.publish_live();
         }
         self.stop().await;
         self.publish();
+    }
+
+    /// Copies the output state for the live feed; no backend call, so it cannot change what reaches a device.
+    fn publish_live(&mut self) {
+        let request = self.live_requests.borrow_and_update().clone();
+        let fresh = if request.targets.is_empty() {
+            live::LiveOutput::default()
+        } else {
+            live::collect(&request, &self.output, self.inventory.as_ref())
+        };
+        self.live.output.send_if_modified(|current| {
+            let changed = *current != fresh;
+            if changed {
+                *current = fresh;
+            }
+            changed
+        });
     }
 
     fn deadline(&self) -> Option<Instant> {

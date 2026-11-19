@@ -172,6 +172,14 @@ fn cases() -> Vec<Case> {
             .shell
             .stop_batch(vec![gpu(), memory()])
             .await),
+        case!("watch_live_output", "two targets", |f| f
+            .shell
+            .watch_live(vec![gpu(), memory()])
+            .await),
+        case!("watch_live_output", "none", |f| f
+            .shell
+            .watch_live(Vec::new())
+            .await),
         case!("stop_all_effects", "session", |f| f
             .shell
             .stop_all_effects()

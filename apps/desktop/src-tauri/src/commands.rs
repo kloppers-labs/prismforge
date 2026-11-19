@@ -117,6 +117,14 @@ pub async fn stop_all_effects(shell: State<'_, DesktopShell>) -> Result<BatchRep
 }
 
 #[tauri::command]
+pub async fn watch_live_output(
+    shell: State<'_, DesktopShell>,
+    targets: Vec<OutputTarget>,
+) -> Result<(), CommandError> {
+    shell.watch_live(targets).await
+}
+
+#[tauri::command]
 pub async fn select_mode(
     shell: State<'_, DesktopShell>,
     device: DeviceRef,

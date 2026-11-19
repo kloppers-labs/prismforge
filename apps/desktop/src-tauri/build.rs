@@ -12,6 +12,7 @@ fn main() {
         "apply_effect_batch",
         "stop_effect_batch",
         "stop_all_effects",
+        "watch_live_output",
         "select_mode",
         "declare_external",
         "clear_external",
