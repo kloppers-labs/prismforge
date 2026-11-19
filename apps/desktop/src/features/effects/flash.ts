@@ -8,6 +8,7 @@ const MAX_CHANGES = MAX_FLASHES_PER_SECOND * 2;
 const SIGNIFICANT = 0.1;
 const DARKER_BELOW = 0.8;
 const SLOWED_FOR_MS = 2000;
+const AREA = 0.1;
 
 function linear(channel: number): number {
   const value = channel / 255;
@@ -22,43 +23,66 @@ export function luminance(leds: Rgb[]): number {
   return sum / leds.length;
 }
 
+/** One LED's swing: the extreme it reached since its last counted change, and which way it went. */
+type Swing = { peak: number; direction: number; changes: number[] };
+
 /**
- * Decides which frames a view draws: a frame that would make a fourth flash within one second is held back.
- * A flash is a pair of opposing changes of 10% or more in any row's luminance, with the darker side below 0.8.
+ * Holds back a frame that would give a tenth or more of the LEDs a fourth flash within one second.
+ * A flash is a pair of opposing swings of 10% or more in an LED's relative luminance, with the darker side below 0.8.
  */
 export class FlashLimiter {
   slowed = false;
-  private shown: number[] | null = null;
-  private changes: number[] = [];
+  private swings: Swing[] | null = null;
   private lastHeld = Number.NEGATIVE_INFINITY;
 
   offer(rows: Rgb[][], now: number): boolean {
-    const light = rows.map(luminance);
-    const before = this.shown;
-    const significant =
-      before !== null &&
-      light.some((value, index) => {
-        const was = before[index] ?? value;
-        return Math.abs(value - was) >= SIGNIFICANT && Math.min(value, was) < DARKER_BELOW;
-      });
-    this.changes = this.changes.filter((at) => at > now - WINDOW_MS);
-    if (significant && this.changes.length >= MAX_CHANGES) {
+    const light = rows.flat().map((led) => luminance([led]));
+    if (this.swings === null || this.swings.length !== light.length) {
+      this.swings = light.map((value) => ({ peak: value, direction: 0, changes: [] }));
+      return this.drawn(now);
+    }
+    const swings = this.swings;
+    const turns = light.map((value, index) => turn(swings[index]!, value));
+    const over = turns.filter(
+      (turned, index) => turned !== 0 && swings[index]!.changes.filter((at) => at > now - WINDOW_MS).length >= MAX_CHANGES,
+    ).length;
+    if (over >= Math.max(1, light.length * AREA)) {
       this.lastHeld = now;
       this.slowed = true;
       return false;
     }
-    if (significant) {
-      this.changes.push(now);
-    }
-    this.shown = light;
+    light.forEach((value, index) => {
+      const swing = swings[index]!;
+      const turned = turns[index]!;
+      if (turned !== 0) {
+        swing.direction = turned;
+        swing.peak = value;
+        swing.changes = [...swing.changes.filter((at) => at > now - WINDOW_MS), now];
+      } else if (swing.direction !== 0 && (value - swing.peak) * swing.direction > 0) {
+        swing.peak = value;
+      }
+    });
+    return this.drawn(now);
+  }
+
+  reset() {
+    this.swings = null;
+  }
+
+  private drawn(now: number): boolean {
     if (now - this.lastHeld > SLOWED_FOR_MS) {
       this.slowed = false;
     }
     return true;
   }
+}
 
-  reset() {
-    this.shown = null;
-    this.changes = [];
+/** The direction of a new counted swing, or 0 when the LED keeps its way or moved too little. */
+function turn(swing: Swing, value: number): number {
+  const moved = value - swing.peak;
+  const direction = Math.sign(moved);
+  if (direction === 0 || direction === swing.direction) {
+    return 0;
   }
+  return Math.abs(moved) >= SIGNIFICANT && Math.min(value, swing.peak) < DARKER_BELOW ? direction : 0;
 }

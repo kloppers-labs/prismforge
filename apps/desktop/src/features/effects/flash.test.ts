@@ -80,3 +80,77 @@ test("the_relative_luminance_follows_the_srgb_formula", () => {
   expect(luminance([{ r: 255, g: 0, b: 0 }])).toBeCloseTo(0.2126, 4);
   expect(luminance([])).toBe(0);
 });
+
+function hsv(hue: number): Rgb {
+  const h = ((hue % 1) + 1) % 1;
+  const sector = Math.floor(h * 6);
+  const f = h * 6 - sector;
+  const up = Math.round(255 * f);
+  const down = Math.round(255 * (1 - f));
+  return [
+    { r: 255, g: up, b: 0 },
+    { r: down, g: 255, b: 0 },
+    { r: 0, g: 255, b: up },
+    { r: 0, g: down, b: 255 },
+    { r: up, g: 0, b: 255 },
+    { r: 255, g: 0, b: down },
+  ][sector]!;
+}
+
+/** The most opposing swings of 0.1 or more that any LED makes in one second of what was drawn, as flashes. */
+function worstLedSecond(drawn: { at: number; leds: number[] }[]): number {
+  let worst = 0;
+  const count = drawn[0]?.leds.length ?? 0;
+  for (let led = 0; led < count; led += 1) {
+    const swings: number[] = [];
+    let peak = drawn[0]!.leds[led]!;
+    let direction = 0;
+    for (const frame of drawn.slice(1)) {
+      const value = frame.leds[led]!;
+      const turn = direction >= 0 ? peak - value : value - peak;
+      if ((direction >= 0 && value > peak) || (direction < 0 && value < peak)) {
+        peak = value;
+      } else if (turn >= 0.1 && Math.min(value, peak) < 0.8) {
+        swings.push(frame.at);
+        direction = direction >= 0 ? -1 : 1;
+        peak = value;
+      }
+    }
+    for (const start of swings) {
+      worst = Math.max(worst, swings.filter((at) => at >= start && at < start + 1000).length);
+    }
+  }
+  return Math.floor(worst / 2);
+}
+
+function playLeds(frames: (index: number) => Rgb[][], hertz: number, seconds: number) {
+  const limiter = new FlashLimiter();
+  const drawn: { at: number; leds: number[] }[] = [];
+  for (let index = 0; index < hertz * seconds; index += 1) {
+    const at = (index * 1000) / hertz;
+    const frame = frames(index);
+    if (limiter.offer(frame, at)) {
+      drawn.push({ at, leds: frame.flat().map((led) => luminance([led])) });
+    }
+  }
+  return { drawn, limiter };
+}
+
+test("a_rainbow_wave_at_top_speed_is_slowed_although_each_row_keeps_its_mean", () => {
+  const cyclesPerSecond = 240 / 60;
+  const wave = (index: number) => [Array.from({ length: 30 }, (_, led) => hsv(led / 30 + (index / 25) * cyclesPerSecond))];
+
+  const { drawn, limiter } = playLeds(wave, 25, 4);
+
+  expect(worstLedSecond(drawn)).toBeLessThanOrEqual(3);
+  expect(limiter.slowed).toBe(true);
+});
+
+test("a_half_on_half_off_alternation_is_slowed", () => {
+  const halves = (index: number) => [Array.from({ length: 20 }, (_, led) => ((led < 10) === (index % 2 === 0) ? WHITE : BLACK))];
+
+  const { drawn, limiter } = playLeds(halves, 30, 3);
+
+  expect(worstLedSecond(drawn)).toBeLessThanOrEqual(3);
+  expect(limiter.slowed).toBe(true);
+});
