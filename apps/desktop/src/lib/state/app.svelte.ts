@@ -4,11 +4,12 @@ import type { IdentifyOutcome } from "../api/bindings/IdentifyOutcome";
 import type { ShellView } from "../api/bindings/ShellView";
 import { EffectsState } from "../../features/effects/state.svelte";
 import { ProfilesState } from "../../features/profiles/state.svelte";
+import { LifecycleState } from "../../features/settings/state.svelte";
 import { isLive } from "../../features/devices/present";
 
 export type Work = "connect" | "demo" | "disconnect" | "refresh";
 
-export type Screen = "devices" | "effects" | "profiles";
+export type Screen = "devices" | "effects" | "profiles" | "settings";
 
 export type IdentifyTarget = { device: DeviceRef; zone: number | null };
 
@@ -28,6 +29,7 @@ export class AppState {
   screen = $state<Screen>("devices");
   connectApplyDismissed = $state(false);
   readonly profiles = new ProfilesState();
+  readonly lifecycle = new LifecycleState();
   readonly effects = new EffectsState(
     () => this.view,
     () => this.profiles.names,
@@ -45,12 +47,23 @@ export class AppState {
   }
 
   async attach(): Promise<() => void> {
-    const unlisten = await api.onView((view) => this.accept(view));
+    const [unlisten, stopLifecycle] = await Promise.all([
+      api.onView((view) => this.accept(view)),
+      api.onLifecycle((view) => this.lifecycle.accept(view)),
+    ]);
+    void this.load();
+    return () => {
+      unlisten();
+      stopLifecycle();
+    };
+  }
+
+  private async load() {
     const current = await api.view();
     if (current.ok) {
       this.accept(current.value);
     }
-    return unlisten;
+    await this.lifecycle.load();
   }
 
   accept(view: ShellView) {

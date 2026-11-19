@@ -111,6 +111,22 @@ pub enum CommandError {
     StoreUnavailable(StoreUnavailable),
     Unreadable { problem: FileProblem },
     File(FileRule),
+    Setting(SettingProblem),
+}
+
+/// Why an app setting was not changed; the settings view always shows the state that holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub enum SettingProblem {
+    /// There is no tray, so a hidden PrismForge could not be found again.
+    TrayUnavailable,
+    /// Connect at start needs an OpenRGB address the user connected to before.
+    NoAddress,
+    /// The system refused the change (`detail`) or did not keep it (`None`).
+    StartEntry {
+        wanted: bool,
+        detail: Option<String>,
+    },
 }
 
 impl From<SessionError> for CommandError {
@@ -162,6 +178,12 @@ impl From<ImportError> for CommandError {
             ImportError::Unreadable { problem } => Self::Unreadable { problem },
             ImportError::Store(error) => Self::Store(error),
         }
+    }
+}
+
+impl From<SettingProblem> for CommandError {
+    fn from(problem: SettingProblem) -> Self {
+        Self::Setting(problem)
     }
 }
 

@@ -16,9 +16,12 @@ Every licence below is compatible with GPL-3.0-or-later. No dependency is GPL-2.
 | `tokio` | 1.54.1 | MIT | all crates except `prismforge-effects` |
 | `thiserror` | 2.0.21 | MIT OR Apache-2.0 | all crates |
 | `serde` | 1.0.229 | MIT OR Apache-2.0 | all crates |
-| `tauri` | 2.12.6 | Apache-2.0 OR MIT | desktop app |
+| `tauri` | 2.12.6 | Apache-2.0 OR MIT | desktop app, with the `tray-icon` feature for the tray |
 | `tauri-build` | 2.7.5 | Apache-2.0 OR MIT | desktop app, build time |
 | `tauri-plugin-dialog` | 2.8.4 | Apache-2.0 OR MIT | desktop app: the native save and open dialogs for profile export and import, opened from Rust only |
+| `tauri-plugin-single-instance` | 2.5.5 | Apache-2.0 OR MIT | desktop app: a second start hands over to the running PrismForge |
+| `auto-launch` | 0.6.0 | MIT | desktop app on macOS and Linux: the per-user start entry |
+| `windows-registry` | 0.6.1 | MIT OR Apache-2.0 | desktop app on Windows: the per-user start entry in `HKCU` |
 | `ts-rs` | 12.0.1 | MIT | `ts` feature only, generates the TypeScript types |
 | `serde_json` | 1.0.154 | MIT OR Apache-2.0 | `prismforge-core` (profile and store files, with the `preserve_order` feature), desktop app tests, effects crate tests; also a Tauri dependency |
 
@@ -28,17 +31,19 @@ The `preserve_order` feature of `serde_json` adds `indexmap` 2.14.2 (Apache-2.0 
 
 `tauri-plugin-dialog` adds four crates: `tauri-plugin-dialog` itself, `tauri-plugin` 2.7.4 (Apache-2.0 OR MIT, a build helper), `tauri-plugin-fs` 2.7.1 (Apache-2.0 OR MIT) and `rfd` 0.17.2 (MIT, the native dialogs). The dialog crate uses a path type from `tauri-plugin-fs`. PrismForge does not register the file system plugin, and the window has no file system or dialog permission.
 
-`Cargo.lock` holds 432 third-party crates for all platforms, most of them from Tauri. The count per licence on 2026-11-19:
+The lifecycle work adds 47 crates. `auto-launch` 0.6.0 (MIT) brings `smappservice-rs` 0.1.3 (MIT) and `objc2-service-management` on macOS and `dirs` and `os_info` (MIT); on Windows PrismForge uses `windows-registry` instead. `tauri-plugin-single-instance` brings `zbus` 5.19.0 (MIT) and its `async-*`, `zvariant` and `polling` crates for D-Bus on Linux; they are not built on Windows or macOS. The `tray-icon` feature uses `tray-icon` 0.25.1 (MIT OR Apache-2.0). Every new crate is MIT, Apache-2.0 OR MIT, Zlib OR Apache-2.0 OR MIT, or Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT.
+
+`Cargo.lock` holds 479 third-party crates for all platforms, most of them from Tauri. The count per licence on 2026-11-19:
 
 | Licence (as the manifest writes it) | Crates |
 |---|---|
-| MIT OR Apache-2.0, Apache-2.0 OR MIT, MIT/Apache-2.0, Apache-2.0/MIT, Apache-2.0 / MIT | 248 |
-| MIT | 106 |
+| MIT OR Apache-2.0, Apache-2.0 OR MIT, MIT/Apache-2.0, Apache-2.0/MIT, Apache-2.0 / MIT | 276 |
+| MIT | 121 |
 | Unicode-3.0 | 18 |
-| Zlib OR Apache-2.0 OR MIT, MIT OR Zlib OR Apache-2.0, MIT OR Apache-2.0 OR Zlib | 21 |
+| Zlib OR Apache-2.0 OR MIT, MIT OR Zlib OR Apache-2.0, MIT OR Apache-2.0 OR Zlib | 23 |
 | Unlicense OR MIT, Unlicense/MIT | 11 |
 | MPL-2.0 (`cssparser`, `cssparser-macros`, `dtoa-short`, `option-ext`, `selectors`) | 7 |
-| Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 3 |
+| Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 5 |
 | Apache-2.0 (`tao`, `sync_wrapper`) | 2 |
 | BSD-3-Clause, BSD-3-Clause AND MIT, BSD-3-Clause/MIT, BSD-3-Clause OR MIT OR Apache-2.0 | 6 |
 | Zlib | 2 |
@@ -69,7 +74,7 @@ On macOS on 2026-11-18, `pnpm licenses list` reports 107 packages: MIT 89, Apach
 
 ## Fonts and icons
 
-PrismForge ships no font files. The window uses the system font of the operating system. The app icon and the interface icons are original PrismForge artwork in this repository.
+PrismForge ships no font files. The window uses the system font of the operating system. The app icon, the monochrome tray icon (`icons/tray-template.svg`) and the interface icons are original PrismForge artwork in this repository.
 
 ## Software that PrismForge talks to but does not include
 

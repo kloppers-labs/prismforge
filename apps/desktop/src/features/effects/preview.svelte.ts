@@ -30,6 +30,7 @@ export class PreviewPlayer {
   private changeTimer: ReturnType<typeof setTimeout> | undefined;
   private motion: MediaQueryList | null = null;
   private closed = false;
+  private windowShown = true;
 
   constructor(private readonly limits: () => PreviewLimits) {}
 
@@ -46,6 +47,19 @@ export class PreviewPlayer {
     clearTimeout(this.changeTimer);
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.motion?.removeEventListener("change", this.onMotion);
+  }
+
+  /** The native window can be hidden while the document still reports itself visible. */
+  setWindowShown(shown: boolean) {
+    if (shown === this.windowShown) {
+      return;
+    }
+    this.windowShown = shown;
+    if (shown) {
+      this.restart();
+    } else {
+      this.halt();
+    }
   }
 
   show(instance: EffectInstance | null, leds: number) {
@@ -95,7 +109,7 @@ export class PreviewPlayer {
 
   private async request(start: number) {
     const pattern = this.pattern;
-    if (!pattern || this.closed || document.visibilityState === "hidden") {
+    if (!pattern || this.closed || !this.windowShown || document.visibilityState === "hidden") {
       return;
     }
     const generation = this.generation;

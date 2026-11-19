@@ -95,6 +95,13 @@ impl Profiles {
             .await
     }
 
+    /// The name of the profile applied or saved in this session; asks the session nothing.
+    pub async fn active_name(&self, handle: &SessionHandle) -> Option<String> {
+        let id = self.active_in(handle)?.profile;
+        self.with(move |store| store.profile(&id).ok().map(|profile| profile.name.clone()))
+            .await
+    }
+
     pub async fn profile(&self, id: &ProfileId) -> Result<Profile, StoreError> {
         let id = id.clone();
         self.with(move |store| store.profile(&id).cloned()).await

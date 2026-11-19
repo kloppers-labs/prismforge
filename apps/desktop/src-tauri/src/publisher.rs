@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use prismforge_core::session::SessionSnapshot;
+use tokio::sync::watch;
 
 use crate::view::{ApplyingProfile, ConnectApply, OnConnect, ShellView};
 
@@ -12,6 +13,7 @@ pub trait ViewSink: Send + Sync + 'static {
 pub struct Publisher<S> {
     sink: S,
     current: Mutex<ShellView>,
+    changes: watch::Sender<u64>,
 }
 
 impl<S: ViewSink> Publisher<S> {
@@ -25,11 +27,22 @@ impl<S: ViewSink> Publisher<S> {
                 connect_apply: None,
                 on_connect: OnConnect::NotApplicable,
             }),
+            changes: watch::channel(0).0,
         }
     }
 
     pub fn current(&self) -> ShellView {
         self.lock().clone()
+    }
+
+    /// Wakes in-process subscribers after every view and after each [`Self::touch`].
+    pub fn changes(&self) -> watch::Receiver<u64> {
+        self.changes.subscribe()
+    }
+
+    /// For a change outside the view that a subscriber reads beside it, such as the active profile.
+    pub fn touch(&self) {
+        self.changes.send_modify(|count| *count += 1);
     }
 
     pub fn publish(&self, session: Option<SessionSnapshot>) -> ShellView {
@@ -53,6 +66,7 @@ impl<S: ViewSink> Publisher<S> {
         edit(&mut current);
         current.revision += 1;
         self.sink.deliver(&current);
+        self.touch();
         current.clone()
     }
 

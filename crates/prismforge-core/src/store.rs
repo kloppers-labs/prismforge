@@ -1,3 +1,4 @@
+mod app_settings;
 mod durable;
 pub(crate) mod envelope;
 mod files;
@@ -25,6 +26,9 @@ use crate::profile::{
 use crate::session::{SessionDevice, SessionError, SessionSnapshot};
 use crate::store::durable::{Loaded, StoreFile, Unwritten};
 
+pub use app_settings::{
+    APP_SETTINGS_FORMAT, AppSettings, AppSettingsFile, CloseAction, OpenRgbAddress,
+};
 pub use durable::{STORE_FILE_LIMIT, WriteFailure, WriteStep};
 pub use envelope::{
     EXPORT_FORMAT, FileProblem, PROFILE_FORMAT, REGISTRY_FORMAT, SCHEMA_VERSION, SETTINGS_FORMAT,
@@ -68,6 +72,8 @@ pub enum StoreError {
     InvalidProfile { problem: FileProblem },
     #[error("the device list is not valid: {problem}")]
     InvalidRegistry { problem: FileProblem },
+    #[error("the app settings are not valid: {problem}")]
+    InvalidSettings { problem: FileProblem },
     /// An update needs the profile applied or saved in this session; `active` is the one that is.
     #[error("profile {id} was not applied in this session")]
     NotActive {

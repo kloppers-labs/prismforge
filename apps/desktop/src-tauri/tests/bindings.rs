@@ -3,7 +3,9 @@
 mod generated;
 
 use prismforge_core::store::{ApplyOutcome, ExportReport, ImportReport, ProfileDetails, Saved};
-use prismforge_desktop::{CommandError, EffectCatalog, ShellView, StoreView};
+use prismforge_desktop::{
+    AppSettingChange, CommandError, EffectCatalog, LifecycleView, ShellView, StoreView,
+};
 use prismforge_effects::{PreviewBatch, PreviewRequest};
 use ts_rs::{Config, TS};
 
@@ -26,6 +28,8 @@ fn committed_bindings_match_the_rust_types() {
     ApplyOutcome::export_all(&config).expect("export ApplyOutcome");
     ImportReport::export_all(&config).expect("export ImportReport");
     ExportReport::export_all(&config).expect("export ExportReport");
+    LifecycleView::export_all(&config).expect("export LifecycleView");
+    AppSettingChange::export_all(&config).expect("export AppSettingChange");
 
     generated.compare_or_update();
 }

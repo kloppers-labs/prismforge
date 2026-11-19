@@ -42,7 +42,9 @@ impl<S: ViewSink> Shell<S> {
 
     pub async fn create_profile(&self, name: &str) -> Result<Saved, CommandError> {
         let (_permit, handle, profiles) = self.permitted_session_store().await?;
-        Ok(profiles.create_from_session(&handle, name).await?)
+        let saved = profiles.create_from_session(&handle, name).await;
+        self.publisher.touch();
+        Ok(saved?)
     }
 
     pub async fn preview_update(&self, id: &ProfileId) -> Result<Saved, CommandError> {
@@ -52,7 +54,9 @@ impl<S: ViewSink> Shell<S> {
 
     pub async fn update_profile(&self, id: &ProfileId) -> Result<Saved, CommandError> {
         let (_permit, handle, profiles) = self.permitted_session_store().await?;
-        Ok(profiles.update_from_session(&handle, id).await?)
+        let saved = profiles.update_from_session(&handle, id).await;
+        self.publisher.touch();
+        Ok(saved?)
     }
 
     pub async fn rename_profile(&self, id: &ProfileId, name: &str) -> Result<(), CommandError> {

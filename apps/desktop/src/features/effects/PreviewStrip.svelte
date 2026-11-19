@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { nativeWindow } from "../../lib/window.svelte";
   import type { EffectInstance } from "../../lib/api/bindings/EffectInstance";
   import type { PreviewLimits } from "../../lib/api/bindings/PreviewLimits";
   import { ledCount } from "../devices/present";
@@ -17,6 +18,10 @@
 
   $effect(() => {
     player.show(instance, leds);
+  });
+
+  $effect(() => {
+    player.setWindowShown(nativeWindow.visible);
   });
 </script>
 

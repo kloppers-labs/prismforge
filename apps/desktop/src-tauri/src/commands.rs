@@ -5,18 +5,20 @@ use prismforge_openrgb::{ClientConfig, OpenRgbBackend, TcpConnector};
 use prismforge_testkit::DemoBackend;
 use tauri::State;
 
-use crate::DesktopShell;
 use crate::effects::EffectCatalog;
 use crate::view::{CommandError, ShellView};
+use crate::{DesktopLifecycle, DesktopShell};
 
 #[tauri::command]
 pub fn view(shell: State<'_, DesktopShell>) -> ShellView {
     shell.view()
 }
 
+/// A store failure does not stop the connect; only connect at start needs the remembered address.
 #[tauri::command]
 pub async fn connect_openrgb(
     shell: State<'_, DesktopShell>,
+    lifecycle: State<'_, DesktopLifecycle>,
     host: String,
     port: u16,
 ) -> Result<ShellView, CommandError> {
@@ -24,6 +26,16 @@ pub async fn connect_openrgb(
     if host.is_empty() {
         return Err(CommandError::EmptyHost);
     }
+    let _ = lifecycle.remember_address(&shell, host, port).await;
+    connect(&shell, host, port).await
+}
+
+/// The one connect path, for the Connect button and for connect at start.
+pub async fn connect(
+    shell: &DesktopShell,
+    host: &str,
+    port: u16,
+) -> Result<ShellView, CommandError> {
     let connector = TcpConnector::new(host, port);
     shell
         .start(OpenRgbBackend::new(connector, ClientConfig::default()))

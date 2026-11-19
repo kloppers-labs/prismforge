@@ -4,6 +4,7 @@ import type { FileProblem } from "./api/bindings/FileProblem";
 import type { FileRule } from "./api/bindings/FileRule";
 import type { NameProblem } from "./api/bindings/NameProblem";
 import type { SessionError } from "./api/bindings/SessionError";
+import type { SettingProblem } from "./api/bindings/SettingProblem";
 import type { StoreError } from "./api/bindings/StoreError";
 import type { StoreUnavailable } from "./api/bindings/StoreUnavailable";
 
@@ -41,7 +42,24 @@ export function failureText(failure: Failure): string {
   if ("File" in failure) {
     return fileRuleText(failure.File);
   }
+  if ("Setting" in failure) {
+    return settingProblemText(failure.Setting);
+  }
   return sessionErrorText(failure.Session);
+}
+
+export function settingProblemText(problem: SettingProblem): string {
+  if (problem === "TrayUnavailable") {
+    return "This system has no tray, so PrismForge cannot keep running without its window. Closing the window quits PrismForge.";
+  }
+  if (problem === "NoAddress") {
+    return "Connect to OpenRGB once first. PrismForge then remembers that address and can connect to it when it starts.";
+  }
+  const change = problem.StartEntry.wanted ? "add PrismForge to the programs that start with the system" : "remove PrismForge from the programs that start with the system";
+  if (problem.StartEntry.detail === null) {
+    return `PrismForge tried to ${change}, but the system did not keep the change. The switch shows what the system reports now.`;
+  }
+  return `PrismForge could not ${change}: ${problem.StartEntry.detail}. The switch shows what the system reports now.`;
 }
 
 export function sessionErrorText(error: SessionError): string {
@@ -82,7 +100,7 @@ export function storeErrorText(error: StoreError): string {
   if ("UnknownZone" in error) {
     return "This zone is not on the device.";
   }
-  if ("InvalidProfile" in error || "InvalidRegistry" in error) {
+  if ("InvalidProfile" in error || "InvalidRegistry" in error || "InvalidSettings" in error) {
     return "PrismForge did not write the file, because the result would not be valid. The previous version is still in place.";
   }
   if ("NotActive" in error) {

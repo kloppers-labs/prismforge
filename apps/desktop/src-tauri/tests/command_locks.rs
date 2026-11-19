@@ -9,13 +9,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use prismforge_core::profile::ProfileId;
-use prismforge_core::store::{NoticeEvent, StoreNotice};
+use prismforge_core::store::{CloseAction, NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
-use prismforge_desktop::{OnConnect, Shell, ShellConfig, Stores, preview_effect, stop_then_exit};
+use prismforge_desktop::{
+    AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores, TrayState, preview_effect,
+    stop_then_exit,
+};
 use prismforge_effects::{EffectInstance, PreviewRequest};
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 
+use support::lifecycle::{FakeEntry, FakeExit, FakeWindow, LifecycleRecorder};
 use support::temp::TempDir;
 use support::{Recorder, is_connected};
 
@@ -27,6 +31,9 @@ type Run<'a> = Pin<Box<dyn Future<Output = ()> + 'a>>;
 /// A connected demo shell with one saved, exported profile marked to apply on connect.
 struct Fixture {
     shell: Shell<Recorder>,
+    lifecycle: Lifecycle<LifecycleRecorder>,
+    window: FakeWindow,
+    exit: FakeExit,
     id: ProfileId,
     unknown: ProfileId,
     exported: PathBuf,
@@ -103,10 +110,13 @@ fn openrgb(server: &FakeServer) -> OpenRgbBackend<impl Connector + use<>> {
 fn cases() -> Vec<Case> {
     vec![
         case!("view", "current", |f| f.shell.view()),
-        case!("connect_openrgb", "fake server", |f| f
-            .shell
-            .start(openrgb(&f.server))
-            .await),
+        case!("connect_openrgb", "fake server", |f| {
+            let _ = f
+                .lifecycle
+                .remember_address(&f.shell, "127.0.0.1", 6742)
+                .await;
+            f.shell.start(openrgb(&f.server)).await
+        }),
         case!("start_demo", "demo", |f| f
             .shell
             .start(DemoBackend::new())
@@ -271,6 +281,94 @@ fn cases() -> Vec<Case> {
             .shell
             .dismiss_notice(notice())
             .await),
+        case!("lifecycle", "publish", |f| f
+            .lifecycle
+            .publish(&f.shell)
+            .await),
+        case!("change_setting", "background", |f| f
+            .lifecycle
+            .change(&f.shell, AppSettingChange::OnClose(CloseAction::Background))
+            .await),
+        case!("change_setting", "start with the system", |f| f
+            .lifecycle
+            .change(&f.shell, AppSettingChange::StartWithSystem(true))
+            .await),
+        case!("change_setting", "start hidden", |f| f
+            .lifecycle
+            .change(&f.shell, AppSettingChange::StartHidden(true))
+            .await),
+        case!("change_setting", "connect at start", |f| f
+            .lifecycle
+            .change(&f.shell, AppSettingChange::ConnectAtStart(true))
+            .await),
+        case!("answer_close", "keep running", |f| {
+            f.lifecycle
+                .close_requested(&f.shell, &f.window, &f.exit)
+                .await;
+            f.lifecycle
+                .answer_close(&f.shell, Some(CloseAction::Background), &f.window, &f.exit)
+                .await
+        }),
+        case!("answer_close", "cancel", |f| f
+            .lifecycle
+            .answer_close(&f.shell, None, &f.window, &f.exit)
+            .await),
+        case!("quit", "exit handler", |f| {
+            f.lifecycle.quit(&f.shell, &f.window, &f.exit).await;
+            stop_then_exit(&f.shell, || {}).await
+        }),
+    ]
+}
+
+/// The glue's actions (`tray::Action`), the tray model and start-up: not commands, but the same paths.
+fn system_actions() -> Vec<Case> {
+    vec![
+        case!("Show", "tray click", |f| f
+            .lifecycle
+            .show(&f.shell, &f.window)
+            .await),
+        case!("Toggle", "tray item", |f| f
+            .lifecycle
+            .toggle(&f.shell, &f.window)
+            .await),
+        case!("StopAll", "tray item", |f| f
+            .lifecycle
+            .stop_all(&f.shell)
+            .await),
+        case!("Quit", "tray item, app menu or keyboard", |f| {
+            f.lifecycle.quit(&f.shell, &f.window, &f.exit).await;
+            stop_then_exit(&f.shell, || {}).await
+        }),
+        case!("SecondInstance", "second start", |f| f
+            .lifecycle
+            .second_instance(&f.shell, &f.window)
+            .await),
+        case!("CloseRequested", "window close", |f| f
+            .lifecycle
+            .close_requested(&f.shell, &f.window, &f.exit)
+            .await),
+        case!("tray model", "follow", |f| f
+            .lifecycle
+            .tray_model(&f.shell)
+            .await),
+        case!("start up", "connect at start armed", |f| {
+            let _ = f
+                .lifecycle
+                .remember_address(&f.shell, "127.0.0.1", 6742)
+                .await;
+            let _ = f
+                .lifecycle
+                .change(&f.shell, AppSettingChange::ConnectAtStart(true))
+                .await;
+            let connects = std::cell::Cell::new(0);
+            f.lifecycle
+                .begin(&f.shell, false, &f.window, |_| async {
+                    connects.set(connects.get() + 1);
+                    let _ = f.shell.start(openrgb(&f.server)).await;
+                })
+                .await;
+            assert_eq!(connects.get(), 1, "connect at start did not run");
+        }),
     ]
 }
 
@@ -346,8 +444,13 @@ async fn fixture(template: &Template) -> Fixture {
             .location("usb:desk")
             .zone("Ring", 8),
     );
+    let lifecycle = Lifecycle::new(LifecycleRecorder::default(), FakeEntry::default());
+    lifecycle.set_tray(TrayState::Available);
     Fixture {
         shell,
+        lifecycle,
+        window: FakeWindow::default(),
+        exit: FakeExit::default(),
         id: template.id.clone(),
         unknown: ProfileId::parse("p-0000000000000000").expect("id"),
         exported: template.outside.path().join("glow.json"),
@@ -442,7 +545,7 @@ async fn joined(turns: &[Turn], case: &Case, f: &Fixture, partner: Partner, done
 async fn every_command_beside(partner: Partner, orders: &[&[Turn]]) {
     let template = template().await;
     let mut hung = Vec::new();
-    for case in cases() {
+    for case in cases().into_iter().chain(system_actions()) {
         for turns in orders {
             let f = fixture(&template).await;
             let done = AtomicBool::new(false);
@@ -532,4 +635,32 @@ fn every_registered_command_is_in_the_lock_table() {
         "in the lock table but not registered: {unknown:?}"
     );
     assert_eq!(permitted(), registered);
+}
+
+fn glue_actions() -> BTreeSet<String> {
+    let tray = source("src/tray.rs");
+    let (_, body) = tray
+        .split_once("pub enum Action {")
+        .expect("the glue's action enum");
+    let (body, _) = body.split_once('}').expect("end of the action enum");
+    body.split(',')
+        .map(str::trim)
+        .filter(|variant| !variant.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn every_glue_action_is_in_the_lock_table() {
+    let table: BTreeSet<String> = system_actions()
+        .iter()
+        .map(|case| case.command.to_owned())
+        .collect();
+
+    let missing: Vec<_> = glue_actions().difference(&table).cloned().collect();
+
+    assert!(
+        missing.is_empty(),
+        "glue actions not in the lock table: {missing:?}"
+    );
 }

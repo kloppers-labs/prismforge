@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The PrismForge window: its own session and profile commands and the session view event. No plugin permission.",
+  "description": "The PrismForge window: its own session and profile commands and the session and lifecycle view events. No plugin permission.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -34,6 +34,10 @@
     "allow-import-profile",
     "allow-set-device-name",
     "allow-set-zone-name",
-    "allow-dismiss-store-notice"
+    "allow-dismiss-store-notice",
+    "allow-lifecycle",
+    "allow-change-setting",
+    "allow-answer-close",
+    "allow-quit"
   ]
 }
