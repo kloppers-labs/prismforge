@@ -164,3 +164,17 @@ test("the_draft_preview_draws_a_row_for_every_target_at_its_own_led_count", asyn
   await waitFor(() => expect(document.querySelectorAll(".stage .led:not(.off)")).toHaveLength(8 + 8 + 52 + 12));
   expect(document.querySelectorAll(".stage .led.off")).toHaveLength(0);
 });
+
+test("the_live_output_asks_again_after_a_refused_request", async () => {
+  let refusals = 1;
+  const shell = fakeShell(openRgbKeyboardRunning, effectHandlers({
+    preview_effect: () => rainbowPreview,
+    watch_live_output: () => (refusals-- > 0 ? Promise.reject("NoSession") : null),
+  }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+  await fireEvent.click(button("Live output"));
+
+  await waitFor(() => expect(watched(shell.calls).filter((targets) => (targets as unknown[]).length === 2)).toHaveLength(2), { timeout: 3_000 });
+});

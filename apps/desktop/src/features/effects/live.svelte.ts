@@ -5,6 +5,7 @@ import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
 import { FlashLimiter } from "./flash";
 
 const STILL_EVERY_MS = 2000;
+const ASK_AGAIN_MS = 1000;
 
 /** Shows the frames PrismForge sends; it asks for them only while the view is on screen and never writes. */
 export class LiveWatcher {
@@ -17,6 +18,7 @@ export class LiveWatcher {
   private unlisten: UnlistenFn | null = null;
   private lastDrawn = Number.NEGATIVE_INFINITY;
   private closed = false;
+  private again: ReturnType<typeof setTimeout> | undefined;
 
   async open() {
     const unlisten = await api.onLive((live) => this.take(live));
@@ -29,6 +31,7 @@ export class LiveWatcher {
 
   close() {
     this.closed = true;
+    clearTimeout(this.again);
     this.unlisten?.();
     this.watch([]);
   }
@@ -39,13 +42,24 @@ export class LiveWatcher {
     if (asked === this.asked) {
       return;
     }
+    clearTimeout(this.again);
     this.asked = asked;
     this.limiter.reset();
     this.lastDrawn = Number.NEGATIVE_INFINITY;
     if (targets.length === 0) {
       this.output = null;
     }
-    void api.watchLiveOutput(targets);
+    void this.ask(targets, asked);
+  }
+
+  /** A refused request is asked again, so the view never shows a stopped feed as live. */
+  private async ask(targets: OutputTarget[], asked: string) {
+    const answer = await api.watchLiveOutput(targets);
+    if (answer.ok || asked !== this.asked || this.closed) {
+      return;
+    }
+    this.asked = "";
+    this.again = setTimeout(() => this.watch(targets), ASK_AGAIN_MS);
   }
 
   private take(live: LiveOutput) {

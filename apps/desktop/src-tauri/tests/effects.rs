@@ -343,14 +343,34 @@ async fn the_live_output_reaches_the_window_only_while_it_is_watched() {
     tokio::time::sleep(Duration::from_secs(1)).await;
     let after = recorder.live();
     shell.stop().await;
-    let ended = shell.watch_live(vec![whole(GPU)]).await;
 
     assert!((20..=26).contains(&watched.len()), "{}", watched.len());
     assert!(watched.iter().all(|live| live.devices.len() == 1
         && live.devices[0].device.as_str() == GPU
         && live.devices[0].zones[0].colors.len() == 12));
     assert_eq!(after.len(), watched.len());
-    assert_eq!(ended, Err(CommandError::NoSession));
     let frames_per_second = 30;
     assert!(controls.outputs().len() - before >= 2 * frames_per_second - 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_live_request_carries_over_to_the_next_session() {
+    let (shell, recorder, _controls, _dir) = demo().await;
+    shell.watch_live(vec![whole(GPU)]).await.expect("watch");
+
+    shell.stop().await;
+    let between = shell.watch_live(vec![whole(GPU)]).await;
+    let before = recorder.live().len();
+    shell.start(DemoBackend::new()).await.expect("next session");
+    recorder.wait_for(is_connected).await;
+    shell
+        .apply_effect(whole(GPU), instance("rainbow-wave", &[]))
+        .await
+        .expect("apply");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    assert_eq!(between, Ok(()));
+    let after = recorder.live();
+    assert!(after.len() > before + 10, "{} then {}", before, after.len());
+    assert!(after[before..].iter().all(|live| live.devices.len() == 1));
 }

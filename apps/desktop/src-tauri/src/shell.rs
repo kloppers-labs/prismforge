@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 use std::time::Duration;
 
 use prismforge_core::session::{
@@ -42,6 +42,8 @@ pub struct Shell<S: ViewSink> {
     active: Mutex<Option<Active<S>>>,
     pub(crate) stores: Stores,
     pub(crate) lock: Arc<ApplyLock<S>>,
+    /// The window's live request outlives a session; never held across an await.
+    live_request: std::sync::Mutex<Vec<OutputTarget>>,
 }
 
 struct Active<S> {
@@ -64,6 +66,7 @@ impl<S: ViewSink> Shell<S> {
             publisher,
             active: Mutex::new(None),
             stores,
+            live_request: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -164,15 +167,16 @@ impl<S: ViewSink> Shell<S> {
             self.publisher.clone(),
             self.config.view_spacing,
         ));
+        let live = self.forward_live(&handle);
         *active = Some(Active {
             handle,
             kind,
             report,
             session,
             forwarder,
+            live,
             keeper,
             watcher,
-            live: None,
         });
         Ok(view)
     }
@@ -198,29 +202,43 @@ impl<S: ViewSink> Shell<S> {
         }
     }
 
-    /// Sends the live output of `targets` to the window until the next call; an empty list stops it.
+    /// Sends the live output of `targets` to the window until the next call, also from later sessions; an empty list stops it.
     pub async fn watch_live(&self, targets: Vec<OutputTarget>) -> Result<(), CommandError> {
         if targets.len() > MAX_BATCH_TARGETS {
             return Err(CommandError::TooManyTargets {
                 limit: MAX_BATCH_TARGETS,
             });
         }
+        *self
+            .live_request
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = targets;
         let mut active = self.active.lock().await;
-        let active = active.as_mut().ok_or(CommandError::NoSession)?;
-        if let Some(task) = active.live.take() {
-            task.abort();
+        if let Some(active) = active.as_mut() {
+            if let Some(task) = active.live.take() {
+                task.abort();
+            }
+            active.live = self.forward_live(&active.handle);
         }
+        Ok(())
+    }
+
+    fn forward_live(&self, handle: &SessionHandle) -> Option<JoinHandle<()>> {
+        let targets = self
+            .live_request
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
         if targets.is_empty() {
-            return Ok(());
+            return None;
         }
-        let mut feed = active.handle.live_output(targets);
+        let mut feed = handle.live_output(targets);
         let publisher = self.publisher.clone();
-        active.live = Some(tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             while let Some(live) = feed.next().await {
                 publisher.deliver_live(&live);
             }
-        }));
-        Ok(())
+        }))
     }
 
     pub async fn refresh(&self) -> Result<(), CommandError> {
