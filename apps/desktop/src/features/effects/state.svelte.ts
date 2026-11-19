@@ -2,6 +2,7 @@ import { api, type Answer, type Failure } from "../../lib/api/client";
 import type { DeviceRef } from "../../lib/api/bindings/DeviceRef";
 import type { EffectCatalog } from "../../lib/api/bindings/EffectCatalog";
 import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
+import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../../lib/api/bindings/ShellView";
 import type { Names } from "../../lib/names";
 import { serverName } from "../connection/wording";
@@ -25,7 +26,11 @@ import { addRange, effective, selectAll, toggle } from "./selection";
 import { check, initialFields, parseHex, problemText, START_COLOR, toHex, type Field, type Fields } from "./values";
 
 const REAPPLY_DELAY_MS = 300;
-const MIXED_MODES = "These targets run in different modes: some across the setup, some on each device. Select targets of one mode, or stop them first.";
+const SPLIT_TEXT = {
+  mixed: "These targets run in different modes: some across the setup, some on each device. Select targets of one mode, or stop them first.",
+  pictures: "These targets run across the setup on different views or flows. Select targets of one view and flow, or stop them first.",
+  zones: "Its zones run an effect across the setup. An effect on the whole device would end that picture on them. Select its zones to keep it, or stop them first.",
+} as const;
 
 type Across = Extract<ApplyMode, { AcrossSetup: unknown }>["AcrossSetup"];
 
@@ -41,14 +46,23 @@ export function targetsKey(targets: OutputTarget[]): string {
   return targets.map((target) => `${target.device}|${target.zone ?? "all"}`).join(",");
 }
 
-/** The result of the last command sent to several targets, or of Stop all. */
 /** The mode the selected targets run in; a picture across the setup keeps its view and flow on every re-apply. */
-export type Mode = ApplyMode | "mixed";
+export type Mode = ApplyMode | keyof typeof SPLIT_TEXT;
 
+/** The result of the last command sent to several targets, or of Stop all. */
 export type BatchFeedback =
   | { kind: "applied"; label: string; instance: EffectInstance; report: BatchReport; across?: Across; excluded?: SetupOutputStatus[] }
   | { kind: "stopped"; all: boolean; report: BatchReport }
   | { kind: "failed"; error: Failure };
+
+/** A whole device with no effect of its own whose zones run one across the setup. */
+function zonesAcross(session: SessionSnapshot, target: OutputTarget): boolean {
+  return (
+    target.zone === null &&
+    runningOn(session, target) === null &&
+    session.output.scene.assignments.some((assignment) => assignment.target.device === target.device && typeof assignment.mode === "object")
+  );
+}
 
 export class EffectsState {
   catalog = $state<EffectCatalog | null>(null);
@@ -94,24 +108,34 @@ export class EffectsState {
   });
   mode = $derived.by((): Mode => {
     const session = this.view().session;
-    const modes = session ? this.targets.map((target) => runningOn(session, target)?.mode ?? "EachDevice") : [];
+    if (!session) {
+      return "EachDevice";
+    }
+    if (this.targets.some((target) => zonesAcross(session, target))) {
+      return "zones";
+    }
+    const modes = this.targets.map((target) => runningOn(session, target)?.mode ?? "EachDevice");
     const first = modes[0] ?? "EachDevice";
-    return modes.every((mode) => JSON.stringify(mode) === JSON.stringify(first)) ? first : "mixed";
+    if (modes.every((mode) => JSON.stringify(mode) === JSON.stringify(first))) {
+      return first;
+    }
+    return modes.every((mode) => typeof mode === "object") ? "pictures" : "mixed";
   });
+  split = $derived(typeof this.mode === "string" && this.mode !== "EachDevice" ? SPLIT_TEXT[this.mode] : null);
   blocked = $derived.by(() => {
     const session = this.view().session;
     if (this.several) {
       return (
         applyingText(this.view()) ??
         (session && isLive(session) ? null : "PrismForge is not connected. Effects can start again after it reconnects.") ??
-        (this.mode === "mixed" ? MIXED_MODES : null)
+        this.split
       );
     }
     const device = session && this.target ? deviceOf(session, this.target) : null;
     if (!session || !this.target || !device) {
       return "This device is not in the device list.";
     }
-    return applyingText(this.view()) ?? applyBlocked(session, device, this.target.zone);
+    return applyingText(this.view()) ?? applyBlocked(session, device, this.target.zone) ?? this.split;
   });
   allRun = $derived.by(() => {
     const session = this.view().session;
@@ -475,7 +499,7 @@ export class EffectsState {
       return;
     }
     const mode = this.mode;
-    if (mode === "mixed") {
+    if (this.split !== null) {
       return;
     }
     if (typeof mode === "object") {

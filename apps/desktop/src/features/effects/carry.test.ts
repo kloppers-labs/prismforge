@@ -108,3 +108,40 @@ test("an_apply_across_from_effects_lists_the_targets_that_got_nothing_and_retrie
   const retry = shell.calls.filter((call) => call.command === "apply_across")[1]!.args;
   expect({ view: retry.view, flow: retry.flow, targets: retry.targets }).toEqual({ ...ACROSS, targets: [{ device: "demo-graphics-card", zone: null }] });
 });
+
+test.each([
+  ["view", { AcrossSetup: { view: "v-desk", flow: { Along: { angle: 0 } } } }],
+  ["flow", { AcrossSetup: { view: "v-pc", flow: { Along: { angle: 90 } } } }],
+] as const)("targets_across_the_setup_on_a_different_%s_say_so_and_are_not_sent", async (_, mode) => {
+  const session = structuredClone(demoAcrossRunning);
+  const memory = session.output.scene.assignments.find((assignment) => assignment.target.device === "demo-memory-1")!;
+  memory.mode = structuredClone(mode);
+  const shell = fakeShell(session, handlers());
+  render(App);
+  const targets = await openEffects();
+  const row = (device: string, index = 0) => within(within(targets).getAllByRole("group", { name: device })[index]!).getByRole("option", { name: /^Whole device/ });
+  await fireEvent.click(row("Demo Graphics Card"));
+  await fireEvent.click(row("Demo Memory Module"), { ctrlKey: true });
+
+  await setBrightness("40");
+  await wait(DEBOUNCE_AND_MARGIN);
+
+  const bar = screen.getByRole("region", { name: "Effect actions" }).textContent ?? "";
+  expect(bar).toContain("These targets run across the setup on different views or flows. Select targets of one view and flow, or stop them first.");
+  expect(bar).not.toContain("some on each device");
+  expect(button("Apply to 2 targets").disabled).toBe(true);
+  expect(sent(shell)).toEqual([]);
+});
+
+test("a_whole_device_whose_zones_run_across_the_setup_says_why_it_is_not_sent", async () => {
+  const shell = fakeShell(demoAcrossRunning, handlers());
+  render(App);
+  await chooseTarget("Demo Motherboard");
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+
+  const bar = screen.getByRole("region", { name: "Effect actions" }).textContent ?? "";
+
+  expect(bar).toContain("Its zones run an effect across the setup. An effect on the whole device would end that picture on them. Select its zones to keep it, or stop them first.");
+  expect(button("Apply effect").disabled).toBe(true);
+  expect(sent(shell)).toEqual([]);
+});
