@@ -15,7 +15,9 @@
   import StageBar from "./StageBar.svelte";
   import ComponentList from "./ComponentList.svelte";
   import DetectedList from "./DetectedList.svelte";
+  import GroupsList from "./GroupsList.svelte";
   import Inspector from "./Inspector.svelte";
+  import { componentMenu } from "./menu";
   import LibraryPanel from "./LibraryPanel.svelte";
   import UnwiredList from "./UnwiredList.svelte";
   import { editAction, type EditAction } from "./keys";
@@ -58,6 +60,7 @@
 
   $effect(() => {
     setup.follow(session);
+    app.groups.follow(session);
   });
 
   $effect(() => {
@@ -157,8 +160,8 @@
             <Canvas {setup} {colors} live={across.stage === "live"} onaction={act} />
           </div>
           <aside class="side" aria-label="Components and editor">
-            <ComponentList {setup} {session} names={app.names} {colors} onaction={act} menu={() => null} />
-            <Inspector {setup} {session} names={app.names} onidentify={identify} />
+            <ComponentList {setup} {session} names={app.names} {colors} onaction={act} menu={(id) => componentMenu({ setup, identify }, id)} />
+            <Inspector {setup} {session} names={app.names} groups={app.groups} onidentify={identify} />
             {#if identified && setup.selection.includes(identified)}
               <p class="identify" role="status">
                 {identifyText(setup.draft, identified, app.names, session)}
@@ -169,6 +172,7 @@
         </div>
         <AcrossPanel {across} {setup} {session} names={app.names} catalog={app.effects.catalog} />
         <UnwiredList {setup} {session} names={app.names} />
+        <GroupsList {setup} groups={app.groups} />
         <OutputList {setup} {session} names={app.names} />
         <DetectedList {setup} {session} names={app.names} />
         <LibraryPanel {setup} />

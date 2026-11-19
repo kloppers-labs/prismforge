@@ -82,6 +82,8 @@ export class SetupState {
   justSaved = $state(false);
   undoLabel = $state<string | null>(null);
   redoLabel = $state<string | null>(null);
+  /** A dialog that a menu item asked the editor to open, as its button would. */
+  asked = $state<{ kind: "delete" | "group"; from?: HTMLElement } | null>(null);
 
   dirty = $derived(this.stored !== null && !same(this.draft, withViews(this.stored.setup)));
   view = $derived(this.draft.views.find((view) => view.id === this.tab) ?? null);

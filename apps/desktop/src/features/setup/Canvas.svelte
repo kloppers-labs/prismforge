@@ -120,6 +120,19 @@
     }
   }
 
+  function oncontextmenu(event: MouseEvent) {
+    const id = (event.target as Element | null)?.closest<SVGElement>("[data-component]")?.dataset.component;
+    const row = id ? document.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"]`) : null;
+    if (!id || !row) {
+      return;
+    }
+    event.preventDefault();
+    if (!setup.selection.includes(id)) {
+      setup.select([id]);
+    }
+    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: event.clientX, clientY: event.clientY }));
+  }
+
   function onkeydown(event: KeyboardEvent) {
     if (drag && event.key === "Escape") {
       event.preventDefault();
@@ -139,6 +152,7 @@
     {onpointerdown}
     {onpointermove}
     {onpointerup}
+    {oncontextmenu}
     onpointercancel={() => (drag = null)}
   >
     <defs>

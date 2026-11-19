@@ -3,24 +3,29 @@
   import type { Geometry } from "../../lib/api/bindings/Geometry";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import Dialog from "../../lib/Dialog.svelte";
+  import { failureText } from "../../lib/errors";
   import type { Names } from "../../lib/names";
+  import type { GroupsState } from "../effects/groups.svelte";
   import { CANVAS, NUDGE, SIZE_LIMITS, placementOf } from "./edits";
   import { COMPONENT_LED_LIMIT, ledCount, reversed, withLeds } from "./geometry";
   import NumberField from "./NumberField.svelte";
   import { firstLedText, kindText, outputLine, selectionName, wiringTexts } from "./present";
   import type { SetupState } from "./state.svelte";
   import WireForm from "./WireForm.svelte";
-  import { chainOf, outputOf } from "./wiring";
+  import { chainOf, outputOf, sameTarget, targetOf } from "./wiring";
+  import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
 
   let {
     setup,
     session,
     names,
+    groups,
     onidentify,
   }: {
     setup: SetupState;
     session: SessionSnapshot;
     names: Names;
+    groups: GroupsState;
     onidentify: (id: string) => void;
   } = $props();
 
@@ -41,6 +46,43 @@
   let title = $derived(ids.length === 0 ? "Edit the selection" : `Edit ${selectionName(setup.draft, ids)}`);
   let deleting = $state(false);
   let deleteButton: HTMLButtonElement | undefined = $state();
+  let grouping = $state(false);
+  let groupName = $state("");
+  let groupButton: HTMLButtonElement | undefined = $state();
+  let opener: HTMLElement | undefined = $state();
+  let members = $derived(
+    ids.reduce<OutputTarget[]>((found, id) => {
+      const wired = outputOf(setup.draft, id);
+      return wired && !found.some((target) => sameTarget(target, targetOf(wired))) ? [...found, targetOf(wired)] : found;
+    }, []),
+  );
+
+  $effect(() => {
+    const asked = setup.asked;
+    if (!asked) {
+      return;
+    }
+    setup.asked = null;
+    opener = asked.from;
+    if (asked.kind === "delete" && one) {
+      deleting = true;
+    } else if (asked.kind === "group" && members.length > 0) {
+      startGroup();
+    }
+  });
+
+  function startGroup() {
+    groupName = "";
+    groups.problem = null;
+    grouping = true;
+  }
+
+  async function makeGroup(event: SubmitEvent) {
+    event.preventDefault();
+    if (await groups.create(groupName, members)) {
+      grouping = false;
+    }
+  }
 
   function reshape(geometry: Geometry, what: string) {
     if (one) {
@@ -54,6 +96,21 @@
 
 </script>
 
+{#snippet groupButtonSnippet()}
+  <button
+    type="button"
+    class="small"
+    data-mirror="component.group"
+    bind:this={groupButton}
+    disabled={members.length === 0}
+    aria-describedby={members.length === 0 ? "group-none" : undefined}
+    onclick={() => ((opener = groupButton), startGroup())}
+  >
+    Make a group from the selection…
+  </button>
+  {#if members.length === 0}<span id="group-none" class="visually-hidden">None of the selected components is wired.</span>{/if}
+{/snippet}
+
 <section class="inspector" aria-label={title}>
   {#if ids.length === 0}
     <p class="hint">Select a component in the drawing or the list to move, turn, flip, rename or wire it.</p>
@@ -65,11 +122,14 @@
       <button type="button" class="small" onclick={() => setup.moveSelection(0, -NUDGE)}>Move up</button>
       <button type="button" class="small" onclick={() => setup.moveSelection(0, NUDGE)}>Move down</button>
       <button type="button" class="small" onclick={() => setup.turnSelection(-1)}>Turn left 15°</button>
-      <button type="button" class="small" onclick={() => setup.turnSelection(1)}>Turn right 15°</button>
-      <button type="button" class="small" onclick={() => setup.flipSelection()}>Flip each</button>
+      <button type="button" class="small" data-mirror="component.turn" onclick={() => setup.turnSelection(1)}>Turn right 15°</button>
+      <button type="button" class="small" data-mirror="component.flip" onclick={() => setup.flipSelection()}>Flip each</button>
     </div>
     <p class="hint">They move by the same amount, so their spacing stays as it is. Each turns and flips round its own centre.</p>
-    <button type="button" class="small" onclick={() => setup.takeOut()}>Take out of the {setup.view?.name} view</button>
+    <div class="buttons">
+      {@render groupButtonSnippet()}
+      <button type="button" class="small" data-mirror="component.take-out" onclick={() => setup.takeOut()}>Take out of the {setup.view?.name} view</button>
+    </div>
   {:else if component && placement}
     <h2 class="heading">{component.name}</h2>
     <p class="kind">{kindText(component.geometry)}</p>
@@ -99,8 +159,8 @@
         <button type="button" class="small" onclick={() => setup.moveSelection(0, -NUDGE)}>Move up</button>
         <button type="button" class="small" onclick={() => setup.moveSelection(0, NUDGE)}>Move down</button>
         <button type="button" class="small" onclick={() => setup.turnSelection(-1)}>Turn left 15°</button>
-        <button type="button" class="small" onclick={() => setup.turnSelection(1)}>Turn right 15°</button>
-        <button type="button" class="small" aria-pressed={placement.flipped} aria-describedby="flip-note" onclick={() => setup.flipSelection()}>Flip</button>
+        <button type="button" class="small" data-mirror="component.turn" onclick={() => setup.turnSelection(1)}>Turn right 15°</button>
+        <button type="button" class="small" data-mirror="component.flip" aria-pressed={placement.flipped} aria-describedby="flip-note" onclick={() => setup.flipSelection()}>Flip</button>
       </div>
       <p id="flip-note" class="hint">Flip mirrors the drawing left to right. The order of the LEDs on the wire stays the same.</p>
     </fieldset>
@@ -186,7 +246,7 @@
             <button type="button" class="small" disabled={chain.index === 0} onclick={() => setup.moveInChain(component!.id, -1)}>Earlier in the chain</button>
             <button type="button" class="small" disabled={chain.index === chain.length - 1} onclick={() => setup.moveInChain(component!.id, 1)}>Later in the chain</button>
           {/if}
-          <button type="button" class="small" onclick={() => onidentify(component!.id)}>Identify</button>
+          <button type="button" class="small" data-mirror="component.identify" onclick={() => onidentify(component!.id)}>Identify</button>
           <button type="button" class="small" onclick={() => setup.unwire(component!.id)}>Unwire</button>
         </div>
         <NumberField
@@ -206,14 +266,30 @@
     </fieldset>
 
     <div class="buttons">
-      <button type="button" class="small" onclick={() => setup.takeOut([component!.id])}>Take out of the {setup.view?.name} view</button>
-      <button type="button" class="small danger" bind:this={deleteButton} onclick={() => (deleting = true)}>Delete component…</button>
+      {@render groupButtonSnippet()}
+      <button type="button" class="small" data-mirror="component.take-out" onclick={() => setup.takeOut([component!.id])}>Take out of the {setup.view?.name} view</button>
+      <button type="button" class="small danger" data-mirror="component.delete" bind:this={deleteButton} onclick={() => ((opener = deleteButton), (deleting = true))}>Delete component…</button>
     </div>
   {/if}
 </section>
 
+{#if grouping}
+  <Dialog title="New group" {opener} onclose={() => (grouping = false)}>
+    <form id="setup-group-form" class="form" onsubmit={makeGroup}>
+      <label for="setup-group-name">Group name</label>
+      <input id="setup-group-name" type="text" autocomplete="off" maxlength={groups.view?.name_limit ?? 60} bind:value={groupName} />
+    </form>
+    <p>The group holds the {members.length === 1 ? "output" : `${members.length} outputs`} of the selected components, as a saved group on Effects. A group only selects; it changes no lighting by itself.</p>
+    {#if groups.problem}<p class="problem" role="alert">{failureText(groups.problem)}</p>{/if}
+    {#snippet actions()}
+      <button type="button" onclick={() => (grouping = false)}>Cancel</button>
+      <button type="submit" form="setup-group-form" class="primary" disabled={groups.working}>Make group</button>
+    {/snippet}
+  </Dialog>
+{/if}
+
 {#if deleting && component}
-  <Dialog title="Delete {component.name}?" opener={deleteButton} onclose={() => (deleting = false)}>
+  <Dialog title="Delete {component.name}?" {opener} onclose={() => (deleting = false)}>
     <p>The component leaves every view and its output. Undo brings it back until you save. Your lights stay as they are.</p>
     {#snippet actions()}
       <button type="button" onclick={() => (deleting = false)}>Keep component</button>
@@ -290,6 +366,15 @@
     padding-left: var(--space-4);
     color: var(--warning);
     font-size: var(--font-s);
+  }
+
+  .form {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .problem {
+    color: var(--problem);
   }
 
   .unwired {
