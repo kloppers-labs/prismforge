@@ -182,7 +182,7 @@ export class SetupState {
     }
     this.saving = true;
     this.saveProblem = null;
-    const answer = await api.saveSetup(this.draft);
+    const answer = await api.saveSetup($state.snapshot(this.draft));
     this.saving = false;
     if (!answer.ok) {
       this.saveProblem = answer.error;

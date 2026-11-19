@@ -128,7 +128,7 @@ export class AcrossPlayer {
     }
     const generation = this.generation;
     const answer = await api.previewAcross({
-      ...draft,
+      ...$state.snapshot(draft),
       start_ms: start,
       frame_count: this.reduced ? 1 : clamp(FRAMES_PER_BATCH, limits.frames),
       interval_ms: clamp(FRAME_INTERVAL_MS, limits.interval_ms),
