@@ -4,6 +4,7 @@
   import type { Names } from "../../lib/names";
   import { kindLabel, ledCount } from "../devices/present";
   import { conditionText, editMode, nearbyEffects, outputOf, stopBlocked, targetLeds, targetName } from "./present";
+  import { acrossText } from "../setup/flow";
   import type { EffectsState } from "./state.svelte";
 
   let {
@@ -84,12 +85,20 @@
       <span>{mode.text}</span>
     </p>
   </div>
+  {#if typeof effects.mode === "object"}
+    <p class="across"><span aria-hidden="true">▦</span> {acrossText(effects.mode.AcrossSetup.view, effects.mode.AcrossSetup.flow)}. Changes keep this mode.</p>
+  {/if}
   {#if condition}
     <dl class="output"><dt>Output</dt><dd>{condition}</dd></dl>
   {/if}
 </section>
 
 <style>
+  .across {
+    color: var(--text-dim);
+    font-size: var(--font-s);
+  }
+
   .bar {
     display: grid;
     gap: var(--space-2);

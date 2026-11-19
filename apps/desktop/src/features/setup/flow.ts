@@ -1,4 +1,5 @@
 import type { Flow } from "../../lib/api/bindings/Flow";
+import type { ViewId } from "../../lib/api/bindings/ViewId";
 
 const NAMED: Record<number, string> = { 0: "left to right", 90: "top to bottom", 180: "right to left", 270: "bottom to top" };
 
@@ -10,4 +11,11 @@ export function flowText(flow: Flow): string {
     return NAMED[angle] ? `flowing ${NAMED[angle]} (${angle}°)` : `flowing at ${angle}° clockwise from left to right`;
   }
   return `out from a centre ${flow.FromCentre.x}% across and ${flow.FromCentre.y}% down`;
+}
+
+const VIEW_NAMES: Record<string, string> = { "v-pc": "PC", "v-desk": "Desk" };
+
+/** The apply mode of a running picture, with its flow, as the Effects screen names it. */
+export function acrossText(view: ViewId, flow: Flow): string {
+  return `Runs across the setup: ${VIEW_NAMES[view] ?? view} view, ${flowText(flow)}`;
 }

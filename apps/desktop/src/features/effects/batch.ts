@@ -11,7 +11,7 @@ import type { BatchFeedback } from "./state.svelte";
 
 export type RowState = "Applied" | "Stopped" | "Skipped" | "Failed" | "Covered";
 
-export type BatchRow = { key: string; label: string; state: RowState; text: string; settled: boolean };
+export type BatchRow = { key: string; label: string; state: RowState | "Not sent"; text: string; settled: boolean };
 
 export type BatchSummary = { headline: string; settled: boolean; rows: BatchRow[]; retry: number };
 
@@ -73,8 +73,15 @@ export function summarize(batch: BatchFeedback, session: SessionSnapshot, names:
   if (batch.kind === "failed") {
     return null;
   }
-  const rows = batch.report.results.map((result) => row(session, names, result, server));
-  const sent = rows.filter((each) => each.state !== "Covered");
+  const excluded: BatchRow[] = (batch.kind === "applied" ? (batch.excluded ?? []) : []).map((status) => ({
+    key: `excluded|${status.output}`,
+    label: status.label,
+    state: "Not sent",
+    text: `${status.zone_name ? `${status.zone_name} on ${status.label}` : status.label}: not sent. ${status.problem ? "Its parts in the setup no longer fit it." : `This zone is no longer ${status.zone_name ?? "the one placed in the setup"}.`} Place it again in Setup.`,
+    settled: false,
+  }));
+  const rows = [...batch.report.results.map((result) => row(session, names, result, server)), ...excluded];
+  const sent = rows.filter((each) => each.state !== "Covered" && each.state !== "Not sent");
   const done = sent.filter((each) => each.state === "Applied" || each.state === "Stopped").length;
   const retry = batch.report.results.filter(
     (result) => typeof result.outcome === "object" && "Skipped" in result.outcome && retryable(result.outcome.Skipped.error),
