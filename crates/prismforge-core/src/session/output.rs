@@ -234,6 +234,9 @@ impl Layout {
     pub fn render(&self, effect: &Effect, time: Duration, leds: usize) -> Vec<Rgb> {
         match self {
             Self::Strip => effect.render_strip(time, leds),
+            Self::Across(across) if across.points.len() == leds => {
+                effect.render_across(time, across.flow, across.plane, &across.points)
+            }
             Self::Across(across) => {
                 let points: Vec<Option<ScenePoint>> = (0..leds)
                     .map(|index| across.points.get(index).copied().flatten())

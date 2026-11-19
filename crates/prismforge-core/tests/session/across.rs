@@ -375,3 +375,31 @@ async fn a_picture_has_a_bounded_number_of_targets() {
     );
     assert_eq!(controls.outputs().len(), before);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_plan_for_another_led_count_still_writes_full_frames() {
+    let (handle, controls) = demo(config()).await;
+    let setup = strips(&[(GPU, 4)]);
+    for leds in [8, 20] {
+        let mut devices = handle.snapshot().devices;
+        let gpu = devices
+            .iter_mut()
+            .find(|device| device.identity.reference() == Some(&DeviceRef::new(GPU)))
+            .expect("gpu");
+        gpu.descriptor.led_count = leds;
+        let plan = plan_across(&setup, &view_id(), RIGHT, &devices).expect("view");
+        assert_eq!(plan.targets[0].points.len(), leds);
+
+        handle
+            .apply_across(plan, support::solid(Rgb::new(9, 9, 9)))
+            .await
+            .expect("across");
+        sleep(Duration::from_millis(100)).await;
+
+        let frames = device_frames(&controls.outputs(), GPU);
+        let last = frames.last().expect("a frame");
+        assert_eq!(last.len(), GPU_LEDS, "planned for {leds} LEDs");
+        assert_eq!(&last[..4], &[Rgb::new(9, 9, 9); 4]);
+        assert_eq!(&last[4..], &[BLACK; GPU_LEDS - 4]);
+    }
+}
