@@ -81,7 +81,7 @@ export function applyBlocked(session: SessionSnapshot, device: SessionDevice, zo
   }
   const label = declaredBy(session, ref);
   if (label !== null) {
-    return `You said ${label} controls this device. Hand it back below before you apply an effect.`;
+    return `You said ${label} controls this device. Hand it back before you apply an effect.`;
   }
   if (!hasDirectMode(device)) {
     return "This device has no Direct Mode, so PrismForge effects cannot run on it. Its hardware modes still work.";
@@ -108,7 +108,7 @@ export function modeBlocked(session: SessionSnapshot, device: SessionDevice): st
   }
   const label = declaredBy(session, ref);
   if (label !== null) {
-    return `You said ${label} controls this device. Hand it back below first.`;
+    return `You said ${label} controls this device. Hand it back first.`;
   }
   if (identifying(session, ref)) {
     return "An identify is running on this device. Wait until it finishes.";
@@ -123,20 +123,24 @@ export function stopBlocked(session: SessionSnapshot, target: OutputTarget): str
   return canStop(session, target) ? null : "No PrismForge effect runs on this target.";
 }
 
-export function shortOwner(session: SessionSnapshot, device: SessionDevice): string {
+export type TargetMark = { text: string; tone: "good" | "caution" | "plain" };
+
+/** A short mark for a target row; null when nothing controls the device. */
+export function targetMark(session: SessionSnapshot, device: SessionDevice): TargetMark | null {
   const ref = reference(device);
   const output = ref === null ? null : outputOf(session, ref);
   if (!output) {
-    return "Owner: none";
+    return null;
   }
   const owner = output.owner;
   if (owner === "Effect") {
-    return `Owner: PrismForge effect, ${shortCondition(output.condition)}`;
+    const state = shortCondition(output.condition);
+    return { text: `Effect ${state}`, tone: state === "running" ? "good" : state === "idle" ? "plain" : "caution" };
   }
   if ("HardwareMode" in owner) {
-    return `Owner: hardware mode ${modeName(device, owner.HardwareMode.mode)}`;
+    return { text: `Hardware mode ${modeName(device, owner.HardwareMode.mode)}`, tone: "plain" };
   }
-  return `Owner: ${owner.External.label}, as you said`;
+  return { text: `Left to ${owner.External.label}`, tone: "caution" };
 }
 
 function shortCondition(condition: OutputCondition): string {
@@ -248,4 +252,33 @@ export function controlSummary(session: SessionSnapshot, device: SessionDevice, 
     return `Runs hardware mode ${modeName(device, owner.HardwareMode.mode)}, selected in PrismForge.`;
   }
   return `Left to ${owner.External.label}. PrismForge sends nothing to it.`;
+}
+
+export type Mode = { name: "Live" | "Draft" | "Off"; text: string };
+
+/** Whether edits reach the device now, in words the action bar shows. */
+export function editMode(state: {
+  blocked: string | null;
+  live: boolean;
+  chosen: string | null;
+  running: string | null;
+  runningLabel: string | null;
+  target: string;
+}): Mode {
+  if (state.blocked !== null) {
+    return { name: "Off", text: `Effects are off. ${state.blocked}` };
+  }
+  if (state.live) {
+    return { name: "Live", text: `Changes go to ${state.target} as you make them.` };
+  }
+  if (state.chosen === null) {
+    return { name: "Draft", text: "Choose an effect. Your devices stay as they are until you apply it." };
+  }
+  if (state.running === state.chosen) {
+    return { name: "Draft", text: "This effect runs now. Press Apply effect to send your changes." };
+  }
+  if (state.runningLabel !== null) {
+    return { name: "Draft", text: `${state.runningLabel} runs now. Apply effect replaces it.` };
+  }
+  return { name: "Draft", text: "Your devices stay as they are until you press Apply effect." };
 }

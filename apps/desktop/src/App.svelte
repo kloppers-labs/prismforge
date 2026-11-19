@@ -162,7 +162,7 @@
 
     <main id="content" tabindex="-1" inert={covered} bind:this={main} onfocusin={trackPageFocus}>
       {#if app.screen === "settings"}
-        <SettingsScreen lifecycle={app.lifecycle} onprofiles={() => app.openProfiles()} />
+        <SettingsScreen {app} lifecycle={app.lifecycle} onprofiles={() => app.openProfiles()} />
       {:else if app.screen === "profiles"}
         <ProfilesScreen {app} />
       {:else if app.screen === "effects"}

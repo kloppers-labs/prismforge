@@ -14,7 +14,7 @@ import {
   type ModeFeedback,
 } from "./feedback";
 import { applyBlocked, applyingText, deviceOf, runningOn, targetName } from "./present";
-import { check, initialFields, problemText, type Field, type Fields } from "./values";
+import { check, initialFields, parseHex, problemText, START_COLOR, toHex, type Field, type Fields } from "./values";
 
 const REAPPLY_DELAY_MS = 300;
 
@@ -34,6 +34,7 @@ export class EffectsState {
   fields = $state<Fields>({});
   rustProblems = $state<Record<string, string>>({});
   working = $state<"apply" | "stop" | null>(null);
+  private lastColor = START_COLOR;
   externalProblem = $state<Failure | null>(null);
   private effectResult = $state<EffectFeedback | null>(null);
   private modeResult = $state<ModeFeedback | null>(null);
@@ -133,11 +134,15 @@ export class EffectsState {
     this.rustProblems = {};
     const running = this.running;
     const values = running?.effect.effect === effect ? running.effect.values : {};
-    this.fields = this.definition ? initialFields(this.definition, values) : {};
+    this.fields = this.definition ? initialFields(this.definition, values, this.lastColor) : {};
   }
 
   setField(id: string, field: Field) {
     this.fields = { ...this.fields, [id]: field };
+    const color = field.kind === "color" ? parseHex(field.text) : null;
+    if (color) {
+      this.lastColor = toHex(color);
+    }
     const { [id]: _, ...others } = this.rustProblems;
     this.rustProblems = others;
     if (this.canAutoApply) {

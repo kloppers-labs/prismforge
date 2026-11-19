@@ -3,7 +3,7 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { Names } from "../../lib/names";
   import { deviceKey, hasDirectMode, ledCount, reference } from "../devices/present";
-  import { shortOwner } from "./present";
+  import { targetMark } from "./present";
 
   let {
     session,
@@ -17,43 +17,78 @@
     onselect: (target: OutputTarget) => void;
   } = $props();
 
+  let list: HTMLElement | undefined = $state();
   let entries = $derived(
-    session.devices.map((device, index) => ({ key: deviceKey(device, index), ref: reference(device), device })),
+    session.devices.map((device, index) => ({ key: deviceKey(device, index), ref: reference(device), device, mark: targetMark(session, device) })),
   );
+  let firstRef = $derived(entries.find((entry) => entry.ref !== null)?.ref ?? null);
 
   function current(ref: string | null, zone: number | null): "true" | undefined {
     return selected !== null && ref === selected.device && zone === selected.zone ? "true" : undefined;
   }
+
+  function stop(ref: string | null, zone: number | null): number {
+    const anchor = selected ?? (firstRef === null ? null : { device: firstRef, zone: null });
+    return anchor !== null && ref === anchor.device && zone === anchor.zone ? 0 : -1;
+  }
+
+  function move(event: KeyboardEvent) {
+    const rows = list ? [...list.querySelectorAll<HTMLButtonElement>("button.pick:not(:disabled)")] : [];
+    const at = rows.indexOf(event.currentTarget as HTMLButtonElement);
+    const next = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: rows.length - 1 }[event.key];
+    const row = next === undefined ? undefined : rows[Math.min(Math.max(next, 0), rows.length - 1)];
+    if (row) {
+      event.preventDefault();
+      row.click();
+      row.focus();
+    }
+  }
 </script>
 
-<nav class="targets" aria-labelledby="targets-title">
+<nav class="targets" aria-labelledby="targets-title" bind:this={list}>
   <h2 id="targets-title" class="title">Targets</h2>
   <ul>
-    {#each entries as { key, ref, device } (key)}
+    {#each entries as { key, ref, device, mark } (key)}
       <li>
-        <div class="device" role="group" aria-labelledby="target-{key}">
+        <div class="device" role="group" aria-labelledby="target-{key}" aria-describedby={ref === null ? `target-${key}-why` : undefined}>
           <p id="target-{key}" class="name">{names.device(device)}</p>
-          <p class="owner">{shortOwner(session, device)}</p>
-          {#if !device.available || !hasDirectMode(device)}
+          {#if mark || !device.available || !hasDirectMode(device)}
             <p class="tags">
-              {#if !device.available}<span class="tag unavailable">Unavailable</span>{/if}
+              {#if mark}<span class="tag {mark.tone}">{mark.text}</span>{/if}
+              {#if !device.available}<span class="tag">Unavailable</span>{/if}
               {#if !hasDirectMode(device)}<span class="tag">No Direct Mode</span>{/if}
             </p>
           {/if}
           {#if ref === null}
-            <p class="reason">PrismForge cannot tell this device apart from an identical one, so it cannot be a target.</p>
+            <p id="target-{key}-why" class="reason">PrismForge cannot tell this device apart from an identical one, so it cannot be a target.</p>
           {/if}
           <ul class="parts">
             <li>
-              <button type="button" disabled={ref === null} aria-current={current(ref, null)} onclick={() => ref !== null && onselect({ device: ref, zone: null })}>
-                Whole device <span class="meta">{ledCount(device.descriptor.led_count)}</span>
+              <button
+                type="button"
+                class="pick"
+                disabled={ref === null}
+                tabindex={stop(ref, null)}
+                aria-current={current(ref, null)}
+                onclick={() => ref !== null && onselect({ device: ref, zone: null })}
+                onkeydown={move}
+              >
+                <span class="row"><span>Whole device</span><span class="pick-meta">{ledCount(device.descriptor.led_count)}</span></span>
               </button>
             </li>
             {#if device.descriptor.zones.length > 1}
               {#each device.descriptor.zones as zone, index (index)}
                 <li>
-                  <button type="button" disabled={ref === null} aria-current={current(ref, index)} onclick={() => ref !== null && onselect({ device: ref, zone: index })}>
-                    {names.zone(device, index)} <span class="meta">{ledCount(zone.led_count)}</span>
+                  <button
+                    type="button"
+                    class="pick"
+                    disabled={ref === null}
+                    tabindex={stop(ref, index)}
+                    aria-current={current(ref, index)}
+                    onclick={() => ref !== null && onselect({ device: ref, zone: index })}
+                    onkeydown={move}
+                  >
+                    <span class="row"><span>{names.zone(device, index)}</span><span class="pick-meta">{ledCount(zone.led_count)}</span></span>
                   </button>
                 </li>
               {/each}
@@ -70,14 +105,14 @@
     border-right: 1px solid var(--line-subtle);
     background: var(--surface-1);
     overflow-y: auto;
-    padding: 16px 12px;
+    padding: var(--space-4) var(--space-3);
   }
 
   .title {
     font-size: var(--font-s);
     font-weight: var(--weight-strong);
     color: var(--text-dim);
-    padding: 0 8px 10px;
+    padding: 0 var(--space-2) var(--space-3);
   }
 
   ul {
@@ -88,85 +123,46 @@
 
   .targets > ul {
     display: grid;
-    gap: 14px;
+    gap: var(--space-4);
   }
 
   .device {
     display: grid;
     gap: 2px;
-    padding: 0 8px;
   }
 
   .name {
     font-weight: var(--weight-strong);
+    padding: 0 var(--space-2);
   }
 
-  .owner,
   .reason {
     color: var(--text-dim);
     font-size: var(--font-s);
+    padding: 0 var(--space-2);
   }
 
   .tags {
     display: flex;
-    gap: 4px;
-    margin: 2px 0;
-  }
-
-  .tag {
-    font-size: var(--font-xs);
-    padding: 0 6px;
-    border-radius: var(--radius-xs);
-    border: 1px solid var(--line-subtle);
-    color: var(--text-dim);
-  }
-
-  .unavailable {
-    border-style: dashed;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    padding: 0 var(--space-2);
   }
 
   .parts {
     display: grid;
     gap: 2px;
-    margin-top: 4px;
+    margin-top: var(--space-1);
   }
 
-  .parts button {
-    width: 100%;
+  .parts .pick {
+    min-height: var(--control-h-s);
+    padding-block: var(--space-1);
+  }
+
+  .row {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
-    text-align: left;
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 5px 10px 5px 14px;
-    position: relative;
-    font-weight: var(--weight-regular);
-  }
-
-  .parts button:hover:not(:disabled) {
-    background: var(--surface-2);
-  }
-
-  .parts button[aria-current="true"] {
-    background: var(--surface-2);
-    border-color: var(--line-subtle);
-  }
-
-  .parts button[aria-current="true"]::before {
-    content: "";
-    position: absolute;
-    left: 4px;
-    top: 7px;
-    bottom: 7px;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--spectrum);
-    background-size: 100% 600%;
-  }
-
-  .meta {
-    color: var(--text-faint);
-    font-size: var(--font-s);
+    gap: var(--space-2);
   }
 </style>

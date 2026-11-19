@@ -7,7 +7,7 @@ import { button, chooseTarget, effectHandlers, openEffects, wait, withoutEffects
 import { demoEffectIdentifying, demoEffectsNotConnected, demoEffectsRunning } from "../../test/fixtures/sessions";
 
 const DEBOUNCE_AND_MARGIN = 700;
-const LIVE_HINT = /Changes apply as you make them/;
+const LIVE_HINT = /Changes go to .* as you make them\./;
 
 type Shell = ReturnType<typeof fakeShell>;
 
@@ -86,7 +86,7 @@ test("sends_no_apply_after_another_program_is_declared", async () => {
   const shell = await runningGraphicsCard({ declare_external: () => null });
 
   await setBrightness("40");
-  await fireEvent.click(button("Another program controls this device"));
+  await fireEvent.click(button("Leave this device to another program"));
   await setBrightness("50");
   await wait(DEBOUNCE_AND_MARGIN);
   await shell.push(withOwner(demoEffectsRunning, "demo-graphics-card", { External: { label: "another program" } }));

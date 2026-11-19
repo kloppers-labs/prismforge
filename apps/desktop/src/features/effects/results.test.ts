@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
+import { go } from "../../test/shell";
 import { button, chooseTarget, effectHandlers, wait, withEffect, withOwner } from "../../test/effects";
 import { demoConnected, demoEffectsRunning } from "../../test/fixtures/sessions";
 
@@ -34,7 +35,7 @@ test("no_stale_effect_claim_after_a_hardware_mode_or_a_declaration", async () =>
   expect(screen.queryByText(/accepted Rainbow wave/)).toBeNull();
   expect(document.body.textContent).not.toMatch(PRESENT_EFFECT_CLAIM);
 
-  await fireEvent.click(button("Another program controls this device"));
+  await fireEvent.click(button("Leave this device to another program"));
   await shell.push(withOwner(demoConnected, GPU, { External: { label: "another program" } }));
   await wait(50);
   expect(screen.getByText(/^You said another program controls this device\. PrismForge sends nothing to it\.$/)).toBeTruthy();
@@ -99,8 +100,9 @@ test("the_frame_rate_in_use_comes_from_the_snapshot", async () => {
   const shell = fakeShell(demoConnected, effectHandlers({ set_frame_rate: () => 60 }));
   render(App);
   await chooseTarget("Demo Graphics Card");
+  await go("Settings");
 
-  await fireEvent.input(screen.getByRole("spinbutton", { name: "Frames per second" }), { target: { value: "75" } });
+  await fireEvent.input(await screen.findByRole("spinbutton", { name: "Frames per second" }), { target: { value: "75" } });
   await fireEvent.click(button("Set frame rate"));
 
   expect(await screen.findByText(/^You asked for 75 frames per second\. PrismForge set the nearest allowed rate, 60\./)).toBeTruthy();

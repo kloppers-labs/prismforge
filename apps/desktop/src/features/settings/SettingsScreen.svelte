@@ -3,12 +3,19 @@
   import type { CloseAction } from "../../lib/api/bindings/CloseAction";
   import type { StartEntryState } from "../../lib/api/bindings/StartEntryState";
   import { failureText, storeUnavailableText } from "../../lib/errors";
+  import type { AppState } from "../../lib/state/app.svelte";
   import Switch from "../../lib/Switch.svelte";
+  import { isLive } from "../devices/present";
+  import { applyingText } from "../effects/present";
+  import FrameRate from "../effects/FrameRate.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { SettingKey, LifecycleState } from "./state.svelte";
   import { MACHINE_ENTRY_REMOVAL, addressText, quitShortcut, settingsNoticeText, startPathText, trayName } from "./wording";
 
-  let { lifecycle, onprofiles }: { lifecycle: LifecycleState; onprofiles: () => void } = $props();
+  let { app, lifecycle, onprofiles }: { app: AppState; lifecycle: LifecycleState; onprofiles: () => void } = $props();
+
+  let session = $derived(app.session);
+  let catalog = $derived(app.effects.catalog);
 
   onMount(() => {
     lifecycle.load();
@@ -238,11 +245,19 @@
     </aside>
   </section>
 
+  <section class="group" aria-labelledby="output-title">
+    <h2 id="output-title">Effect output</h2>
+    {#if session && isLive(session) && catalog}
+      <FrameRate effects={app.effects} range={catalog.frame_rate} current={session.output.frame_rate} held={applyingText(app.view)} />
+    {:else}
+      <p class="help">The frame rate of PrismForge effects can be set while PrismForge is connected.</p>
+    {/if}
+  </section>
+
   <section class="group" aria-labelledby="files-title">
     <h2 id="files-title">Where PrismForge keeps its files</h2>
     <p class="help">Your profiles, your names for devices and these settings are in this folder on this computer:</p>
     <p class="folder">{view?.folder ?? ""}</p>
-    <p class="help">The frame rate of PrismForge effects is on the Effects screen while PrismForge is connected.</p>
   </section>
 
   <section class="group quit" aria-labelledby="quit-title">

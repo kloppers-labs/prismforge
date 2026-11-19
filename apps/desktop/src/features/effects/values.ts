@@ -29,15 +29,18 @@ export function parseHex(text: string): Rgb | null {
   return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
 }
 
-export function initialFields(definition: EffectDefinition, values: Record<string, ControlValue> = {}): Fields {
-  return Object.fromEntries(definition.controls.map((control) => [control.id, field(control, values[control.id])]));
+export const START_COLOR = "#ffffff";
+
+/** A colour without a default starts from `start`, so a required colour never opens empty. */
+export function initialFields(definition: EffectDefinition, values: Record<string, ControlValue> = {}, start = START_COLOR): Fields {
+  return Object.fromEntries(definition.controls.map((control) => [control.id, field(control, values[control.id], start)]));
 }
 
-function field(control: ControlDefinition, value: ControlValue | undefined): Field {
+function field(control: ControlDefinition, value: ControlValue | undefined, start: string): Field {
   const kind = control.kind;
   if ("Color" in kind) {
     const color = value && "Color" in value ? value.Color : kind.Color.default;
-    return { kind: "color", text: color ? toHex(color) : "" };
+    return { kind: "color", text: color ? toHex(color) : start };
   }
   if ("Palette" in kind) {
     const colors = value && "Palette" in value ? value.Palette : kind.Palette.default;
