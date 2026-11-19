@@ -26,6 +26,7 @@ type Opened = {
 export const MENU_OVERLAY = "context-menu";
 const POINTER_WINDOW_MS = 1000;
 const MENU_SHORTCUT = "Shift+F10";
+const OPENERS = "button, input, summary, [href], [tabindex]";
 const TEXT_INPUTS = new Set(["", "text", "search", "url", "email", "password", "number", "tel"]);
 
 class Menus {
@@ -190,10 +191,25 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
     show(event, origin, boxOf(origin), true);
   }
 
-  const announced = node.matches(FOCUSABLE) ? node.getAttribute("aria-keyshortcuts") : undefined;
-  if (announced !== undefined) {
-    node.setAttribute("aria-keyshortcuts", announced ? `${announced} ${MENU_SHORTCUT}` : MENU_SHORTCUT);
-  }
+  const hinted = new Map<HTMLElement, string | null>();
+  const hint = () => {
+    for (const control of hinted.keys()) {
+      if (!control.isConnected) {
+        hinted.delete(control);
+      }
+    }
+    const openers = node.matches(FOCUSABLE) ? [node] : [...node.querySelectorAll<HTMLElement>(OPENERS)].filter((control) => !isTextField(control));
+    for (const control of openers) {
+      if (!hinted.has(control)) {
+        const before = control.getAttribute("aria-keyshortcuts");
+        hinted.set(control, before);
+        control.setAttribute("aria-keyshortcuts", before ? `${before} ${MENU_SHORTCUT}` : MENU_SHORTCUT);
+      }
+    }
+  };
+  hint();
+  const watcher = node.matches(FOCUSABLE) ? null : new MutationObserver(hint);
+  watcher?.observe(node, { childList: true, subtree: true });
   node.addEventListener("contextmenu", oncontextmenu);
   node.addEventListener("keydown", onkeydown);
   return {
@@ -206,10 +222,13 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
       }
       node.removeEventListener("contextmenu", oncontextmenu);
       node.removeEventListener("keydown", onkeydown);
-      if (announced) {
-        node.setAttribute("aria-keyshortcuts", announced);
-      } else if (announced === null) {
-        node.removeAttribute("aria-keyshortcuts");
+      watcher?.disconnect();
+      for (const [control, before] of hinted) {
+        if (before) {
+          control.setAttribute("aria-keyshortcuts", before);
+        } else {
+          control.removeAttribute("aria-keyshortcuts");
+        }
       }
     },
   };
