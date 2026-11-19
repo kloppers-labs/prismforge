@@ -55,3 +55,24 @@ export function stopResultText(result: StopResult, server: string): string[] {
   const text = stopText(result.Stopped.restore, server);
   return [text.headline, ...text.details];
 }
+
+export type StartPath = {
+  system: boolean;
+  hidden: boolean;
+  connect: boolean;
+  address: string | null;
+  profile: string | null;
+};
+
+export function startPathText(path: StartPath): string {
+  if (path.system && path.connect && path.address !== null && path.profile !== null) {
+    const start = path.hidden ? `starts hidden in ${trayName()}` : "starts";
+    return `When you sign in, PrismForge ${start}, connects to OpenRGB at ${path.address} and applies ${path.profile}. Your lights change at system start without a click.`;
+  }
+  const missing = [
+    ...(path.system ? [] : ["start PrismForge when you sign in"]),
+    ...(path.connect ? [] : ["connect to OpenRGB when PrismForge starts"]),
+    ...(path.profile !== null ? [] : ["a profile marked to apply when PrismForge connects"]),
+  ];
+  return `Your lights do not change by themselves at system start. Not set: ${missing.join(", ")}.`;
+}

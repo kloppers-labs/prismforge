@@ -12,6 +12,7 @@ import {
   lifecycleInUse,
   lifecycleNoTray,
   lifecycleRecovered,
+  lifecycleStartPath,
   lifecycleTrayStopBusy,
   lifecycleTrayStopped,
 } from "../../test/fixtures/lifecycles";
@@ -266,4 +267,40 @@ test("busy_in_the_tray_stop_report_is_shown_and_not_retried", async () => {
   ).toBeTruthy();
   expect(within(report).getByText("PrismForge does not try again by itself. Stop the remaining effects on the Effects screen.")).toBeTruthy();
   expect(called(shell, "stop_effect")).toHaveLength(0);
+});
+
+test("the_start_up_path_shows_each_step_and_the_profile_it_applies", async () => {
+  fakeShell(null, { lifecycle: () => lifecycleStartPath });
+  render(App);
+  await openSettings();
+
+  const steps = await screen.findByRole("list", { name: "Start-up steps" });
+  const items = within(steps).getAllByRole("listitem");
+  expect(items).toHaveLength(4);
+  expect(within(items[0]!).getByRole("switch").getAttribute("aria-checked")).toBe("true");
+  expect(within(items[1]!).getByRole("switch").getAttribute("aria-checked")).toBe("false");
+  expect(within(items[2]!).getByRole("switch").getAttribute("aria-checked")).toBe("true");
+  expect(within(items[3]!).getByText("Evening")).toBeTruthy();
+  expect(screen.getByText("With steps 1, 3 and 4 on, your lights change at system start without a click. Every step is off until you turn it on.")).toBeTruthy();
+  expect(screen.getByRole("status", { name: "Start-up result" }).textContent?.trim()).toBe(
+    "When you sign in, PrismForge starts, connects to OpenRGB at 127.0.0.1:6742 and applies Evening. Your lights change at system start without a click.",
+  );
+});
+
+test("without_a_marked_profile_the_start_up_path_says_none_and_links_to_profiles", async () => {
+  const shell = fakeShell(null);
+  render(App);
+  await openSettings();
+
+  const steps = await screen.findByRole("list", { name: "Start-up steps" });
+  const last = within(steps).getAllByRole("listitem")[3]!;
+  expect(within(last).getByText("None marked.")).toBeTruthy();
+  expect(screen.getByRole("status", { name: "Start-up result" }).textContent?.trim()).toBe(
+    "Your lights do not change by themselves at system start. Not set: start PrismForge when you sign in, connect to OpenRGB when PrismForge starts, a profile marked to apply when PrismForge connects.",
+  );
+  await fireEvent.click(within(last).getByRole("button", { name: "Open Profiles" }));
+
+  await screen.findByRole("navigation", { name: "Profiles" }).catch(() => null);
+  expect(called(shell, "profile_store").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("heading", { level: 1, name: "Settings" })).toBeNull();
 });

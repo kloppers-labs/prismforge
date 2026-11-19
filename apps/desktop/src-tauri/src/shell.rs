@@ -85,6 +85,20 @@ impl<S: ViewSink> Shell<S> {
         self.current().await.0.map(|handle| handle.snapshot())
     }
 
+    /// The profile that connect at start applies: the mark in the real store, which opens if needed.
+    pub async fn start_profile(&self) -> crate::lifecycle::StartProfile {
+        use crate::lifecycle::StartProfile;
+        use crate::on_connect::{Mark, marked};
+        match self.stores.profiles(StoreKind::Real).await {
+            Err(reason) => StartProfile::Unavailable { reason },
+            Ok(profiles) => match marked(&profiles).await {
+                None => StartProfile::NotMarked,
+                Some(Mark::Ready(_, name)) => StartProfile::Marked { name },
+                Some(Mark::Unreadable(_, problem)) => StartProfile::Unreadable { problem },
+            },
+        }
+    }
+
     pub fn folder(&self) -> String {
         self.stores.root().display().to_string()
     }

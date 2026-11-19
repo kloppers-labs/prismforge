@@ -8,7 +8,8 @@ use prismforge_desktop::{
     Stores, TrayState, ViewSink,
 };
 use prismforge_effects::EffectInstance;
-use prismforge_testkit::DemoBackend;
+use prismforge_openrgb::{ClientConfig, OpenRgbBackend};
+use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 
 use crate::Module;
 use crate::support::lifecycle::{FakeEntry, FakeExit, FakeWindow, LifecycleRecorder};
@@ -271,7 +272,45 @@ async fn tray_stops(views: &mut Module) {
     );
 }
 
+async fn start_path(views: &mut Module) {
+    let s = setup("life-path", true, SessionConfig::default()).await;
+    let server = FakeServer::new();
+    server.add_device(
+        0,
+        FixtureDevice::new("desk", "Fixture Strip")
+            .serial("SN-desk")
+            .location("usb:desk")
+            .zone("Ring", 8),
+    );
+    s.shell
+        .start(OpenRgbBackend::new(
+            server.connector(),
+            ClientConfig::default(),
+        ))
+        .await
+        .expect("start");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let id = s.shell.create_profile("Evening").await.expect("save").id;
+    s.shell.set_apply_on_connect(Some(id)).await.expect("mark");
+    s.shell.stop().await;
+    s.lifecycle
+        .remember_address(&s.shell, "127.0.0.1", 6742)
+        .await
+        .expect("address");
+    for change in [
+        AppSettingChange::StartWithSystem(true),
+        AppSettingChange::ConnectAtStart(true),
+    ] {
+        s.lifecycle.change(&s.shell, change).await.expect("change");
+    }
+    views.add(
+        "lifecycleStartPath",
+        &stable(s.lifecycle.publish(&s.shell).await),
+    );
+}
+
 pub async fn generate(views: &mut Module, errors: &mut Module) {
+    start_path(views).await;
     choices(views, errors).await;
     problems(views, errors).await;
     tray_stops(views).await;

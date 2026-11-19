@@ -147,7 +147,7 @@
 
   <main>
     {#if app.screen === "settings"}
-      <SettingsScreen lifecycle={app.lifecycle} />
+      <SettingsScreen lifecycle={app.lifecycle} onprofiles={() => app.openProfiles()} />
     {:else if app.screen === "profiles"}
       <ProfilesScreen {app} />
     {:else if !session || stopped}

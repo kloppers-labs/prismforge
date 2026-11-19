@@ -333,6 +333,12 @@ fn system_actions() -> Vec<Case> {
             .lifecycle
             .close_requested(&f.shell, &f.window, &f.exit)
             .await),
+        case!("start up", "connect at start", |f| f
+            .lifecycle
+            .begin(&f.shell, true, &f.window, |_| async {
+                let _ = f.shell.start(openrgb(&f.server)).await;
+            })
+            .await),
         case!("second start", "show", |f| f
             .lifecycle
             .second_instance(&f.shell, &f.window)

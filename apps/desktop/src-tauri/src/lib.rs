@@ -24,8 +24,8 @@ pub use forward::forward;
 pub use lifecycle::{
     AUTOSTART_ARG, AppSettingChange, ClosePrompt, CloseStep, DeviceStop, ExitControl, Lifecycle,
     LifecycleSink, LifecycleView, SettingsState, SettingsView, StartEntry, StartEntryState,
-    StartupPlan, StopReport, StopResult, TrayModel, TrayState, WindowControl, decide_close,
-    launched_by_system, read_entry, startup_plan, switch_entry, tray_model,
+    StartProfile, StartupPlan, StopReport, StopResult, TrayModel, TrayState, WindowControl,
+    decide_close, launched_by_system, read_entry, startup_plan, switch_entry, tray_model,
 };
 pub use publisher::{Publisher, ViewSink};
 pub use settings::SettingsStore;
@@ -137,15 +137,18 @@ pub fn run() {
 async fn start_up(app: AppHandle) {
     let shell = app.state::<DesktopShell>();
     let lifecycle = app.state::<DesktopLifecycle>();
-    let plan = lifecycle
-        .startup(&shell, launched_by_system(std::env::args()))
+    let window = native::MainWindow::of(&app);
+    let shell = &*shell;
+    lifecycle
+        .begin(
+            shell,
+            launched_by_system(std::env::args()),
+            &window,
+            |address| async move {
+                let _ = commands::connect(shell, &address.host, address.port).await;
+            },
+        )
         .await;
-    if plan.show_window {
-        lifecycle.show(&shell, &native::MainWindow::of(&app)).await;
-    }
-    if let Some(address) = plan.connect {
-        let _ = commands::connect(&shell, &address.host, address.port).await;
-    }
 }
 
 fn close_requested(app: AppHandle) {

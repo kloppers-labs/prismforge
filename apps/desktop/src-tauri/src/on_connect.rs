@@ -17,7 +17,7 @@ enum Phase {
 }
 
 /// The profile the store marks now, as far as this version can read it.
-enum Mark {
+pub(crate) enum Mark {
     Ready(ProfileId, String),
     Unreadable(ProfileId, MarkProblem),
 }
@@ -57,17 +57,7 @@ impl<S: ViewSink> Report<S> {
     }
 
     async fn mark(&self) -> Option<Mark> {
-        let summary = self.profiles.summary(None).await;
-        let id = summary.apply_on_connect?;
-        if let Some(profile) = summary.profiles.iter().find(|profile| profile.id == id) {
-            return Some(Mark::Ready(id, profile.name.clone()));
-        }
-        let problem = if summary.unreadable.iter().any(|locked| locked.id == id) {
-            MarkProblem::NewerVersion
-        } else {
-            MarkProblem::Missing
-        };
-        Some(Mark::Unreadable(id, problem))
+        marked(&self.profiles).await
     }
 
     async fn publish_with(&self, phase: &Phase) {
@@ -88,6 +78,20 @@ impl<S: ViewSink> Report<S> {
         };
         self.publisher.set_on_connect(state);
     }
+}
+
+pub(crate) async fn marked(profiles: &Profiles) -> Option<Mark> {
+    let summary = profiles.summary(None).await;
+    let id = summary.apply_on_connect?;
+    if let Some(profile) = summary.profiles.iter().find(|profile| profile.id == id) {
+        return Some(Mark::Ready(id, profile.name.clone()));
+    }
+    let problem = if summary.unreadable.iter().any(|locked| locked.id == id) {
+        MarkProblem::NewerVersion
+    } else {
+        MarkProblem::Missing
+    };
+    Some(Mark::Unreadable(id, problem))
 }
 
 /// Runs beside one session: applies the marked profile once each time the session becomes live.

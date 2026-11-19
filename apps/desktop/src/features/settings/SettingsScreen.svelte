@@ -1,13 +1,18 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import type { CloseAction } from "../../lib/api/bindings/CloseAction";
   import type { StartEntryState } from "../../lib/api/bindings/StartEntryState";
   import { failureText, storeUnavailableText } from "../../lib/errors";
   import Switch from "../../lib/Switch.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { SettingKey, LifecycleState } from "./state.svelte";
-  import { addressText, quitShortcut, settingsNoticeText, trayName } from "./wording";
+  import { addressText, quitShortcut, settingsNoticeText, startPathText, trayName } from "./wording";
 
-  let { lifecycle }: { lifecycle: LifecycleState } = $props();
+  let { lifecycle, onprofiles }: { lifecycle: LifecycleState; onprofiles: () => void } = $props();
+
+  onMount(() => {
+    lifecycle.load();
+  });
 
   let view = $derived(lifecycle.view);
   let settings = $derived(lifecycle.settings);
@@ -16,6 +21,16 @@
   let unavailable = $derived(view && "Unavailable" in view.settings ? view.settings.Unavailable.reason : null);
   let notices = $derived(view && "Ready" in view.settings ? view.settings.Ready.notices : []);
   let entry = $derived<StartEntryState>(view?.start_with_system ?? "NotRegistered");
+  let startProfile = $derived(view?.start_profile ?? null);
+  let startPath = $derived(
+    startPathText({
+      system: entry === "Registered",
+      hidden: settings?.start_hidden ?? false,
+      connect: settings?.connect_at_start ?? false,
+      address: settings?.address ? addressText(settings.address) : null,
+      profile: startProfile !== null && typeof startProfile === "object" && "Marked" in startProfile ? startProfile.Marked.name : null,
+    }),
+  );
   let trayDetail = $derived(view && typeof view.tray === "object" ? view.tray.Unavailable.detail : null);
 
   function failed(key: SettingKey | "quit"): string | null {
@@ -113,65 +128,93 @@
 
   <section class="group" aria-labelledby="start-title">
     <h2 id="start-title">When PrismForge starts</h2>
+    <p class="help">
+      With steps 1, 3 and 4 on, your lights change at system start without a click. Every step is off until you turn it on.
+    </p>
 
-    <div class="row">
-      <Switch
-        label="Start PrismForge when you sign in"
-        on={entry === "Registered"}
-        disabled={lifecycle.pending !== null}
-        describedby="system-help"
-        onchange={(on) => lifecycle.change({ StartWithSystem: on })}
-      />
-      <div id="system-help" class="help">
-        <p>Adds PrismForge to the programs your system starts for your user account. It needs no administrator rights. Turn it off before you uninstall PrismForge.</p>
-        {#if typeof entry === "object"}
-          <p class="unavailable">PrismForge cannot read its start entry: {entry.Unknown.detail}</p>
+    <ol class="steps" aria-label="Start-up steps">
+      <li>
+        <Switch
+          label="Start PrismForge when you sign in"
+          on={entry === "Registered"}
+          disabled={lifecycle.pending !== null}
+          describedby="system-help"
+          onchange={(on) => lifecycle.change({ StartWithSystem: on })}
+        />
+        <div id="system-help" class="help">
+          <p>Adds PrismForge to the programs your system starts for your user account. It needs no administrator rights. Turn it off before you uninstall PrismForge.</p>
+          {#if typeof entry === "object"}
+            <p class="unavailable">PrismForge cannot read its start entry: {entry.Unknown.detail}</p>
+          {/if}
+        </div>
+        {#if failed("StartWithSystem")}
+          <p class="failure" role="alert">{failed("StartWithSystem")}</p>
         {/if}
-      </div>
-      {#if failed("StartWithSystem")}
-        <p class="failure" role="alert">{failed("StartWithSystem")}</p>
-      {/if}
-    </div>
+      </li>
 
-    <div class="row">
-      <Switch
-        label="Start hidden in {trayName()}"
-        on={settings?.start_hidden ?? false}
-        disabled={!ready || !tray || lifecycle.pending !== null}
-        describedby="hidden-help"
-        onchange={(on) => lifecycle.change({ StartHidden: on })}
-      />
-      <div id="hidden-help" class="help">
-        {#if tray}
-          <p>Only when your system starts PrismForge: the window stays closed and PrismForge waits in {trayName()}. When you start PrismForge yourself, the window opens.</p>
-        {:else}
-          <p class="unavailable">Not available: this system has no tray, so the window always opens.</p>
+      <li>
+        <Switch
+          label="Start hidden in {trayName()}"
+          on={settings?.start_hidden ?? false}
+          disabled={!ready || !tray || lifecycle.pending !== null}
+          describedby="hidden-help"
+          onchange={(on) => lifecycle.change({ StartHidden: on })}
+        />
+        <div id="hidden-help" class="help">
+          {#if tray}
+            <p>Optional. Only when your system starts PrismForge: the window stays closed and PrismForge waits in {trayName()}. When you start PrismForge yourself, the window opens.</p>
+          {:else}
+            <p class="unavailable">Not available: this system has no tray, so the window always opens.</p>
+          {/if}
+        </div>
+        {#if failed("StartHidden")}
+          <p class="failure" role="alert">{failed("StartHidden")}</p>
         {/if}
-      </div>
-      {#if failed("StartHidden")}
-        <p class="failure" role="alert">{failed("StartHidden")}</p>
-      {/if}
-    </div>
+      </li>
 
-    <div class="row">
-      <Switch
-        label="Connect to OpenRGB when PrismForge starts"
-        on={settings?.connect_at_start ?? false}
-        disabled={!ready || lifecycle.pending !== null || (!settings?.address && !settings?.connect_at_start)}
-        describedby="connect-help"
-        onchange={(on) => lifecycle.change({ ConnectAtStart: on })}
-      />
-      <div id="connect-help" class="help">
-        {#if settings?.address}
-          <p>PrismForge connects to <span class="address">{addressText(settings.address)}</span>, the address of your last Connect. If OpenRGB does not answer, it keeps retrying, as after Connect. It never starts demo mode.</p>
-        {:else}
-          <p>Connect to OpenRGB once first. PrismForge then remembers that address.</p>
+      <li>
+        <Switch
+          label="Connect to OpenRGB when PrismForge starts"
+          on={settings?.connect_at_start ?? false}
+          disabled={!ready || lifecycle.pending !== null || (!settings?.address && !settings?.connect_at_start)}
+          describedby="connect-help"
+          onchange={(on) => lifecycle.change({ ConnectAtStart: on })}
+        />
+        <div id="connect-help" class="help">
+          {#if settings?.address}
+            <p>PrismForge connects to <span class="address">{addressText(settings.address)}</span>, the address of your last Connect. If OpenRGB does not answer, it keeps retrying, as after Connect. It never starts demo mode.</p>
+          {:else}
+            <p>Connect to OpenRGB once first. PrismForge then remembers that address.</p>
+          {/if}
+        </div>
+        {#if failed("ConnectAtStart")}
+          <p class="failure" role="alert">{failed("ConnectAtStart")}</p>
         {/if}
-      </div>
-      {#if failed("ConnectAtStart")}
-        <p class="failure" role="alert">{failed("ConnectAtStart")}</p>
-      {/if}
-    </div>
+      </li>
+
+      <li>
+        <p class="step-title">Apply the profile marked “Apply this profile when PrismForge connects”</p>
+        <div class="profile">
+          {#if startProfile === null || startProfile === "NotMarked"}
+            <p>None marked.</p>
+          {:else if "Marked" in startProfile}
+            <p>Applies <strong>{startProfile.Marked.name}</strong>, once, as soon as the connection is made.</p>
+          {:else if "Unreadable" in startProfile}
+            <p class="unavailable">
+              {startProfile.Unreadable.problem === "NewerVersion"
+                ? "The marked profile needs a newer PrismForge, so nothing is applied."
+                : "The marked profile is no longer in the store, so nothing is applied."}
+            </p>
+          {:else}
+            <p class="unavailable">{storeUnavailableText(startProfile.Unavailable.reason)}</p>
+          {/if}
+          <button type="button" class="small" onclick={onprofiles}>Open Profiles</button>
+        </div>
+        <p class="help">Mark one of your OpenRGB profiles on the Profiles screen. Demo profiles are never applied at start.</p>
+      </li>
+    </ol>
+
+    <p class="result" role="status" aria-label="Start-up result">{startPath}</p>
 
     <aside class="automatic" aria-labelledby="automatic-title">
       <h3 id="automatic-title">When your lighting changes without a click</h3>
@@ -240,9 +283,68 @@
     font-size: 16px;
   }
 
-  .row {
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 14px;
+    counter-reset: step;
+  }
+
+  .steps > li {
+    counter-increment: step;
     display: grid;
     gap: 4px;
+    padding-left: 38px;
+    position: relative;
+  }
+
+  .steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--ink-1);
+  }
+
+  .step-title {
+    font-weight: 600;
+    padding: 6px 0 0;
+  }
+
+  .profile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    font-size: 13px;
+  }
+
+  .profile strong {
+    color: var(--text);
+  }
+
+  .small {
+    padding: 2px 10px;
+    font-size: 13px;
+  }
+
+  .result {
+    font-size: 13px;
+    max-width: 72ch;
+    padding: 10px 12px;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--line);
+    background: var(--ink-0);
   }
 
   .choices {

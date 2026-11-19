@@ -13,7 +13,7 @@ use tokio::sync::watch;
 use crate::publisher::ViewSink;
 use crate::shell::Shell;
 use crate::stores::StoreUnavailable;
-use crate::view::{CommandError, SettingProblem};
+use crate::view::{CommandError, MarkProblem, SettingProblem};
 
 pub use close::{ClosePrompt, CloseStep, decide_close};
 pub use start_entry::{StartEntry, StartEntryState, read_entry, switch_entry};
@@ -49,8 +49,20 @@ pub struct LifecycleView {
     pub close_prompt: bool,
     /// The result of the last "Stop all PrismForge effects" from the tray.
     pub tray_stop: Option<StopReport>,
+    /// The profile that connect at start applies, from the real store's mark.
+    pub start_profile: StartProfile,
     /// The per-user folder that holds the settings, both stores and the folder lock.
     pub folder: String,
+}
+
+/// The single source is the per-profile mark "Apply this profile when PrismForge connects".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub enum StartProfile {
+    NotMarked,
+    Marked { name: String },
+    Unreadable { problem: MarkProblem },
+    Unavailable { reason: StoreUnavailable },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -161,6 +173,7 @@ impl<L: LifecycleSink> Lifecycle<L> {
             }
             Err(reason) => SettingsState::Unavailable { reason },
         };
+        let start_profile = shell.start_profile().await;
         let state = self.lock();
         LifecycleView {
             revision: state.revision,
@@ -170,6 +183,7 @@ impl<L: LifecycleSink> Lifecycle<L> {
             window_visible: state.window_visible,
             close_prompt: state.prompt.asking(),
             tray_stop: state.tray_stop.clone(),
+            start_profile,
             folder: shell.folder(),
         }
     }
@@ -251,6 +265,31 @@ impl<L: LifecycleSink> Lifecycle<L> {
             .await?;
         self.publish(shell).await;
         Ok(())
+    }
+
+    /// Shows the window unless the plan keeps it in the tray, then connects through `connect` if chosen.
+    pub async fn begin<S, F, Fut>(
+        &self,
+        shell: &Shell<S>,
+        by_system: bool,
+        window: &dyn WindowControl,
+        connect: F,
+    ) -> StartupPlan
+    where
+        S: ViewSink,
+        F: FnOnce(OpenRgbAddress) -> Fut,
+        Fut: std::future::Future<Output = ()>,
+    {
+        let plan = self.startup(shell, by_system).await;
+        if plan.show_window {
+            self.show(shell, window).await;
+        } else {
+            self.publish(shell).await;
+        }
+        if let Some(address) = plan.connect.clone() {
+            connect(address).await;
+        }
+        plan
     }
 
     pub async fn startup<S: ViewSink>(&self, shell: &Shell<S>, by_system: bool) -> StartupPlan {

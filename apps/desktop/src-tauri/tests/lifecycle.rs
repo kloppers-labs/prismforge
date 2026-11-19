@@ -8,8 +8,9 @@ use prismforge_core::session::{ReconnectPolicy, RestoreOutcome, SessionConfig};
 use prismforge_core::store::{CloseAction, OpenRgbAddress, ProfileStore, StdFileOps};
 use prismforge_core::{BackendOrigin, ConnectionState, DeviceRef, OutputTarget};
 use prismforge_desktop::{
-    AppSettingChange, CommandError, OnConnect, SettingProblem, SettingsState, Shell, ShellConfig,
-    StartEntryState, StopResult, StoreUnavailable, Stores, TrayState, stop_then_exit,
+    AppSettingChange, CommandError, ConnectOutcome, OnConnect, SettingProblem, SettingsState,
+    Shell, ShellConfig, StartEntryState, StartProfile, StopResult, StoreUnavailable, Stores,
+    TrayState, stop_then_exit,
 };
 use prismforge_effects::EffectInstance;
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
@@ -644,4 +645,148 @@ async fn the_store_files_stay_valid_when_the_server_drops_the_session_during_out
             .iter()
             .any(|device| device.name.as_deref() == Some("Desk strip"))
     );
+}
+
+fn desk_server() -> FakeServer {
+    let server = FakeServer::new();
+    server.add_device(
+        0,
+        FixtureDevice::new("desk", "Fixture Strip")
+            .serial("SN-desk")
+            .location("usb:desk")
+            .zone("Ring", 8),
+    );
+    server
+}
+
+/// Saves "Evening" in the real store with an effect on the desk strip and marks it for apply on connect.
+async fn marked_evening(shell: &Shell<Recorder>, recorder: &Recorder, server: &FakeServer) {
+    shell
+        .start(OpenRgbBackend::new(
+            Local(server.clone()),
+            ClientConfig::default(),
+        ))
+        .await
+        .expect("start");
+    let connected = recorder.wait_for(is_connected).await;
+    let device = connected.session.expect("session").devices[0]
+        .identity
+        .reference()
+        .cloned()
+        .expect("resolved");
+    shell
+        .apply_effect(OutputTarget { device, zone: None }, rainbow())
+        .await
+        .expect("effect");
+    let id = shell.create_profile("Evening").await.expect("save").id;
+    shell.set_apply_on_connect(Some(id)).await.expect("mark");
+    shell.stop().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_settings_name_the_real_profile_that_start_up_applies() {
+    let (shell, recorder, _dir) = shell("start-profile");
+    let entry = FakeEntry::default();
+    let (lifecycle, _views) = lifecycle(&entry);
+
+    let none = lifecycle.view(&shell).await.start_profile;
+    shell.start(DemoBackend::new()).await.expect("demo");
+    recorder.wait_for(is_connected).await;
+    let demo = shell.create_profile("Demo glow").await.expect("save").id;
+    shell
+        .set_apply_on_connect(Some(demo))
+        .await
+        .expect("mark demo");
+    shell.stop().await;
+    let demo_only = lifecycle.view(&shell).await.start_profile;
+    marked_evening(&shell, &recorder, &desk_server()).await;
+    let marked = lifecycle.view(&shell).await.start_profile;
+
+    assert_eq!(none, StartProfile::NotMarked);
+    assert_eq!(demo_only, StartProfile::NotMarked);
+    assert_eq!(
+        marked,
+        StartProfile::Marked {
+            name: "Evening".into()
+        }
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn with_every_start_step_on_the_marked_profile_applies_at_system_start_without_a_click() {
+    let (shell, recorder, _dir) = shell("start-path");
+    let server = desk_server();
+    marked_evening(&shell, &recorder, &server).await;
+    let entry = FakeEntry::default();
+    let (lifecycle, views) = lifecycle(&entry);
+    lifecycle.set_tray(TrayState::Available);
+    lifecycle
+        .remember_address(&shell, "127.0.0.1", 6742)
+        .await
+        .expect("address");
+    for change in [
+        AppSettingChange::StartWithSystem(true),
+        AppSettingChange::StartHidden(true),
+        AppSettingChange::ConnectAtStart(true),
+    ] {
+        lifecycle.change(&shell, change).await.expect("step on");
+    }
+    let window = FakeWindow::default();
+    let connected_to = std::sync::Mutex::new(None);
+
+    let plan = lifecycle
+        .begin(&shell, true, &window, |address| async {
+            *connected_to.lock().expect("address") = Some(address);
+            let _ = shell
+                .start(OpenRgbBackend::new(
+                    Local(server.clone()),
+                    ClientConfig::default(),
+                ))
+                .await;
+        })
+        .await;
+    let fired = recorder
+        .wait_view(|view| matches!(view.on_connect, OnConnect::Fired { .. }))
+        .await;
+
+    assert!(!plan.show_window);
+    assert_eq!(window.shown.load(Ordering::SeqCst), 0);
+    assert!(!views.last().window_visible);
+    assert_eq!(
+        *connected_to.lock().expect("address"),
+        Some(OpenRgbAddress {
+            host: "127.0.0.1".into(),
+            port: 6742
+        })
+    );
+    let OnConnect::Fired { ran: Some(ran), .. } = fired.on_connect else {
+        panic!("{:?}", fired.on_connect);
+    };
+    assert_eq!(ran.name.as_deref(), Some("Evening"));
+    assert!(matches!(ran.outcome, ConnectOutcome::Applied { .. }));
+    let running = shell.snapshot().await.expect("session");
+    assert_eq!(running.output.scene.assignments.len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_start_by_the_user_shows_the_window_and_connects_nothing_by_default() {
+    let (shell, _recorder, _dir) = shell("start-user");
+    let entry = FakeEntry::default();
+    let (lifecycle, views) = lifecycle(&entry);
+    lifecycle.set_tray(TrayState::Available);
+    let window = FakeWindow::default();
+    let mut connects = 0;
+
+    let plan = lifecycle
+        .begin(&shell, false, &window, |_| {
+            connects += 1;
+            async {}
+        })
+        .await;
+
+    assert!(plan.show_window);
+    assert!(window.is_visible());
+    assert!(views.last().window_visible);
+    assert_eq!(connects, 0);
+    assert_eq!(shell.view().session, None);
 }

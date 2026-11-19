@@ -1,6 +1,35 @@
 // Generated from real sessions by `cargo test -p prismforge-desktop --test fixtures`. Do not edit.
 import type { LifecycleView } from "../../lib/api/bindings/LifecycleView";
 
+export const lifecycleStartPath: LifecycleView = {
+  "revision": 5,
+  "settings": {
+    "Ready": {
+      "settings": {
+        "on_close": null,
+        "start_hidden": false,
+        "connect_at_start": true,
+        "address": {
+          "host": "127.0.0.1",
+          "port": 6742
+        }
+      },
+      "notices": []
+    }
+  },
+  "tray": "Available",
+  "start_with_system": "Registered",
+  "window_visible": true,
+  "close_prompt": false,
+  "tray_stop": null,
+  "start_profile": {
+    "Marked": {
+      "name": "Evening"
+    }
+  },
+  "folder": "store-folder"
+};
+
 export const lifecycleFresh: LifecycleView = {
   "revision": 2,
   "settings": {
@@ -19,6 +48,7 @@ export const lifecycleFresh: LifecycleView = {
   "window_visible": true,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -40,6 +70,7 @@ export const lifecycleAsking: LifecycleView = {
   "window_visible": true,
   "close_prompt": true,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -64,6 +95,7 @@ export const lifecycleChosen: LifecycleView = {
   "window_visible": true,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -88,6 +120,7 @@ export const lifecycleHidden: LifecycleView = {
   "window_visible": false,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -109,6 +142,7 @@ export const lifecycleQuitChosen: LifecycleView = {
   "window_visible": true,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -134,6 +168,7 @@ export const lifecycleNoTray: LifecycleView = {
   "window_visible": true,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -159,6 +194,7 @@ export const lifecycleEntryUnknown: LifecycleView = {
   "window_visible": true,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -174,6 +210,11 @@ export const lifecycleInUse: LifecycleView = {
   "window_visible": true,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": {
+    "Unavailable": {
+      "reason": "InUse"
+    }
+  },
   "folder": "store-folder"
 };
 
@@ -210,6 +251,7 @@ export const lifecycleRecovered: LifecycleView = {
   "window_visible": true,
   "close_prompt": false,
   "tray_stop": null,
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -253,6 +295,7 @@ export const lifecycleTrayStopped: LifecycleView = {
       }
     ]
   },
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
 
@@ -289,5 +332,6 @@ export const lifecycleTrayStopBusy: LifecycleView = {
       }
     ]
   },
+  "start_profile": "NotMarked",
   "folder": "store-folder"
 };
