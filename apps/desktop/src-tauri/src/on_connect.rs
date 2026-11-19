@@ -13,6 +13,7 @@ use crate::view::{ApplyingProfile, ConnectApply, ConnectOutcome, MarkProblem, Ma
 enum Phase {
     Waiting,
     Fired { ran: Option<ConnectApply> },
+    Closed,
 }
 
 /// The profile the store marks now, as far as this version can read it.
@@ -42,9 +43,14 @@ impl<S: ViewSink> Report<S> {
         self.publish_with(&phase).await;
     }
 
+    /// Ends the report with its session; a publish that started earlier finishes first.
+    pub async fn close(&self) {
+        *self.phase.lock().await = Phase::Closed;
+    }
+
     async fn set(&self, next: Phase) {
         let mut phase = self.phase.lock().await;
-        if *phase != next {
+        if *phase != next && *phase != Phase::Closed {
             *phase = next;
             self.publish_with(&phase).await;
         }
@@ -65,16 +71,16 @@ impl<S: ViewSink> Report<S> {
     }
 
     async fn publish_with(&self, phase: &Phase) {
-        let mark = self.mark().await;
         let state = match phase {
-            Phase::Waiting => match mark {
+            Phase::Closed => return,
+            Phase::Waiting => match self.mark().await {
                 None => OnConnect::NotArmed,
                 Some(Mark::Ready(id, name)) => OnConnect::Armed { id, name },
                 Some(Mark::Unreadable(id, problem)) => OnConnect::Unreadable { id, problem },
             },
             Phase::Fired { ran } => OnConnect::Fired {
                 ran: ran.clone(),
-                next: mark.map(|mark| match mark {
+                next: self.mark().await.map(|mark| match mark {
                     Mark::Ready(_, name) => Marked::Ready { name },
                     Mark::Unreadable(_, problem) => Marked::Unreadable { problem },
                 }),

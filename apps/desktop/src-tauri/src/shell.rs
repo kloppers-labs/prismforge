@@ -216,9 +216,10 @@ fn parts<S>(active: Option<&Active<S>>) -> (Option<SessionHandle>, StoreKind) {
 }
 
 /// The watcher holds a handle, so it stops first; the keeper writes the last registry after the session.
-async fn end<S>(active: Option<Active<S>>) {
+async fn end<S: ViewSink>(active: Option<Active<S>>) {
     let Some(Active {
         handle,
+        report,
         session,
         forwarder,
         keeper,
@@ -231,6 +232,9 @@ async fn end<S>(active: Option<Active<S>>) {
     forwarder.abort();
     let _ = forwarder.await;
     stop_beside(watcher).await;
+    if let Some(report) = report {
+        report.close().await;
+    }
     drop(handle);
     let _ = session.await;
     finish(keeper).await;
@@ -252,3 +256,6 @@ async fn stop_beside(task: Option<JoinHandle<()>>) {
 fn is_unstarted(snapshot: &SessionSnapshot) -> bool {
     snapshot.connection == ConnectionState::Disconnected { reason: None }
 }
+
+#[cfg(test)]
+mod tests;
