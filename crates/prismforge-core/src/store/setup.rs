@@ -60,9 +60,15 @@ impl SetupFile {
         }
     }
 
-    /// Empty while the file needs a newer PrismForge.
-    pub fn setup(&self) -> &Setup {
-        &self.setup
+    /// Refused while the file needs a newer PrismForge.
+    pub fn setup(&self) -> Result<&Setup, StoreError> {
+        match &self.newer {
+            Some(problem) => Err(StoreError::NewerFile {
+                file: self.file.name.clone(),
+                problem: problem.clone(),
+            }),
+            None => Ok(&self.setup),
+        }
     }
 
     pub fn notices(&self) -> &[StoreNotice] {

@@ -166,7 +166,7 @@ impl ProfileDetails {
         profile: &Profile,
         now: Option<&SessionSnapshot>,
         apply_on_connect: Option<&ProfileId>,
-        setup: &Setup,
+        setup: Option<&Setup>,
     ) -> Self {
         let (devices, owners) = now.map_or((&[][..], &[][..]), |snapshot| {
             (&snapshot.devices[..], &snapshot.output.devices[..])

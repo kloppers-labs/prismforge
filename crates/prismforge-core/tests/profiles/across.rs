@@ -6,7 +6,7 @@ use prismforge_core::setup::{
     Component, ComponentId, FirstLed, Geometry, OutputId, Placement, Setup, SetupOutput, Strip,
     View, ViewId, plan_across,
 };
-use prismforge_core::store::{ApplyOutcome, Profiles, Readiness, StdFileOps};
+use prismforge_core::store::{ApplyOutcome, Profiles, Readiness, StdFileOps, StoreError};
 use prismforge_core::{ApplyMode, DeviceRef, OutputTarget, Rgb};
 use prismforge_effects::{ControlValue, EffectInstance, Flow, prepare};
 use prismforge_testkit::DemoOutput;
@@ -262,5 +262,103 @@ async fn an_effect_across_a_view_the_setup_no_longer_has_is_skipped() {
             .iter()
             .all(|output| !matches!(output, DemoOutput::DeviceFrame { .. })),
         "{written:?}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn effects_across_a_setup_that_needs_a_newer_prismforge_say_so() {
+    let dir = TempDir::new("across-newer");
+    let (handle, _) = demo().await;
+    let profiles = store_with_desk(&dir, &handle).await;
+    apply_across(&handle).await;
+    let id = profiles
+        .create_from_session(&handle, "Desk")
+        .await
+        .expect("create")
+        .id;
+    handle.stop_all_effects().await.expect("stop");
+    drop(profiles);
+    let newer = serde_json::to_vec(&serde_json::json!({
+        "format": "prismforge.setup",
+        "schema_version": { "major": 2, "minor": 0 }
+    }))
+    .expect("encode");
+    dir.write("setup.json", &newer);
+    let profiles = Profiles::open(dir.path().to_path_buf(), StdFileOps)
+        .await
+        .expect("reopen");
+
+    let details = profiles.details(&id, Some(&handle)).await.expect("details");
+    let report = match profiles.apply(&handle, &id).await.expect("apply") {
+        ApplyOutcome::Applied(report) => report,
+        other => panic!("{other:?}"),
+    };
+
+    let reason = SkipReason::NewerSetup;
+    assert!(report.items.iter().all(|item| item.outcome
+        == ItemOutcome::Skipped {
+            reason: reason.clone()
+        }));
+    assert!(details.settings.iter().all(|setting| setting.today
+        == Readiness::Skipped {
+            reason: reason.clone()
+        }));
+    assert!(matches!(
+        profiles.setup().await,
+        Err(StoreError::NewerFile { .. })
+    ));
+}
+
+#[tokio::test(start_paused = true)]
+async fn apply_and_details_give_one_reason_for_an_external_device_that_lost_its_place() {
+    let dir = TempDir::new("across-order");
+    let (handle, _) = demo().await;
+    let profiles = store_with_desk(&dir, &handle).await;
+    apply_across(&handle).await;
+    let id = profiles
+        .create_from_session(&handle, "Desk")
+        .await
+        .expect("create")
+        .id;
+    handle.stop_all_effects().await.expect("stop");
+    handle
+        .declare_external(DeviceRef::new(MEMORY_1), "Other app".into())
+        .await
+        .expect("declare");
+    let mut without = desk();
+    without.views.clear();
+    profiles
+        .save_setup(without, Some(&handle))
+        .await
+        .expect("view removed");
+
+    let details = profiles.details(&id, Some(&handle)).await.expect("details");
+    let report = match profiles.apply(&handle, &id).await.expect("apply") {
+        ApplyOutcome::Applied(report) => report,
+        other => panic!("{other:?}"),
+    };
+
+    let memory = DeviceRef::new(MEMORY_1);
+    let applied = report
+        .items
+        .iter()
+        .find(|item| item.device == memory)
+        .expect("item");
+    let checked = details
+        .settings
+        .iter()
+        .find(|setting| setting.device == memory)
+        .expect("setting");
+    assert_eq!(
+        applied.outcome,
+        ItemOutcome::Skipped {
+            reason: SkipReason::SetupChanged
+        }
+    );
+    assert_eq!(
+        checked.today,
+        Readiness::Skipped {
+            reason: SkipReason::SetupChanged
+        }
     );
 }

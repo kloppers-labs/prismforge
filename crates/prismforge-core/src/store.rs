@@ -285,7 +285,8 @@ impl ProfileStore {
         self.registry.known_devices()
     }
 
-    pub fn setup(&self) -> &Setup {
+    /// Refused with `NewerFile` while the setup file needs a newer PrismForge.
+    pub fn setup(&self) -> Result<&Setup, StoreError> {
         self.setup.setup()
     }
 
@@ -415,7 +416,13 @@ impl ProfileStore {
         let profile = self.profile(&id)?;
         Ok(ImportReport {
             renamed_from: (profile.name != requested).then_some(requested),
-            details: ProfileDetails::of(&id, profile, now, self.apply_on_connect(), self.setup()),
+            details: ProfileDetails::of(
+                &id,
+                profile,
+                now,
+                self.apply_on_connect(),
+                self.setup().ok(),
+            ),
         })
     }
 
@@ -429,7 +436,7 @@ impl ProfileStore {
             self.profile(id)?,
             now,
             self.apply_on_connect(),
-            self.setup(),
+            self.setup().ok(),
         ))
     }
 

@@ -78,6 +78,8 @@ pub enum SkipReason {
     },
     /// The effect runs across a setup view that is gone, or this target is no longer placed in it as the setup says.
     SetupChanged,
+    /// The effect runs across the setup, and the setup file needs a newer PrismForge.
+    NewerSetup,
     Refused {
         error: OutputError,
     },
@@ -94,10 +96,11 @@ pub enum ApplyError {
 
 /// Applies `profile` through the session commands as a profile, so it creates no user intent records.
 /// Effects across a setup view run as one batch per view, flow and effect, so they share one start.
+/// `setup` is `None` while the setup file needs a newer PrismForge.
 pub async fn apply(
     handle: &SessionHandle,
     profile: &Profile,
-    setup: &Setup,
+    setup: Option<&Setup>,
 ) -> Result<ApplyReport, ApplyError> {
     let snapshot = handle.snapshot();
     if !is_live(&snapshot.connection) {
@@ -235,10 +238,16 @@ impl Picture {
     async fn apply(
         self,
         handle: &SessionHandle,
-        setup: &Setup,
+        setup: Option<&Setup>,
         devices: &[SessionDevice],
         outcomes: &mut [Option<ItemOutcome>],
     ) {
+        let Some(setup) = setup else {
+            for (index, _) in self.members {
+                outcomes[index] = Some(skip(SkipReason::NewerSetup));
+            }
+            return;
+        };
         let plan = plan_across(setup, &self.view, self.flow, devices).ok();
         let placeable = |target: &OutputTarget| {
             plan.as_ref()

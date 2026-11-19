@@ -243,13 +243,13 @@ impl Profiles {
             .with(move |store| {
                 let profile = store.profile(&key)?.clone();
                 let marked = store.apply_on_connect() == Some(&key);
-                Ok::<_, StoreError>((profile, marked, store.setup().clone()))
+                Ok::<_, StoreError>((profile, marked, store.setup().ok().cloned()))
             })
             .await?;
         if marked && !is_live(&handle.snapshot().connection) {
             return Ok(ApplyOutcome::WaitingForConnection);
         }
-        let report = apply(handle, &profile, &setup).await?;
+        let report = apply(handle, &profile, setup.as_ref()).await?;
         *self.lock_active() = intents(handle, u64::MAX).await.ok().map(|log| Active {
             session: handle.session_id(),
             profile: id.clone(),
@@ -333,9 +333,9 @@ impl Profiles {
             .await
     }
 
-    /// The stored setup; empty while its file needs a newer PrismForge.
-    pub async fn setup(&self) -> Setup {
-        self.with(|store| store.setup().clone()).await
+    /// The stored setup; refused with `NewerFile` while its file needs a newer PrismForge.
+    pub async fn setup(&self) -> Result<Setup, StoreError> {
+        self.with(|store| store.setup().cloned()).await
     }
 
     /// Stores `setup`; outputs that are new or changed must fit the devices the session reports now.

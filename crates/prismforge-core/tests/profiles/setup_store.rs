@@ -90,12 +90,12 @@ async fn a_setup_round_trips_with_its_format_and_version() {
     let dir = TempDir::new("setup-round-trip");
     let devices = devices().await;
     let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
-    assert_eq!(store.setup(), &Setup::default());
+    assert_eq!(store.setup(), Ok(&Setup::default()));
 
     store.save_setup(fans(), &devices).expect("save");
     let again = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
 
-    assert_eq!(again.setup(), &fans());
+    assert_eq!(again.setup(), Ok(&fans()));
     assert!(again.notices().is_empty());
     let file = stored(&dir);
     assert_eq!(file["format"], json!(SETUP_FORMAT));
@@ -115,10 +115,10 @@ async fn names_are_trimmed_and_an_unchanged_setup_writes_nothing() {
     store
         .save_setup(renamed(fans(), "  Front fan "), &devices)
         .expect("save");
-    assert_eq!(store.setup(), &fans());
+    assert_eq!(store.setup(), Ok(&fans()));
     store.save_setup(fans(), &devices).expect("same again");
 
-    assert_eq!(store.setup(), &fans());
+    assert_eq!(store.setup(), Ok(&fans()));
     assert!(
         !dir.files().contains(&format!("{FILE}.bak")),
         "{:?}",
@@ -140,7 +140,7 @@ async fn a_damaged_setup_is_restored_from_its_backup() {
 
     let store = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
 
-    assert_eq!(store.setup(), &fans());
+    assert_eq!(store.setup(), Ok(&fans()));
     assert_eq!(
         store.notices(),
         [StoreNotice {
@@ -175,7 +175,13 @@ async fn a_setup_from_a_newer_prismforge_is_refused_and_left_untouched() {
         supported: 1,
     };
 
-    assert_eq!(store.setup(), &Setup::default());
+    assert_eq!(
+        store.setup(),
+        Err(StoreError::NewerFile {
+            file: FILE.into(),
+            problem: problem.clone(),
+        })
+    );
     assert_eq!(
         store.notices(),
         [StoreNotice {
@@ -212,7 +218,7 @@ async fn unknown_fields_of_a_newer_minor_version_are_kept() {
     dir.write(FILE, &serde_json::to_vec(&file).expect("encode"));
 
     let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
-    let mut setup = store.setup().clone();
+    let mut setup = store.setup().expect("readable").clone();
     setup.components[1].name = "Exhaust".into();
     store.save_setup(setup, &devices).expect("save");
 
@@ -270,7 +276,7 @@ async fn a_setup_that_is_not_valid_is_refused_and_the_file_stays() {
         })
     );
     assert_eq!(dir.read(FILE), before);
-    assert_eq!(store.setup(), &fans());
+    assert_eq!(store.setup(), Ok(&fans()));
 }
 
 #[tokio::test(start_paused = true)]
@@ -332,7 +338,7 @@ async fn the_async_store_saves_the_setup_against_the_session_devices() {
         .await
         .expect("save");
 
-    assert_eq!(profiles.setup().await, fans());
+    assert_eq!(profiles.setup().await, Ok(fans()));
     profiles
         .save_setup(renamed(fans(), "Other"), None)
         .await
