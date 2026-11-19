@@ -80,7 +80,7 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `c1e567f`, the last code commit of Task 8b fix round 1.
+Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `474115e`, the last code commit of Task 8b fix round 2.
 
 | Command | Result |
 |---|---|
@@ -89,9 +89,9 @@ Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `c1e567f`, the last code 
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
 | `cargo test --workspace` | Pass: 331 tests (no Rust change in Task 8b) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 326 interface tests in 24 files (72 new in Task 8b, 11 of them in fix round 1) |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 330 interface tests in 25 files (76 new in Task 8b: 11 in fix round 1, 4 in fix round 2) |
 | `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (265 modules, 3 files checked) |
-| `pnpm tauri:build` in `apps/desktop` | Pass at `c1e567f`: `PrismForge.app` (15.57 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.53 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (265 modules). |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `474115e`: `PrismForge.app` (15.57 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.53 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (265 modules). |
 
 Every menu was opened in the interface preview in Orca's browser (Chromium on macOS) at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300, at the right and bottom edges, from the keyboard on a profile row and a zone button, and on Diagnostics docked (1440 × 900) and covering (1100 × 700). Every menu stayed inside the window with its 8 px margin. Fix round 1 retook the zone row at 640 × 400, a Diagnostics section at 460 × 300, the keyboard menus, the profile menus with the new labels, and a keyboard menu that moves with its row when the target list scrolls. The screenshots are design evidence only.
 
@@ -270,7 +270,7 @@ Not done:
 - A screen reader pass (Narrator or NVDA) over each screen, the notices and the Details disclosures.
 - Copy as text in Diagnostics: that the clipboard works in the native window.
 - Real hardware: Set lighting, the Live and Draft marks, and Hand back with a real other program.
-- Context menus in the native window on Windows: a right-click, Shift+F10 and the Menu key on a device row, a profile row and the connection chip; no WebView menu (Reload, Inspect) outside text fields in the installed build; Cut, Copy and Paste in the Host field; a menu at the right and bottom edges at 200 % scaling; Narrator or NVDA reading a disabled item with its reason and announcing Shift+F10 on rows and chips; a right-click on a disabled button (for example Identify device on the light bar) shows no WebView menu.
+- Context menus in the native window on Windows: a right-click, Shift+F10 and the Menu key on a device row, a profile row and the connection chip; no WebView menu (Reload, Inspect) outside text fields in the installed build; Cut, Copy and Paste in the Host field; a menu at the right and bottom edges at 200 % scaling; Narrator or NVDA reading a disabled item with its reason, announcing Shift+F10 on rows, chips and the buttons inside zone rows, and reading "is now off" once when an item turns off while focused; a right-click on a disabled button (for example Identify device on the light bar) shows no WebView menu.
 
 ## Missing information from the owner
 
