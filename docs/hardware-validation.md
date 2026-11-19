@@ -1,0 +1,49 @@
+# Hardware validation
+
+This file records tests of PrismForge against a real OpenRGB server. Each entry removes serial numbers, Windows device instance paths and other values that identify one machine.
+
+## How to add an entry
+
+1. Start OpenRGB 1.0 or later and turn on the SDK server.
+2. Run the read-only probe: `cargo run -p prismforge-openrgb --example probe -- --host 127.0.0.1 --port 6742`.
+3. Remove serial numbers and `HID:` location paths from the output.
+4. Add a new section below with the date, the OpenRGB version, the operating system and the result.
+
+The probe only reads. It does not write colours and it does not change modes.
+
+## 2026-11-19: first probe, OpenRGB 1.1, Windows 11
+
+### Result
+
+- The probe negotiated SDK protocol 6.
+- The client read six controllers. It parsed every controller without a per-device issue.
+- The final connection state was `Connected`.
+
+This is the first test against a real server. It confirms the handshake, the controller count reply and the controller data parser for protocol 6. It does not test colour writes, notifications or reconnects.
+
+### Devices
+
+| Device | Type | LEDs | Zones | Direct Mode | Location kind |
+|---|---|---|---|---|---|
+| ENE DRAM (module 1) | Memory | 8 | 1 linear zone, 8 LEDs | Yes, mode 0 | SMBus, address `0x72` |
+| ENE DRAM (module 2) | Memory | 8 | 1 linear zone, 8 LEDs | Yes, mode 0 | SMBus, address `0x73` |
+| Gigabyte B550 AORUS ELITE V2 | Motherboard | 77 | `D_LED1` and `D_LED2` (linear, 36 LEDs each, size 0 to 1024); `I/O Cover`, `LED_C1`, `LED_CPU`, `PCI-E Accent`, `LED_C2` (1 LED each) | Yes, mode 0, brightness 0 to 255 | HID |
+| Microsoft HID VHF Driver | Accessory | 36 | 1 matrix zone, 18 × 12 | Yes, mode 0 | HID |
+| Keychron Gaming Keyboard | Keyboard | 84 | 1 matrix zone, 16 × 6 | **No** | HID |
+| NVIDIA GeForce RTX 3060 Ti LHR | GPU | 2 | `0 - RGBW`, `1 - SINGLE COLOR` (1 LED each) | Yes, mode 1, brightness 0 to 100 | None reported |
+
+### Findings
+
+1. **Identity of identical modules works.** The two memory modules have the same vendor, name and zone shape, and no serial. Their SMBus addresses are different, so PrismForge gives them different device identities.
+2. **The keyboard has no Direct Mode.** Its only per-LED mode is named `Custom`, and every mode on this keyboard reports `AutomaticSave` persistence. This means each change goes to the keyboard's own memory. PrismForge does not send effects to this keyboard, because frequent writes to device memory can wear it out. This agrees with the rule in [decision 0001](decisions/0001-openrgb-integration.md): a colour frame goes only to a mode named `Direct`.
+3. **Speed ranges are reversed on two devices.** The memory modules report speed from 4 to 0, and the motherboard reports speed from 9 to 0. A lower number is a faster speed on these devices. PrismForge does not set hardware mode speeds yet. Any later work that does must accept a minimum that is larger than the maximum.
+4. **Resizable zones report their maximum.** `D_LED1` and `D_LED2` report 36 LEDs with a permitted size of 0 to 1024. The real number of LEDs on the connected strips or fans is not known yet.
+5. **One accessory is not identified.** OpenRGB reports a "Microsoft HID VHF Driver" accessory with 36 LEDs in an 18 × 12 matrix. VHF is the Windows virtual HID framework, so this is probably a virtual device that another program creates. We have not checked what it is.
+6. **Some devices have no serial or no location.** The memory modules and the GPU have an empty serial. The GPU also has an empty location. Identity depends on the other fields for these devices.
+
+### Not tested in this run
+
+- Colour writes to any device.
+- "Device list updated" notifications and update packets.
+- Reconnect after an OpenRGB restart, and whether controller IDs stay the same.
+- The PrismForge desktop app.

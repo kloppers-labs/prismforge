@@ -6,7 +6,7 @@
 
 ## Current state
 
-PrismForge controls hardware only through the OpenRGB SDK server, a local TCP service that OpenRGB provides for other programs. PrismForge has its own small SDK client in `crates/prismforge-openrgb`. The client is tested against a scripted fake server in `crates/prismforge-testkit`. **No test against a real OpenRGB server has been done.** Every statement below about server behaviour comes from reading the OpenRGB documentation and source code at pinned commits.
+PrismForge controls hardware only through the OpenRGB SDK server, a local TCP service that OpenRGB provides for other programs. PrismForge has its own small SDK client in `crates/prismforge-openrgb`. The client is tested against a scripted fake server in `crates/prismforge-testkit`. On 2026-11-19 a read-only probe passed against a real OpenRGB 1.1 server (see [hardware validation](../hardware-validation.md)). Other statements below about server behaviour come from reading the OpenRGB documentation and source code at pinned commits.
 
 ## Decisions
 
@@ -154,8 +154,7 @@ PrismForge policy that is stricter than the server:
 
 ## Not verified
 
-- Every behaviour against a real OpenRGB 1.1 server: negotiation, inventory, acknowledge order, colour writes, notifications.
-- The owner's hardware: device list, zones, Direct Mode support.
+- Colour writes, notifications and acknowledge order against a real OpenRGB 1.1 server. Negotiation and inventory passed a read-only probe on 2026-11-19. See [hardware validation](../hardware-validation.md).
 - The Effects plugin operations in the table above.
 - Whether a controller ID stays the same after an OpenRGB restart on the owner's machine.
 

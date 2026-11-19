@@ -30,6 +30,7 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 ## Requirements
 
 - Rust 1.99.0. `rust-toolchain.toml` selects it.
+- On Windows: the Microsoft C++ build tools, for the linker `link.exe`. Install them with `winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"`, then open a new terminal. Without them, `cargo` stops with `linker link.exe not found`.
 - For the desktop app: Node.js 22.22.2 or later and pnpm 10.33.0. On Windows, WebView2 (part of Windows 10 and 11).
 - For a live test: OpenRGB 1.0 or later with the SDK server turned on.
 
