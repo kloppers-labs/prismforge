@@ -72,14 +72,14 @@
   }
 
   legend {
-    font-weight: 550;
+    font-weight: var(--weight-strong);
     padding: 0;
     margin-bottom: 4px;
   }
 
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   ol {
@@ -104,7 +104,7 @@
 
   .order button {
     padding: 5px 10px;
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .add {
@@ -113,6 +113,6 @@
 
   .problem {
     color: var(--problem);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

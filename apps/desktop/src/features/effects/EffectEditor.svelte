@@ -130,8 +130,8 @@
 
   h4 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-s);
+    font-weight: var(--weight-strong);
     color: var(--text-dim);
   }
 
@@ -139,9 +139,9 @@
     display: grid;
     gap: 18px;
     padding: 16px 18px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--radius-m);
-    background: var(--ink-1);
+    background: var(--surface-1);
   }
 
   .run {
@@ -170,7 +170,7 @@
     gap: 4px;
     padding: 10px 14px;
     border-left: 3px solid var(--ok);
-    background: var(--ink-0);
+    background: var(--surface-0);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
     color: var(--text-dim);
   }
@@ -181,6 +181,6 @@
 
   .headline {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 </style>

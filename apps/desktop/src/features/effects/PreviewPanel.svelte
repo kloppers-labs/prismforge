@@ -36,13 +36,13 @@
 
   h4 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-s);
+    font-weight: var(--weight-strong);
     color: var(--text-dim);
   }
 
   .quiet {
     padding: 3px 10px;
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

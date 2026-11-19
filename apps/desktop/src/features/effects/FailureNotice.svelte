@@ -32,7 +32,7 @@
     gap: 4px;
     padding: 10px 14px;
     border-left: 3px solid var(--warning);
-    background: var(--ink-0);
+    background: var(--surface-0);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
     color: var(--text-dim);
   }

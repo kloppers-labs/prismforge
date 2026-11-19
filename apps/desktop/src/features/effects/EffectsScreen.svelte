@@ -77,7 +77,7 @@
 
   .workspace > :global(section) {
     padding-top: 24px;
-    border-top: 1px solid var(--ink-3);
+    border-top: 1px solid var(--surface-3);
   }
 
   .workspace > :global(.editor) {

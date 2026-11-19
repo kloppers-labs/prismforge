@@ -65,7 +65,7 @@
   }
 
   label {
-    font-weight: 550;
+    font-weight: var(--weight-strong);
   }
 
   .row {
@@ -90,11 +90,11 @@
 
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .problem {
     color: var(--problem);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

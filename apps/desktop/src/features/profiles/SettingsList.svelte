@@ -64,7 +64,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 4px 20px;
     padding: 9px 0;
-    border-bottom: 1px solid var(--ink-3);
+    border-bottom: 1px solid var(--surface-3);
   }
 
   .what {
@@ -93,6 +93,6 @@
 
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

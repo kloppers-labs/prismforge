@@ -225,7 +225,7 @@
 
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
     max-width: 72ch;
   }
 
@@ -246,7 +246,7 @@
   }
 
   :global(button.danger) {
-    border-color: #7a3a33;
+    border-color: var(--problem-line);
     color: var(--problem);
   }
 </style>

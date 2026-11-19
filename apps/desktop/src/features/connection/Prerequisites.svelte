@@ -13,7 +13,7 @@
     display: grid;
     gap: 8px;
     padding-top: 16px;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--line-subtle);
   }
 
   ul {
@@ -26,12 +26,12 @@
 
   p {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   code {
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-    font-size: 13px;
+    font-family: var(--font-mono);
+    font-size: var(--font-s);
     color: var(--text);
   }
 </style>

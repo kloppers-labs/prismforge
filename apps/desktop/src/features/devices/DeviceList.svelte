@@ -44,15 +44,15 @@
 
 <style>
   .list {
-    border-right: 1px solid var(--line);
-    background: var(--ink-1);
+    border-right: 1px solid var(--line-subtle);
+    background: var(--surface-1);
     overflow-y: auto;
     padding: 16px 12px;
   }
 
   .title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-s);
+    font-weight: var(--weight-strong);
     color: var(--text-dim);
     padding: 0 8px 10px;
     display: flex;
@@ -81,17 +81,17 @@
     border: 1px solid transparent;
     padding: 9px 10px 9px 14px;
     position: relative;
-    font-weight: 400;
+    font-weight: var(--weight-regular);
   }
 
   li button:hover:not(:disabled) {
-    background: var(--ink-2);
+    background: var(--surface-2);
     border-color: transparent;
   }
 
   li button[aria-current="true"] {
-    background: var(--ink-2);
-    border-color: var(--line);
+    background: var(--surface-2);
+    border-color: var(--line-subtle);
   }
 
   li button[aria-current="true"]::before {
@@ -107,12 +107,12 @@
   }
 
   .name {
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 
   .meta {
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .tags {
@@ -123,10 +123,10 @@
   }
 
   .tag {
-    font-size: 12px;
+    font-size: var(--font-xs);
     padding: 0 6px;
-    border-radius: 4px;
-    border: 1px solid var(--line);
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--line-subtle);
     color: var(--text-dim);
   }
 
@@ -135,13 +135,13 @@
   }
 
   .identical {
-    border-color: #6b5a33;
+    border-color: var(--warning-line);
     color: var(--warning);
   }
 
   .issues {
     margin: 16px 8px 0;
-    font-size: 13px;
+    font-size: var(--font-s);
     color: var(--text-dim);
   }
 </style>
