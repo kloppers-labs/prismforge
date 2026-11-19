@@ -133,7 +133,7 @@ export const settingsInUse: CommandError = {
   "StoreUnavailable": "InUse"
 };
 
-export const errorSetupLedBounds: CommandError = {
+export const errorSetupExceedsOutput: CommandError = {
   "Store": {
     "InvalidSetup": {
       "problem": {
@@ -141,6 +141,21 @@ export const errorSetupLedBounds: CommandError = {
           "output": "o-cooler",
           "needed": 17,
           "available": 16
+        }
+      }
+    }
+  }
+};
+
+export const errorSetupLedBounds: CommandError = {
+  "Store": {
+    "InvalidSetup": {
+      "problem": {
+        "LedCountOutsideBounds": {
+          "component": "c-front-fan-1",
+          "leds": 121,
+          "min": 1,
+          "max": 120
         }
       }
     }

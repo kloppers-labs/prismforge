@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import type { SetupStoreView } from "../../lib/api/bindings/SetupStoreView";
 import { fakeShell, refuse } from "../../test/backend";
-import { errorSetupLedBounds } from "../../test/fixtures/errors";
+import { errorSetupExceedsOutput } from "../../test/fixtures/errors";
 import { demoConnected, openRgbSetupDevices } from "../../test/fixtures/sessions";
 import { setupDemoEmpty, setupDemoTower, setupRealTower } from "../../test/fixtures/setups";
 import { VIEWS, rotateBy, setGeometry } from "./edits";
@@ -66,7 +66,7 @@ test("discard_returns_to_the_stored_setup_and_clears_the_history", async () => {
 });
 
 test("a_save_the_store_refuses_keeps_the_drawing_and_says_why", async () => {
-  const shell = fakeShell(demoConnected, { setup: () => tower(), save_setup: refuse(errorSetupLedBounds) });
+  const shell = fakeShell(demoConnected, { setup: () => tower(), save_setup: refuse(errorSetupExceedsOutput) });
   const state = new SetupState(() => demoConnected);
   await state.load();
   state.edit("Change LED count", (setup) => setGeometry(setup, "c-cooler-left", { Strip: { leds: 9, first: "AtStart" } }));
@@ -75,7 +75,7 @@ test("a_save_the_store_refuses_keeps_the_drawing_and_says_why", async () => {
 
   expect(shell.commands()).toContain("save_setup");
   expect(state.dirty).toBe(true);
-  expect(state.saveProblem).toEqual(errorSetupLedBounds);
+  expect(state.saveProblem).toEqual(errorSetupExceedsOutput);
 });
 
 test("a_new_setup_starts_with_a_pc_view_and_a_desk_view_and_nothing_unsaved", async () => {

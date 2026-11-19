@@ -6,6 +6,7 @@
   import Inventory from "./features/devices/Inventory.svelte";
   import EffectsScreen from "./features/effects/EffectsScreen.svelte";
   import ProfilesScreen from "./features/profiles/ProfilesScreen.svelte";
+  import SetupScreen from "./features/setup/SetupScreen.svelte";
   import ClosePrompt from "./features/settings/ClosePrompt.svelte";
   import SettingsScreen from "./features/settings/SettingsScreen.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
@@ -169,6 +170,12 @@
         <SettingsScreen {app} lifecycle={app.lifecycle} onprofiles={() => app.openProfiles()} />
       {:else if app.screen === "profiles"}
         <ProfilesScreen {app} />
+      {:else if app.screen === "setup"}
+        {#if session && inventory}
+          <SetupScreen {app} {session} />
+        {:else}
+          <NeedsConnection {app} {session} title="Setup" plural={false} onconnect={connectForm} />
+        {/if}
       {:else if app.screen === "effects"}
         {#if session && inventory}
           <EffectsScreen {app} {session} />

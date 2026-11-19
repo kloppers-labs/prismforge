@@ -7,7 +7,34 @@ import type { StoreKind } from "../../lib/api/bindings/StoreKind";
 import type { ViewId } from "../../lib/api/bindings/ViewId";
 import { reference } from "../devices/present";
 import { problems } from "./bounds";
-import { VIEWS, placementOf, withViews } from "./edits";
+import type { Geometry } from "../../lib/api/bindings/Geometry";
+import type { OutputId } from "../../lib/api/bindings/OutputId";
+import {
+  VIEWS,
+  addComponent,
+  flip,
+  moveBy,
+  moveInChain,
+  moveTo,
+  place,
+  placementOf,
+  removeComponent,
+  rename,
+  rotateBy,
+  setFirstLed,
+  setGeometry,
+  setRotation,
+  setSize,
+  unplace,
+  unwire,
+  wire,
+  withViews,
+  type Joining,
+  type NewComponent,
+  type OutputChoice,
+} from "./edits";
+import type { ShapePart } from "./library";
+import { nameOf, selectionName } from "./present";
 import { History } from "./history";
 
 type Snapshot = { setup: Setup; selection: ComponentId[] };
@@ -186,6 +213,124 @@ export class SetupState {
 
   toggle(id: ComponentId) {
     this.select(this.selection.includes(id) ? this.selection.filter((each) => each !== id) : [...this.selection, id]);
+  }
+
+  moveSelection(dx: number, dy: number) {
+    const ids = this.selection;
+    if (ids.length > 0) {
+      this.edit(`Move ${selectionName(this.draft, ids)}`, (setup) => moveBy(setup, this.tab, ids, dx, dy));
+    }
+  }
+
+  turnSelection(steps: number) {
+    const ids = this.selection;
+    if (ids.length > 0) {
+      this.edit(`Turn ${selectionName(this.draft, ids)}`, (setup) => rotateBy(setup, this.tab, ids, steps));
+    }
+  }
+
+  flipSelection() {
+    const ids = this.selection;
+    if (ids.length > 0) {
+      this.edit(`Flip ${selectionName(this.draft, ids)}`, (setup) => flip(setup, this.tab, ids));
+    }
+  }
+
+  takeOut(ids: ComponentId[] = this.selection) {
+    if (ids.length > 0) {
+      const view = this.view?.name ?? "";
+      this.edit(
+        `Take ${selectionName(this.draft, ids)} out of the ${view} view`,
+        (setup) => ids.reduce((next, id) => unplace(next, this.tab, id), setup),
+        this.selection.filter((id) => !ids.includes(id)),
+      );
+    }
+  }
+
+  setPlace(id: ComponentId, field: "x" | "y" | "size" | "rotation", value: number) {
+    if (!Number.isFinite(value)) {
+      return;
+    }
+    const at = placementOf(this.draft, this.tab, id);
+    if (!at) {
+      return;
+    }
+    const name = nameOf(this.draft, id);
+    if (field === "rotation") {
+      this.edit(`Turn ${name}`, (setup) => setRotation(setup, this.tab, id, value));
+    } else if (field === "size") {
+      this.edit(`Resize ${name}`, (setup) => setSize(setup, this.tab, id, value));
+    } else {
+      this.edit(`Move ${name}`, (setup) => moveTo(setup, this.tab, id, field === "x" ? value : at.x, field === "y" ? value : at.y));
+    }
+  }
+
+  rename(id: ComponentId, name: string) {
+    this.edit(`Rename ${nameOf(this.draft, id)}`, (setup) => rename(setup, id, name));
+  }
+
+  reshape(id: ComponentId, geometry: Geometry, what: string) {
+    this.edit(`${what} of ${nameOf(this.draft, id)}`, (setup) => setGeometry(setup, id, geometry));
+  }
+
+  /** Adds a component to the current view and, when the user chose one, wires it. */
+  add(component: NewComponent, at: { x: number; y: number; size?: number; rotation?: number }, wiring: { choice: OutputChoice; joining: Joining } | null) {
+    this.edit(
+      `Place ${component.name}`,
+      (setup) => {
+        const added = addComponent(setup, this.tab, component, at);
+        return wiring ? wire(added, component.id, wiring.choice, wiring.joining, freeId(added, "o-")) : added;
+      },
+      [component.id],
+    );
+  }
+
+  /** Adds the parts of one shape at one spot as one step; later parts follow the first on the wire. */
+  addShape(name: string, parts: ShapePart[], at: { x: number; y: number; size: number }, wiring: { choice: OutputChoice; joining: Joining } | null) {
+    const ids: ComponentId[] = [];
+    this.edit(
+      `Place ${name}`,
+      (setup) =>
+        parts.reduce((next, part, index) => {
+          const id = freeId(next, "c-");
+          ids.push(id);
+          const added = addComponent(next, this.tab, { id, name: `${name}${part.suffix}`, geometry: part.geometry }, { ...at, size: Math.round(at.size * part.scale) });
+          if (!wiring) {
+            return added;
+          }
+          const joining = index === 0 ? wiring.joining : "chain";
+          return wire(added, id, wiring.choice, joining, freeId(added, "o-"));
+        }, setup),
+      ids,
+    );
+  }
+
+  placeHere(id: ComponentId, at: { x: number; y: number; size?: number; rotation?: number }) {
+    this.edit(`Place ${nameOf(this.draft, id)} in the ${this.view?.name ?? ""} view`, (setup) => place(setup, this.tab, id, at), [id]);
+  }
+
+  wire(id: ComponentId, choice: OutputChoice, joining: Joining) {
+    this.edit(`Wire ${nameOf(this.draft, id)}`, (setup) => wire(setup, id, choice, joining, freeId(setup, "o-")));
+  }
+
+  unwire(id: ComponentId) {
+    this.edit(`Unwire ${nameOf(this.draft, id)}`, (setup) => unwire(setup, id));
+  }
+
+  moveInChain(id: ComponentId, delta: number) {
+    this.edit(`Move ${nameOf(this.draft, id)} ${delta < 0 ? "earlier" : "later"} in its chain`, (setup) => moveInChain(setup, id, delta));
+  }
+
+  setFirstLed(output: OutputId, first: number) {
+    this.edit("Change the first LED of an output", (setup) => setFirstLed(setup, output, first));
+  }
+
+  remove(id: ComponentId) {
+    this.edit(
+      `Delete ${nameOf(this.draft, id)}`,
+      (setup) => removeComponent(setup, id),
+      this.selection.filter((each) => each !== id),
+    );
   }
 
   private keepSelection() {

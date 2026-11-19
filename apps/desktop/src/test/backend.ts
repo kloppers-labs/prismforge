@@ -8,6 +8,7 @@ import { lifecycleFresh } from "./fixtures/lifecycles";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import { groupsEmpty } from "./fixtures/groups";
+import { setupDemoEmpty } from "./fixtures/setups";
 import { storeEmpty } from "./fixtures/stores";
 
 export type Call = { command: string; args: Record<string, unknown> };
@@ -59,6 +60,7 @@ const defaults: Record<string, Handler> = {
   watch_live_output: () => null,
   profile_store: () => storeEmpty,
   lifecycle: () => lifecycleFresh,
+  setup: () => setupDemoEmpty,
 };
 
 export function refuse(error: unknown): Handler {

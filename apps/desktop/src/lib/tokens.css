@@ -32,6 +32,9 @@
   --demo-ink: #22190a;
   --demo-stripes: repeating-linear-gradient(-45deg, var(--demo) 0 6px, var(--demo-alt) 6px 12px);
   --spectrum: linear-gradient(90deg, #ff5a4e, #ffb340, #f4e04d, #4fd18b, #3fa9ff, #9b7bff);
+  --led-off: #4a505e;
+  --shape-fill: #1f232c;
+  --canvas-grid: #1d2028;
   --spectrum-vertical: linear-gradient(180deg, #ff5a4e, #ffb340, #f4e04d, #4fd18b, #3fa9ff, #9b7bff);
 
   --space-1: 4px;

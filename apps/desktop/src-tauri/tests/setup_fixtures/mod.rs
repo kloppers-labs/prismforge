@@ -340,8 +340,14 @@ async fn demo(modules: &mut SetupModules, sessions: &mut Module, errors: &mut Mo
     modules
         .setups
         .add("setupDemoEmpty", &shell.setup_view().await.expect("empty"));
+    let mut too_long = demo_tower();
+    too_long.components[4] = strip("c-cooler-left", "Cooler left strip", 9);
+    errors.add(
+        "errorSetupExceedsOutput",
+        &shell.save_setup(too_long).await.expect_err("chain too long"),
+    );
     let mut too_many = demo_tower();
-    too_many.components[4] = strip("c-cooler-left", "Cooler left strip", 9);
+    too_many.components[0] = fan("c-front-fan-1", "Front fan 1", 121);
     errors.add(
         "errorSetupLedBounds",
         &shell.save_setup(too_many).await.expect_err("bounds"),

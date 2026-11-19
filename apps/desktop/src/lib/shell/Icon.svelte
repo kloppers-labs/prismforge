@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type IconName = "devices" | "effects" | "profiles" | "diagnostics" | "settings" | "chevron";
+  export type IconName = "devices" | "effects" | "setup" | "profiles" | "diagnostics" | "settings" | "chevron";
 </script>
 
 <script lang="ts">
@@ -17,6 +17,11 @@
     <path d="M2.4 16.4 L8 3.6 L13.6 16.4 Z" />
     <path d="M1 10.8 L5.4 10.2" />
     <path d="M11.6 9.4 L18.6 5.8 M12.8 12.6 L18.8 14.2" />
+  {:else if name === "setup"}
+    <rect x="2.6" y="3" width="8.4" height="14" rx="1.6" />
+    <circle cx="6.8" cy="7.4" r="2" />
+    <circle cx="6.8" cy="13" r="2" />
+    <path d="M13.6 16.6 H17.6 M15.6 16.6 V11.4 M13.4 7.6 L17.8 7.6" />
   {:else if name === "profiles"}
     <path d="M10 2.6 L16.4 6.3 L16.4 13.7 L10 17.4 L3.6 13.7 L3.6 6.3 Z" />
     <path d="M7 8.6 H13 M7 11.4 H11.4" />
