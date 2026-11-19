@@ -18,7 +18,7 @@
   button {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2);
     justify-self: start;
     background: transparent;
     border-color: transparent;
@@ -31,15 +31,15 @@
   }
 
   .label {
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 
   .track {
     width: 34px;
     height: 20px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--ink-0);
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--line-control);
+    background: var(--surface-0);
     position: relative;
     flex: none;
   }
@@ -52,11 +52,11 @@
     height: 14px;
     border-radius: 50%;
     background: var(--text-faint);
-    transition: transform 120ms ease;
+    transition: transform var(--dur-fast) var(--ease-out);
   }
 
   [aria-checked="true"] .track {
-    background: var(--ink-3);
+    background: var(--surface-3);
     border-color: var(--ok);
   }
 
@@ -66,10 +66,10 @@
   }
 
   .state {
-    font-size: 12px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
-    border: 1px solid var(--line);
-    border-radius: 4px;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--radius-xs);
     padding: 0 6px;
   }
 

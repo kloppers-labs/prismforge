@@ -33,9 +33,9 @@
   .track {
     width: 34px;
     height: 20px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--ink-0);
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--line-control);
+    background: var(--surface-0);
     position: relative;
     flex: none;
   }
@@ -52,7 +52,7 @@
   }
 
   [aria-checked="true"] .track {
-    background: var(--ink-3);
+    background: var(--surface-3);
     border-color: var(--ok);
   }
 
@@ -62,16 +62,16 @@
   }
 
   .state {
-    font-size: 12px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
-    border: 1px solid var(--line);
-    border-radius: 4px;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--radius-xs);
     padding: 0 6px;
   }
 
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
     max-width: 72ch;
   }
 </style>

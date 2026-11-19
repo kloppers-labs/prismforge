@@ -17,6 +17,7 @@
     device,
     zone,
     held,
+    closing,
   }: {
     effects: EffectsState;
     catalog: EffectCatalog;
@@ -24,6 +25,7 @@
     device: SessionDevice;
     zone: number | null;
     held: string | null;
+    closing: string;
   } = $props();
 
   let target = $derived(effects.target);
@@ -63,7 +65,7 @@
     <h4 id="run-title">Run on this target</h4>
     <p class="lifecycle">
       A PrismForge effect is computed by PrismForge, not by the device. It runs only while PrismForge runs and is
-      connected. Closing the window quits PrismForge and stops its effects. PrismForge then asks {server} to put back the
+      connected. {closing} PrismForge then asks {server} to put back the
       earlier lighting. PrismForge saves nothing by itself. To keep this lighting, save it as a profile on the Profiles screen.
       Profiles are saved on this computer, not on the device. After PrismForge starts again, no effect runs until you apply
       it or a profile again.
@@ -130,8 +132,8 @@
 
   h4 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-s);
+    font-weight: var(--weight-strong);
     color: var(--text-dim);
   }
 
@@ -139,9 +141,9 @@
     display: grid;
     gap: 18px;
     padding: 16px 18px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--radius-m);
-    background: var(--ink-1);
+    background: var(--surface-1);
   }
 
   .run {
@@ -170,7 +172,7 @@
     gap: 4px;
     padding: 10px 14px;
     border-left: 3px solid var(--ok);
-    background: var(--ink-0);
+    background: var(--surface-0);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
     color: var(--text-dim);
   }
@@ -181,6 +183,6 @@
 
   .headline {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 </style>

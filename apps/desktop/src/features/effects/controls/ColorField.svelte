@@ -60,7 +60,7 @@
   }
 
   label {
-    font-weight: 550;
+    font-weight: var(--weight-strong);
   }
 
   .row {
@@ -79,7 +79,7 @@
   }
 
   .swatch.unset {
-    background: repeating-linear-gradient(45deg, var(--ink-2) 0 5px, var(--ink-3) 5px 10px);
+    background: repeating-linear-gradient(45deg, var(--surface-2) 0 5px, var(--surface-3) 5px 10px);
   }
 
   .swatch input {
@@ -105,11 +105,11 @@
 
   .value {
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .problem {
     color: var(--problem);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

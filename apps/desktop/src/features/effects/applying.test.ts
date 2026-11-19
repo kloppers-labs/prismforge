@@ -49,6 +49,8 @@ test("the_apply_on_connect_result_is_shown_per_target", async () => {
 
   const notice = await screen.findByRole("status", { name: "Applied on connect" });
   expect(notice.textContent).toMatch(/PrismForge applied Evening when it connected\. All 4 settings were accepted\./);
+  expect(within(notice).queryAllByRole("listitem")).toHaveLength(0);
+  await fireEvent.click(within(notice).getByRole("button", { name: "Details" }));
   expect(within(notice).getAllByRole("listitem")).toHaveLength(4);
   await fireEvent.click(within(notice).getByRole("button", { name: "Dismiss" }));
   expect(screen.queryByRole("status", { name: "Applied on connect" })).toBeNull();

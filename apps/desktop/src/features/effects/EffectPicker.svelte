@@ -46,17 +46,17 @@
     column-gap: 8px;
     align-items: baseline;
     padding: 9px 12px 9px 14px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--radius-s);
   }
 
   .option:hover {
-    background: var(--ink-2);
+    background: var(--surface-2);
   }
 
   .option.chosen {
-    background: var(--ink-2);
-    border-color: #4a5163;
+    background: var(--surface-2);
+    border-color: var(--line-control-hover);
   }
 
   .option.chosen::before {
@@ -72,18 +72,18 @@
   }
 
   .name {
-    font-weight: 600;
+    font-weight: var(--weight-strong);
     cursor: pointer;
   }
 
   .tag {
-    font-size: 12px;
+    font-size: var(--font-xs);
     color: var(--ok);
   }
 
   .about {
     grid-column: 2 / -1;
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

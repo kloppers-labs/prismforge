@@ -17,9 +17,11 @@ Run these in `apps/desktop`.
 | `pnpm install --frozen-lockfile` | Installs the pinned npm packages. |
 | `pnpm tauri:dev` | Starts the app with live reload. |
 | `pnpm dev` | Starts only the web interface on port 1420. Without the Tauri shell its commands fail. |
+| `pnpm preview:ui` | Starts the interface preview on port 1430: the real interface with simulated data. See below. |
 | `pnpm typecheck` | Runs `svelte-check` and `tsc`. |
 | `pnpm test` | Runs the interface tests in jsdom. |
 | `pnpm build` | Builds the web interface into `dist`. |
+| `pnpm check:build` | Builds the web interface as `pnpm build` does, into the folder that the Tauri bundle takes (`dist`), and fails if the bundler used any module from `src/dev-preview` or `src/test`, or if the output holds preview text. CI runs it. |
 | `pnpm tauri:build` | Builds the native app and its installers into `target/release/bundle` at the repository root. The build is not signed. |
 
 ## Generated files
@@ -79,6 +81,37 @@ The event `lifecycle-view` carries the lifecycle view after each change. Each ha
 
 Effect commands return `CommandError`. `InvalidEffect` carries the structured validation errors, `NoEffect` names the target, and `Session` carries `Busy`, the ownership conflict and backend errors. Profile commands add `ProfileApplying`, `NotConnected`, `Store` (with `NotActive` and `SessionUnavailable`), `StoreUnavailable` (`InUse` when another PrismForge holds the folder), `Unreadable` and `File` (a path rule). Settings add `Setting`: no tray, no remembered address, or a start entry the system refused or did not keep.
 
+## The window
+
+The window has three parts. `src/lib/shell` holds them. `docs/decisions/0005-shell-and-design-tokens.md` explains the choices.
+
+- **The rail** on the left lists the areas: Devices, Effects and Profiles, then Diagnostics and Settings at its foot. The list is the same in every connection state. The current area has a filled background, an accent bar and a bold label. Below 1100 px the rail is 72 px wide and shows each label under its icon.
+- **The status strip** at the top of the page shows the connection, demo mode and the active profile. The connection chip opens a panel with the reason in words and the actions for that state: Rescan devices, or Connect to OpenRGB and Start demo mode; Disconnect or Stop retrying sit apart below a line. A panel whose only action ends the session opens with focus on the panel, not on that action. The profile chip shows unsaved changes, a profile that is being applied, and the profile set to apply on connect; its panel has Save changes and Open Profiles. In demo mode a striped "Demo mode" marker and a striped edge stay on every screen.
+- **The notice slot** under the strip holds command problems, a failed close or quit, connection problems, repaired files, the tray stop report and the apply-on-connect result. Problems come first, then cautions, then the rest; within a tone the newest is first. With more than one notice only the first shows, with "Show all N notices", and a notice that arrives behind the count is announced. A connection notice stays until the connection changes.
+
+Without a connection, Devices shows the connection form, and Effects shows how to connect. From 1400 px wide, Diagnostics opens beside the page. Below that it covers the page, which cannot take focus until Diagnostics closes; choosing an area, any action in the status strip and any dialog close it first.
+
+| Keys | What they do |
+|---|---|
+| Ctrl+1, Ctrl+2, Ctrl+4 (Command on macOS) | Open Devices, Effects or Profiles. Ctrl+3 and Ctrl+5 are kept for Setup and Automation. The keys count by position, so they work on layouts where digits need Shift. Not while you type in a field or while a dialog is open. |
+| Ctrl+, (Command-, on macOS) | Opens Settings. |
+| F6, Shift+F6 | Move between the rail, the status strip, the notices, the page and Diagnostics. |
+| Tab, as the first key | Reaches "Skip to content". |
+| Arrow keys, Home, End, Escape in a chip panel | Move between its actions; Escape closes it and returns to the chip. A click outside also closes it. |
+| Ctrl+Q (Windows and Linux) | Quits PrismForge. |
+
+The design tokens are in `src/lib/tokens.css`: colour roles, type, spacing, radii, shadows, motion, layers and sizes. Use a token instead of a literal value.
+
+## Interface preview
+
+`pnpm preview:ui` serves the real `App` at `http://localhost:1430` with a fake Tauri transport and the fixtures in `src/test/fixtures`. It is for design work, screenshots and contributors without hardware. It never starts Rust and never reaches hardware. A badge in the corner says "Interface preview: simulated data" and opens a list of states.
+
+- `?state=<name>` picks a state. The names are in `src/dev-preview/scenarios.ts`, for example `first-run`, `retrying`, `lost`, `demo-unsaved`, `effects-running`, `profiles-unresolved`, `applying`, `notices`, `settings`, `diagnostics` and `long-names`.
+- `&area=Effects` opens an area. `&open=connection` or `&open=profile` opens a chip panel. `&diagnostics` opens Diagnostics.
+- Commands that the preview does not simulate fail with a plain message.
+
+The preview has its own Vite config (`vite.preview.config.ts`) and entry (`src/dev-preview`). `pnpm build`, and so the Tauri bundle, never includes it. `pnpm check:build` proves that from the bundler's own module list on each CI run.
+
 ## Profiles in the shell
 
 The store is in the per-user configuration folder that Tauri resolves for `io.github.kloppers-labs.prismforge`: `%APPDATA%` on Windows, `~/Library/Application Support` on macOS, `~/.config` on Linux. The real store is its `store` folder. Demo mode uses its `demo-store` folder, so a profile of simulated devices is never listed or applied while PrismForge is connected to OpenRGB, and the other way round. Diagnostics shows the folder in use.
@@ -117,4 +150,4 @@ The app uses two Tauri plugins and Tauri's own tray support. Only Rust calls the
 | `auto-launch` (macOS and Linux) | 0.6.0 | Not a plugin. The per-user LaunchAgent on macOS and the XDG autostart file on Linux. |
 | `tauri` feature `tray-icon` | 2.12.6 | The tray icon and its menu. No window permission. |
 
-The window gets no window, tray, autostart or process permission: hide, show and quit go through the four app commands above. On macOS PrismForge sets its own app menu, the same as Tauri's default except that Quit PrismForge (Command-Q) runs PrismForge's quit. The plugin adds a small script to the window that routes `window.alert` and `window.confirm` to its message command; the interface uses neither, and without the permission the command is refused. The app registers no shell, file system, HTTP, opener, process or updater plugin. Settings shows the store folder as text, because opening it would need the opener plugin. The window loads only the bundled interface. The Content Security Policy allows scripts, styles, images and fonts from the app itself and IPC to the shell, and nothing else. The interface has no remote content, no CDN files, no telemetry and no network access of its own; only the Rust side opens the TCP connection to OpenRGB. The app runs as a normal user and needs no Administrator rights.
+The window gets no window, tray, autostart or process permission: hide, show and quit go through the four app commands above. On macOS PrismForge sets its own app menu: the PrismForge menu (About, Services, Hide, Hide Others, Show All, Quit PrismForge), Edit, View (Enter Full Screen) and Window (Minimize, Zoom, Close Window). Quit PrismForge (Command-Q) runs PrismForge's quit. Unlike Tauri's default menu it has no File and no Help menu, and it adds Show All. The plugin adds a small script to the window that routes `window.alert` and `window.confirm` to its message command; the interface uses neither, and without the permission the command is refused. The app registers no shell, file system, HTTP, opener, process or updater plugin. Settings shows the store folder as text, because opening it would need the opener plugin. The window loads only the bundled interface. The Content Security Policy allows scripts, styles, images and fonts from the app itself and IPC to the shell, and nothing else. The interface has no remote content, no CDN files, no telemetry and no network access of its own; only the Rust side opens the TCP connection to OpenRGB. The app runs as a normal user and needs no Administrator rights.

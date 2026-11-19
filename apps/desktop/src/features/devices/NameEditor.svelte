@@ -142,7 +142,7 @@
 
   .editor label {
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .editor input {
@@ -151,7 +151,7 @@
 
   .editor p {
     flex-basis: 100%;
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .problem {
@@ -170,6 +170,6 @@
 
   .small {
     padding: 3px 10px;
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

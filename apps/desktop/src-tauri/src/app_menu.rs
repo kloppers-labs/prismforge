@@ -1,4 +1,4 @@
-use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu, WINDOW_SUBMENU_ID};
 use tauri::{AppHandle, Wry};
 
 use crate::tray::{Action, act};
@@ -6,6 +6,7 @@ use crate::tray::{Action, act};
 const QUIT: &str = "app-quit";
 
 /// The macOS app menu with Quit routed to PrismForge's own quit, which releases the devices first.
+/// Untested: Tauri's mock runtime has no native menu.
 pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let name = app.package_info().name.clone();
     let quit = MenuItem::with_id(app, QUIT, format!("Quit {name}"), true, Some("CmdOrCtrl+Q"))?;
@@ -39,8 +40,15 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             &PredefinedMenuItem::select_all(app, None)?,
         ],
     )?;
-    let window = Submenu::with_items(
+    let view = Submenu::with_items(
         app,
+        "View",
+        true,
+        &[&PredefinedMenuItem::fullscreen(app, None)?],
+    )?;
+    let window = Submenu::with_id_and_items(
+        app,
+        WINDOW_SUBMENU_ID,
         "Window",
         true,
         &[
@@ -50,7 +58,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             &PredefinedMenuItem::close_window(app, None)?,
         ],
     )?;
-    Menu::with_items(app, &[&application, &edit, &window])
+    Menu::with_items(app, &[&application, &edit, &view, &window])
 }
 
 pub fn on_event(app: &AppHandle, event: MenuEvent) {

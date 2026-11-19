@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
+import { connectionAction } from "../../test/shell";
 import { button, chooseTarget, effectHandlers, openEffects, wait, withoutEffectsOn, withOwner } from "../../test/effects";
 import { demoEffectIdentifying, demoEffectsNotConnected, demoEffectsRunning } from "../../test/fixtures/sessions";
 
@@ -155,7 +156,7 @@ test("disconnecting_cancels_a_pending_change", async () => {
   const shell = await runningGraphicsCard({ disconnect: () => shell.view(null) });
 
   await setBrightness("40");
-  await fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  await connectionAction("Disconnect");
   await wait(DEBOUNCE_AND_MARGIN);
 
   expect(applies(shell)).toHaveLength(0);

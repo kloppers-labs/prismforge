@@ -1,6 +1,7 @@
 import { api, type Answer, type Failure } from "../api/client";
 import type { DeviceRef } from "../api/bindings/DeviceRef";
 import type { IdentifyOutcome } from "../api/bindings/IdentifyOutcome";
+import type { ProfileId } from "../api/bindings/ProfileId";
 import type { ShellView } from "../api/bindings/ShellView";
 import { EffectsState } from "../../features/effects/state.svelte";
 import { ProfilesState } from "../../features/profiles/state.svelte";
@@ -26,6 +27,8 @@ export class AppState {
   identifiedOnce = $state(false);
   selected = $state<string | null>(null);
   diagnosticsOpen = $state(false);
+  /** True when the window is too narrow to dock Diagnostics, so an open drawer covers the page. */
+  layoutCovers = $state(false);
   screen = $state<Screen>("devices");
   connectApplyDismissed = $state(false);
   readonly profiles = new ProfilesState();
@@ -44,6 +47,16 @@ export class AppState {
 
   get session() {
     return this.view.session;
+  }
+
+  get covering() {
+    return this.diagnosticsOpen && this.layoutCovers;
+  }
+
+  uncover() {
+    if (this.covering) {
+      this.diagnosticsOpen = false;
+    }
   }
 
   async attach(): Promise<() => void> {
@@ -86,9 +99,21 @@ export class AppState {
     }
   }
 
+  go(screen: Screen) {
+    this.uncover();
+    return screen === "profiles" ? this.openProfiles() : (this.screen = screen);
+  }
+
   openProfiles() {
+    this.uncover();
     this.screen = "profiles";
     return this.profiles.refresh();
+  }
+
+  async saveActiveChanges(id: ProfileId) {
+    await this.openProfiles();
+    await this.profiles.select(id);
+    await this.profiles.previewUpdate(id);
   }
 
   /** The store opens on first use, so without a session it is read only when the user opens Profiles. */

@@ -216,7 +216,7 @@ export function onConnectText(state: OnConnect, session: SessionSnapshot | null)
     } else if (typeof state === "object" && "Unreadable" in state) {
       next = ` The profile marked to apply on connect ${markProblemText(state.Unreadable.problem)}. Nothing is applied when you connect.`;
     }
-    return `The connection stopped and PrismForge does not try again. Connect again from the Connection screen.${next}`;
+    return `The connection stopped and PrismForge does not try again. Connect again on the Devices screen.${next}`;
   }
   if (state === "NotApplicable") {
     return session === null

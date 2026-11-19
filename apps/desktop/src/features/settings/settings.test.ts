@@ -32,7 +32,7 @@ function called(shell: ReturnType<typeof fakeShell>, command: string) {
 }
 
 async function openSettings() {
-  const screens = await screen.findByRole("navigation", { name: "Screens" });
+  const screens = await screen.findByRole("navigation", { name: "Main" });
   await fireEvent.click(within(screens).getByRole("button", { name: "Settings" }));
   return screen.findByRole("heading", { level: 1, name: "Settings" });
 }
@@ -186,7 +186,7 @@ test("a_repaired_settings_file_is_explained", async () => {
 test("the_first_close_explains_background_running_and_sends_the_choice", async () => {
   const shell = fakeShell(demoConnected, { answer_close: () => null });
   render(App);
-  await screen.findByRole("navigation", { name: "Screens" });
+  await screen.findByRole("navigation", { name: "Main" });
 
   await shell.pushLifecycle(at(lifecycleAsking, 30));
 
@@ -204,7 +204,7 @@ test("the_first_close_explains_background_running_and_sends_the_choice", async (
 test("escape_cancels_the_first_close_and_quit_is_offered", async () => {
   const shell = fakeShell(null, { answer_close: () => null });
   render(App);
-  await screen.findByRole("navigation", { name: "Screens" });
+  await screen.findByRole("navigation", { name: "Main" });
   await shell.pushLifecycle(at(lifecycleAsking, 30));
   const dialog = await screen.findByRole("dialog");
 
@@ -229,7 +229,7 @@ test("quit_is_on_the_settings_screen_and_on_the_keyboard", async () => {
 test("ctrl_q_quits_where_it_is_the_quit_shortcut", async () => {
   const shell = fakeShell(null, { quit: () => null });
   render(App);
-  await screen.findByRole("navigation", { name: "Screens" });
+  await screen.findByRole("navigation", { name: "Main" });
 
   await fireEvent.keyDown(window, { key: "q", ctrlKey: true });
 
@@ -239,14 +239,13 @@ test("ctrl_q_quits_where_it_is_the_quit_shortcut", async () => {
 test("the_tray_stop_report_lists_each_device_when_the_window_is_shown", async () => {
   const shell = fakeShell(demoConnected);
   render(App);
-  await screen.findByRole("navigation", { name: "Screens" });
+  await screen.findByRole("navigation", { name: "Main" });
 
   await shell.pushLifecycle(at(lifecycleTrayStopped, 40));
 
   const report = await screen.findByRole("status", { name: /^Stop all PrismForge effects, from the tray/ });
-  expect(within(report).getByRole("heading").textContent?.trim()).toBe(
-    "Stop all PrismForge effects, from the tray: every effect was stopped.",
-  );
+  expect(within(report).getByText("Stop all PrismForge effects, from the tray: every effect was stopped.")).toBeTruthy();
+  await fireEvent.click(within(report).getByRole("button", { name: "Details" }));
   expect(within(report).getByText("Demo Graphics Card")).toBeTruthy();
   expect(within(report).getByText("Demo Motherboard")).toBeTruthy();
   await fireEvent.click(within(report).getByRole("button", { name: "Dismiss" }));
@@ -256,14 +255,12 @@ test("the_tray_stop_report_lists_each_device_when_the_window_is_shown", async ()
 test("busy_in_the_tray_stop_report_is_shown_and_not_retried", async () => {
   const shell = fakeShell(demoConnected);
   render(App);
-  await screen.findByRole("navigation", { name: "Screens" });
+  await screen.findByRole("navigation", { name: "Main" });
 
   await shell.pushLifecycle(at(lifecycleTrayStopBusy, 40));
 
   const report = await screen.findByRole("status", { name: /^Stop all PrismForge effects, from the tray/ });
-  expect(within(report).getByRole("heading").textContent?.trim()).toBe(
-    "Stop all PrismForge effects, from the tray: some effects were not stopped.",
-  );
+  expect(within(report).getByText("Stop all PrismForge effects, from the tray: some effects were not stopped.")).toBeTruthy();
   expect(
     within(report).getByText("Not stopped. PrismForge is still working on earlier requests. Wait a moment, then try again."),
   ).toBeTruthy();
@@ -310,7 +307,7 @@ test("without_a_marked_profile_the_start_up_path_says_none_and_links_to_profiles
 test("a_close_answer_that_could_not_be_stored_is_shown_when_the_window_is_back", async () => {
   const shell = fakeShell(demoConnected, { answer_close: refuse(errors.settingsInUse) });
   render(App);
-  await screen.findByRole("navigation", { name: "Screens" });
+  await screen.findByRole("navigation", { name: "Main" });
   await shell.pushLifecycle(at(lifecycleAsking, 30));
   const dialog = await screen.findByRole("dialog");
 
@@ -318,9 +315,11 @@ test("a_close_answer_that_could_not_be_stored_is_shown_when_the_window_is_back",
   await shell.pushLifecycle(at(lifecycleFresh, 31));
 
   const alert = await screen.findByRole("alert");
-  expect(alert.textContent?.trim()).toBe(
-    "PrismForge could not remember your choice for closing the window. Another PrismForge window is using the profile folder. This window does not read or save profiles. Close the other window, then try again. It asks again the next time you close the window.",
-  );
+  expect(
+    within(alert).getByText(
+      "PrismForge could not remember your choice for closing the window. Another PrismForge window is using the profile folder. This window does not read or save profiles. Close the other window, then try again. It asks again the next time you close the window.",
+    ),
+  ).toBeTruthy();
 });
 
 test("further_quit_requests_are_ignored_while_prismforge_quits", async () => {
@@ -338,7 +337,7 @@ test("further_quit_requests_are_ignored_while_prismforge_quits", async () => {
 test("a_held_quit_shortcut_sends_one_quit", async () => {
   const shell = fakeShell(null, { quit: () => new Promise(() => {}) });
   render(App);
-  await screen.findByRole("navigation", { name: "Screens" });
+  await screen.findByRole("navigation", { name: "Main" });
 
   await fireEvent.keyDown(window, { key: "q", ctrlKey: true });
   await fireEvent.keyDown(window, { key: "q", ctrlKey: true, repeat: true });

@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { StoreView } from "../../lib/api/bindings/StoreView";
 import { fakeShell, refuse } from "../../test/backend";
+import { connectionAction, expandNotices, findDemoMarker, openProfileChip } from "../../test/shell";
 import { effectHandlers, wait } from "../../test/effects";
 import { appliedFully, appliedPartly, waitingForConnection } from "../../test/fixtures/applies";
 import * as errors from "../../test/fixtures/errors";
@@ -40,7 +41,7 @@ function called(shell: ReturnType<typeof fakeShell>, command: string) {
 }
 
 async function openProfiles() {
-  const screens = await screen.findByRole("navigation", { name: "Screens" });
+  const screens = await screen.findByRole("navigation", { name: "Main" });
   await fireEvent.click(within(screens).getByRole("button", { name: "Profiles" }));
   return screen.findByRole("navigation", { name: "Profiles" });
 }
@@ -294,18 +295,19 @@ test("recovery_notices_stay_until_dismissed_and_carry_the_instructions", async (
   expect(notices.textContent).toMatch(/used its backup/);
 });
 
-test("the_header_shows_the_active_profile_and_unknown_unsaved_changes", async () => {
+test("the_status_strip_shows_the_active_profile_and_unknown_unsaved_changes", async () => {
   const unknown = structuredClone(storeSaved);
   unknown.summary.unsaved_changes = null;
   let store: StoreView = storeUnsaved;
   fakeShell(demoConnected, handlers(storeUnsaved, { profile_store: () => store }));
   render(App);
 
-  const status = await screen.findByRole("button", { name: /^Profile Evening/ });
+  const status = await screen.findByRole("button", { name: /^Profile: Evening/ });
   expect(status.textContent).toMatch(/4 unsaved changes/);
   store = unknown;
-  await fireEvent.click(status);
-  await waitFor(() => expect(screen.getByRole("button", { name: /^Profile Evening/ }).textContent).toMatch(/Unsaved changes unknown/));
+  const panel = await openProfileChip();
+  await fireEvent.click(within(panel).getByRole("button", { name: "Open Profiles" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: /^Profile: Evening/ }).textContent).toMatch(/Unsaved changes unknown/));
   expect(screen.getByRole("navigation", { name: "Profiles" })).toBeTruthy();
 });
 
@@ -366,7 +368,7 @@ test("demo_profiles_are_marked_as_demo_on_the_profiles_screen", async () => {
   render(App);
   await openProfiles();
 
-  expect(screen.getByRole("complementary", { name: "Demo mode" })).toBeTruthy();
+  expect(await findDemoMarker()).toBeTruthy();
   expect(screen.getByText(/These are demo profiles\. They are kept apart from your real profiles and never apply to real hardware\./)).toBeTruthy();
 });
 
@@ -477,10 +479,10 @@ test("results_go_after_disconnect_and_reconnect", async () => {
   await fireEvent.click(within(article).getByRole("button", { name: "Rename" }));
   expect(screen.getByRole("textbox", { name: "New name" })).toBeTruthy();
 
-  await fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  await connectionAction("Disconnect");
   await shell.pushView({ revision: 200, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable" });
 
-  await waitFor(() => expect(screen.getByRole("navigation", { name: "Screens" }).textContent).toMatch(/Devices/));
+  await waitFor(() => expect(screen.getByRole("navigation", { name: "Main" }).textContent).toMatch(/Devices/));
   expect(result().textContent?.trim()).toBe("");
   expect(screen.queryByRole("textbox", { name: "New name" })).toBeNull();
 });
@@ -522,7 +524,7 @@ test("a_session_that_stopped_by_itself_says_to_connect_again", async () => {
 
   await waitFor(() =>
     expect(onConnect().textContent?.trim()).toBe(
-      "The connection stopped and PrismForge does not try again. Connect again from the Connection screen. When you connect, PrismForge applies Desk as soon as it has read the devices.",
+      "The connection stopped and PrismForge does not try again. Connect again on the Devices screen. When you connect, PrismForge applies Desk as soon as it has read the devices.",
     ),
   );
   expect(within(article).queryByText(/trying again|not connected yet|once the connection is made/)).toBeNull();
@@ -579,6 +581,8 @@ function deskReport(change: (report: Extract<ConnectOutcome, { Applied: unknown 
 
 async function statusAndNotice(view: ShellView) {
   await deskWith(view);
+  await waitFor(() => expect(screen.getByRole("region", { name: "Notices" })).toBeTruthy());
+  await expandNotices();
   const notice = await screen.findByRole("status", { name: "Applied on connect" });
   await waitFor(() => expect(onConnect().textContent).toMatch(/does not run again by itself/));
   return { status: onConnect().textContent?.trim() ?? "", notice: notice.textContent ?? "" };

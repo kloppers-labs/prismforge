@@ -74,7 +74,7 @@
     gap: 8px;
     align-items: flex-start;
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 
   .headline :global(svg) {

@@ -7,6 +7,7 @@
   import ExternalControl from "./ExternalControl.svelte";
   import FrameRate from "./FrameRate.svelte";
   import HardwareModes from "./HardwareModes.svelte";
+  import { closeText } from "../settings/wording";
   import { applyingText, deviceOf } from "./present";
   import TargetList from "./TargetList.svelte";
   import TargetStatus from "./TargetStatus.svelte";
@@ -14,6 +15,13 @@
   let { app, session }: { app: AppState; session: SessionSnapshot } = $props();
 
   let effects = $derived(app.effects);
+  let closing = $derived(
+    closeText({
+      loaded: app.lifecycle.view !== null,
+      tray: app.lifecycle.trayAvailable,
+      onClose: app.lifecycle.settings?.on_close ?? null,
+    }),
+  );
   let target = $derived(effects.target);
   let device = $derived(target ? deviceOf(session, target) : null);
   let catalog = $derived(effects.catalog);
@@ -41,7 +49,7 @@
       {#if target && device}
         {#key `${target.device}-${target.zone}`}
           <TargetStatus {session} {device} zone={target.zone} names={app.names} />
-          <EffectEditor {effects} {catalog} {session} {device} zone={target.zone} {held} />
+          <EffectEditor {effects} {catalog} {session} {device} zone={target.zone} {held} {closing} />
           <HardwareModes {effects} {session} {device} {held} />
           <ExternalControl {effects} {session} {device} {held} />
         {/key}
@@ -77,7 +85,7 @@
 
   .workspace > :global(section) {
     padding-top: 24px;
-    border-top: 1px solid var(--ink-3);
+    border-top: 1px solid var(--surface-3);
   }
 
   .workspace > :global(.editor) {

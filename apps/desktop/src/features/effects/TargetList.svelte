@@ -67,15 +67,15 @@
 
 <style>
   .targets {
-    border-right: 1px solid var(--line);
-    background: var(--ink-1);
+    border-right: 1px solid var(--line-subtle);
+    background: var(--surface-1);
     overflow-y: auto;
     padding: 16px 12px;
   }
 
   .title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--font-s);
+    font-weight: var(--weight-strong);
     color: var(--text-dim);
     padding: 0 8px 10px;
   }
@@ -98,13 +98,13 @@
   }
 
   .name {
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 
   .owner,
   .reason {
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .tags {
@@ -114,10 +114,10 @@
   }
 
   .tag {
-    font-size: 12px;
+    font-size: var(--font-xs);
     padding: 0 6px;
-    border-radius: 4px;
-    border: 1px solid var(--line);
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--line-subtle);
     color: var(--text-dim);
   }
 
@@ -141,16 +141,16 @@
     border: 1px solid transparent;
     padding: 5px 10px 5px 14px;
     position: relative;
-    font-weight: 450;
+    font-weight: var(--weight-regular);
   }
 
   .parts button:hover:not(:disabled) {
-    background: var(--ink-2);
+    background: var(--surface-2);
   }
 
   .parts button[aria-current="true"] {
-    background: var(--ink-2);
-    border-color: var(--line);
+    background: var(--surface-2);
+    border-color: var(--line-subtle);
   }
 
   .parts button[aria-current="true"]::before {
@@ -167,6 +167,6 @@
 
   .meta {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

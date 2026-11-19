@@ -30,7 +30,7 @@
     gap: 10px;
     padding: 14px 16px;
     border-left: 3px solid var(--warning);
-    background: var(--ink-1);
+    background: var(--surface-1);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
   }
 
@@ -59,11 +59,11 @@
 
   .small {
     padding: 3px 10px;
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

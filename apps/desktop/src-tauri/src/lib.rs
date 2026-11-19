@@ -24,7 +24,9 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 
 pub use effects::{EffectCatalog, preview_effect};
-pub use exit::{ExitGuard, stop_then_exit, stop_within};
+pub use exit::{
+    ExitGuard, QUIT_STOP_LIMIT, quit_then_exit, stop_at_exit, stop_then_exit, stop_within,
+};
 pub use forward::forward;
 pub use lifecycle::{
     AUTOSTART_ARG, AppSettingChange, ClosePrompt, CloseStep, DeviceStop, ExitControl, Lifecycle,
@@ -171,12 +173,13 @@ fn on_run_event(app: &AppHandle, event: RunEvent) {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
                 let shell = app.state::<DesktopShell>();
-                stop_then_exit(&shell, || app.exit(0)).await;
+                quit_then_exit(&shell, &app.state::<ExitGuard>(), || app.exit(0)).await;
             });
         }
         RunEvent::Exit => {
             let shell = app.state::<DesktopShell>();
-            tauri::async_runtime::block_on(stop_within(&shell, LAST_STOP_LIMIT));
+            let guard = app.state::<ExitGuard>();
+            tauri::async_runtime::block_on(stop_at_exit(&shell, &guard, LAST_STOP_LIMIT));
         }
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => tray::act(app, tray::Action::Show),

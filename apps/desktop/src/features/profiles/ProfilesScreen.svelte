@@ -118,8 +118,8 @@
     display: grid;
     gap: 4px;
     padding: 10px 14px;
-    border-left: 3px solid var(--line);
-    background: var(--ink-1);
+    border-left: 3px solid var(--line-subtle);
+    background: var(--surface-1);
     color: var(--text-dim);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
     max-width: 80ch;
@@ -137,7 +137,7 @@
 
   .lead {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 
   .notice {

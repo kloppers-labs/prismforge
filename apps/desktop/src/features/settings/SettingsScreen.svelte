@@ -279,7 +279,7 @@
   .help {
     display: grid;
     gap: 4px;
-    font-size: 13px;
+    font-size: var(--font-s);
     max-width: 68ch;
   }
 
@@ -287,7 +287,7 @@
     display: grid;
     gap: 14px;
     padding-top: 22px;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--line-subtle);
   }
 
   .group h2 {
@@ -319,16 +319,16 @@
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-subtle);
     display: grid;
     place-items: center;
-    font-size: 12px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
-    background: var(--ink-1);
+    background: var(--surface-1);
   }
 
   .step-title {
-    font-weight: 600;
+    font-weight: var(--weight-strong);
     padding: 6px 0 0;
   }
 
@@ -337,7 +337,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .profile strong {
@@ -346,16 +346,16 @@
 
   .small {
     padding: 2px 10px;
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .result {
-    font-size: 13px;
+    font-size: var(--font-s);
     max-width: 72ch;
     padding: 10px 12px;
     border-radius: var(--radius-s);
-    border: 1px solid var(--line);
-    background: var(--ink-0);
+    border: 1px solid var(--line-subtle);
+    background: var(--surface-0);
   }
 
   .choices {
@@ -381,7 +381,7 @@
 
   [role="radio"][aria-checked="true"] {
     border-color: var(--ok);
-    background: var(--ink-2);
+    background: var(--surface-2);
   }
 
   [role="radio"][aria-checked="true"] .dot {
@@ -399,7 +399,7 @@
 
   .failure {
     color: var(--problem);
-    font-size: 13px;
+    font-size: var(--font-s);
     max-width: 68ch;
   }
 
@@ -408,8 +408,8 @@
     gap: 8px;
     padding: 14px 16px 14px 18px;
     border-radius: var(--radius-s);
-    background: var(--ink-1);
-    border: 1px solid var(--line);
+    background: var(--surface-1);
+    border: 1px solid var(--line-subtle);
     position: relative;
     max-width: 72ch;
   }
@@ -422,16 +422,16 @@
     bottom: -1px;
     width: 3px;
     border-radius: var(--radius-s) 0 0 var(--radius-s);
-    background: linear-gradient(180deg, #ff5a4e, #ffb340, #f4e04d, #4fd18b, #3fa9ff, #9b7bff);
+    background: var(--spectrum-vertical);
   }
 
   .automatic h3 {
-    font-size: 14px;
+    font-size: var(--font-m);
   }
 
   .automatic p {
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .address,
@@ -444,7 +444,7 @@
     user-select: text;
     overflow-wrap: anywhere;
     color: var(--text);
-    font-family: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+    font-family: var(--font-mono);
   }
 
   .folder {
@@ -452,9 +452,9 @@
     overflow-wrap: anywhere;
     padding: 8px 10px;
     border-radius: var(--radius-s);
-    background: var(--ink-0);
-    border: 1px solid var(--line);
-    font-size: 13px;
+    background: var(--surface-0);
+    border: 1px solid var(--line-subtle);
+    font-size: var(--font-s);
   }
 
   .quit button {
@@ -467,8 +467,8 @@
     align-items: flex-start;
     padding: 10px 14px;
     border-radius: var(--radius-s);
-    border: 1px solid var(--line);
-    background: var(--ink-1);
+    border: 1px solid var(--line-subtle);
+    background: var(--surface-1);
   }
 
   .notice :global(svg) {
@@ -476,10 +476,10 @@
   }
 
   .notice.problem {
-    background: #2a1d1f;
+    background: var(--problem-surface);
   }
 
   .notice.warning {
-    background: #2a2519;
+    background: var(--warning-surface);
   }
 </style>

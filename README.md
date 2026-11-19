@@ -13,6 +13,7 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | OpenRGB SDK client (protocol 6, OpenRGB 1.0 and later) | Built. Tested against a scripted fake server only. |
 | Device identity that survives an OpenRGB restart | Built. Tested against a scripted fake server only. |
 | Desktop app: connection, device list, identify, diagnostics, demo mode | Built. Run by hand on macOS (Apple Silicon) only. |
+| Window: navigation rail, status strip, one notice slot, design tokens, keyboard shortcuts | Built. Tested in interface tests and looked at in a browser preview with simulated data. Not run in the native window or on Windows. |
 | Windows build of the desktop app | Built and tested in CI on `windows-latest`: format, lint, all tests, typecheck and the unsigned installers. |
 | Run of the desktop app on Windows | **Not done** |
 | Test against a real OpenRGB server | **Not done** |
@@ -52,10 +53,12 @@ pnpm tauri:dev
 
 `pnpm tauri:build` builds the native app and its installers into `target/release/bundle`. The build is not signed. `apps/desktop/README.md` lists every command, the generated files and the security settings.
 
-The app starts on the connection screen. Nothing connects until you choose:
+The window has a rail on the left with Devices, Effects and Profiles, and Diagnostics and Settings at its foot. These stay the same whether PrismForge is connected or not. A status strip at the top shows the connection, the active profile with its unsaved changes, a profile that is being applied, and demo mode. Click a part of the strip for its details and actions, such as Rescan devices, Disconnect and Save changes. Messages that need your attention appear in one place under the strip. Ctrl+1, Ctrl+2 and Ctrl+4 (Command on macOS) open Devices, Effects and Profiles, and Ctrl+, opens Settings.
+
+The app starts on Devices, which shows the connection form. Nothing connects until you choose:
 
 - **Connect to OpenRGB**: give the host and port of the OpenRGB SDK server. The default is `127.0.0.1` and `6742`.
-- **Explore demo mode**: five simulated devices. A striped banner labels demo mode on every screen. Demo mode sends nothing to hardware.
+- **Explore demo mode**: five simulated devices. A striped "Demo mode" marker in the status strip labels demo mode on every screen. Demo mode sends nothing to hardware.
 
 After a connection, **Devices** shows the device list and identify. **Effects** runs an effect:
 

@@ -9,6 +9,6 @@
 <style>
   .headline {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 </style>

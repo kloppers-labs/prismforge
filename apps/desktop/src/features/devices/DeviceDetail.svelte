@@ -190,8 +190,8 @@
 
   .note {
     padding: 10px 14px;
-    border-left: 3px solid var(--line);
-    background: var(--ink-1);
+    border-left: 3px solid var(--line-subtle);
+    background: var(--surface-1);
     color: var(--text-dim);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
   }
@@ -204,12 +204,12 @@
 
   .note.warning p:first-child {
     color: var(--text);
-    font-weight: 600;
+    font-weight: var(--weight-strong);
   }
 
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   table {
@@ -221,23 +221,23 @@
   td {
     text-align: left;
     padding: 7px 12px 7px 0;
-    border-bottom: 1px solid var(--ink-3);
+    border-bottom: 1px solid var(--surface-3);
   }
 
   thead th {
     color: var(--text-faint);
-    font-weight: 500;
-    font-size: 13px;
+    font-weight: var(--weight-regular);
+    font-size: var(--font-s);
   }
 
   tbody th {
-    font-weight: 550;
+    font-weight: var(--weight-strong);
   }
 
   .reported {
     display: block;
-    font-weight: 400;
-    font-size: 12px;
+    font-weight: var(--weight-regular);
+    font-size: var(--font-xs);
     color: var(--text-faint);
   }
 
@@ -274,14 +274,14 @@
     gap: 6px;
     align-items: center;
     padding: 4px 10px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--radius-pill);
   }
 
   .tag {
-    font-size: 12px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
-    border-left: 1px solid var(--line);
+    border-left: 1px solid var(--line-subtle);
     padding-left: 6px;
   }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy, onMount, type Snippet } from "svelte";
+  import { onDestroy, onMount, tick, type Snippet } from "svelte";
+  import { overlays } from "./overlays.svelte";
 
   let {
     title,
@@ -22,8 +23,15 @@
     return box ? [...box.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), [tabindex='0']")] : [];
   }
 
-  onMount(() => focusable()[0]?.focus());
-  onDestroy(() => opener?.focus());
+  onMount(async () => {
+    overlays.dialogs += 1;
+    await tick();
+    focusable()[0]?.focus();
+  });
+  onDestroy(() => {
+    overlays.dialogs -= 1;
+    opener?.focus();
+  });
 
   function onkeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {
@@ -64,9 +72,9 @@
     inset: 0;
     display: grid;
     place-items: center;
-    padding: 24px;
-    background: rgb(10 11 14 / 72%);
-    z-index: 20;
+    padding: var(--space-5);
+    background: var(--backdrop);
+    z-index: var(--z-dialog);
   }
 
   .dialog {
@@ -74,27 +82,28 @@
     max-height: 100%;
     overflow-y: auto;
     display: grid;
-    gap: 16px;
-    padding: 24px 26px;
-    border: 1px solid var(--line);
+    gap: var(--space-4);
+    padding: var(--space-5);
+    border: 1px solid var(--line-subtle);
     border-radius: var(--radius-m);
-    background: var(--ink-1);
+    background: var(--surface-1);
+    box-shadow: var(--shadow-2);
   }
 
   .dialog h2 {
-    font-size: 18px;
+    font-size: var(--font-l);
   }
 
   .body {
     display: grid;
-    gap: 10px;
+    gap: var(--space-2);
     color: var(--text-dim);
   }
 
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-2);
     justify-content: flex-end;
   }
 </style>

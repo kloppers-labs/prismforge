@@ -2,6 +2,8 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
+import { summarise } from "./wording";
+import { connectionChip, findDemoMarker, openConnection, waitForConnection } from "../../test/shell";
 import {
   demoConnected,
   openRgbAllRejected,
@@ -31,7 +33,7 @@ test("shows_connection_failure_without_fake_devices", async () => {
   expect(screen.getByText("Nothing answered at the OpenRGB server at 127.0.0.1:6742.")).toBeTruthy();
   expect(screen.queryByRole("navigation", { name: /Devices/ })).toBeNull();
   expect(screen.queryByRole("button", { name: /Identify/ })).toBeNull();
-  expect(screen.queryByRole("complementary", { name: "Demo mode" })).toBeNull();
+  expect(document.querySelector("[data-demo]")).toBeNull();
   expect(screen.queryByText(/Demo/)).toBeNull();
 });
 
@@ -39,13 +41,15 @@ test("labels_demo_mode", async () => {
   fakeShell(demoConnected);
   render(App);
 
-  const banner = await screen.findByRole("complementary", { name: "Demo mode" });
-  expect(banner.textContent).toContain("These devices are simulated. Nothing is sent to hardware.");
+  const marker = await findDemoMarker();
+  expect(within(marker).getByText("simulated devices")).toBeTruthy();
+  const panel = await openConnection();
+  expect(within(panel).getByText("Demo mode: these devices are simulated. Nothing is sent to hardware.")).toBeTruthy();
   expect(screen.getByText("Simulated device. There is no hardware behind it.")).toBeTruthy();
-  expect(screen.getByText("the demo backend")).toBeTruthy();
+  expect(within(connectionChip()).getByText("Demo backend")).toBeTruthy();
 
   await fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-  expect(screen.getByRole("complementary", { name: "Demo mode" })).toBeTruthy();
+  expect(await findDemoMarker()).toBeTruthy();
   const diagnostics = screen.getByRole("complementary", { name: "Diagnostics" });
   expect(within(diagnostics).getByText("Simulated (demo mode)")).toBeTruthy();
 });
@@ -54,10 +58,11 @@ test("shows_retry_attempt_and_cause", async () => {
   fakeShell(openRgbRefused);
   render(App);
 
-  expect(await screen.findByText("Retrying, retry 3 next")).toBeTruthy();
+  await waitForConnection("Retrying, retry 3 next");
   expect(screen.getByText("Nothing answered at the OpenRGB server at 127.0.0.1:6742.")).toBeTruthy();
   expect(screen.getByText(/PrismForge tries again on its own\. Retry 3 comes next/)).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Stop retrying" })).toBeTruthy();
+  const panel = await openConnection();
+  expect(within(panel).getByRole("button", { name: "Stop retrying" })).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/Attempt \d+ failed/);
 });
 
@@ -122,7 +127,7 @@ test("ignores_a_view_older_than_the_one_shown", async () => {
   await shell.pushView({ revision: 10, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable" });
   await shell.pushView({ revision: 9, session: openRgbRefused, applying: null, connect_apply: null, on_connect: "NotApplicable" });
 
-  expect(await screen.findByRole("complementary", { name: "Demo mode" })).toBeTruthy();
+  expect(await findDemoMarker()).toBeTruthy();
   expect(screen.queryByText(/^Retrying/)).toBeNull();
 });
 
@@ -135,4 +140,10 @@ test("the_connection_screen_says_a_marked_profile_is_applied_on_connect", async 
       "PrismForge does not download, install or change OpenRGB. It writes nothing to your devices until you choose an action such as Identify, Apply effect or Apply profile, or until it connects while a profile is set to “Apply this profile when PrismForge connects”: that profile is applied as soon as the connection is made.",
     ),
   ).toBeTruthy();
+});
+
+test("retrying_reads_as_waiting_not_as_a_failure", () => {
+  expect(summarise(openRgbRefused).tone).toBe("waiting");
+  expect(summarise(openRgbLostWhileConnected).tone).toBe("waiting");
+  expect(summarise(openRgbOldServer).tone).toBe("problem");
 });

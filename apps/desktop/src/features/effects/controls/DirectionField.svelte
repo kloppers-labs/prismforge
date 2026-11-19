@@ -50,7 +50,7 @@
   }
 
   legend {
-    font-weight: 550;
+    font-weight: var(--weight-strong);
     padding: 0;
     margin-bottom: 4px;
   }
@@ -69,12 +69,12 @@
 
   .problem {
     color: var(--problem);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 
   .detail,
   .hint {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

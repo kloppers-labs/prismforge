@@ -4,7 +4,7 @@ Last update: 2026-11-19.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built. Task 3a, the profile core in Rust, and Task 3b, the profiles screen and the shell wiring, are built. Task 6a, the application lifecycle (tray, close or quit, one instance, start-up, Settings), is built; the rest of Task 6 (packaging, the validation matrix, measurements) is not started.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built. Task 3a, the profile core in Rust, and Task 3b, the profiles screen and the shell wiring, are built. Task 6a, the application lifecycle (tray, close or quit, one instance, start-up, Settings), is built; the rest of Task 6 (packaging, the validation matrix, measurements) is not started. Plan 2 (`docs/plans/prismforge-plan-2-experience.md`) follows. Its Task 7, the window shell, is built.
 
 The repository has a Rust workspace with four crates and a desktop app. `prismforge-effects` holds six original built-in effects as pure functions, their typed control definitions and the validation of stored effect instances. `prismforge-core` holds the device types, the identity matching, the backend contract, the scene and ownership types, and the session. The session owns the backend, reconnects, keeps a readable snapshot, runs the identify action, and runs effects through an output scheduler with explicit output ownership. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
 
@@ -14,11 +14,13 @@ The session has commands for effects: list the effect definitions, apply or repl
 
 `apps/desktop` is a Tauri 2 app with a Svelte 5 and TypeScript interface. It has a connection screen, a Devices screen with device details and identify, an Effects screen, a diagnostics drawer and a labelled demo mode. The Effects screen lists every device and zone with its owner and output condition. It renders parameter controls from the effect definitions, shows a preview rendered in Rust, applies and stops effects, selects hardware modes, records that another program controls a device, and sets the frame rate. The shell in `apps/desktop/src-tauri` owns at most one session. The interface types and the test fixtures are generated from the Rust code.
 
-The desktop app saves profiles (Task 3b). The shell opens a real store and a separate demo store below the per-user configuration folder on first use, after it holds a folder lock. It seeds each session with the stored device list, keeps the list on disk beside the session, and applies the profile marked for apply on connect once per user connect. A profile apply holds a lock in the shell that refuses every other output command. The Profiles screen lists the profiles with their contents and how many devices are found today, shows each stored setting with the reason it would be skipped, and saves, updates (change list first), applies (a result per setting), renames, duplicates, deletes (confirmed), exports and imports. Export and import use the native dialog, opened from Rust. Devices and zones can have the user's names. The header names the active profile and its unsaved changes.
+The desktop app saves profiles (Task 3b). The shell opens a real store and a separate demo store below the per-user configuration folder on first use, after it holds a folder lock. It seeds each session with the stored device list, keeps the list on disk beside the session, and applies the profile marked for apply on connect once per user connect. A profile apply holds a lock in the shell that refuses every other output command. The Profiles screen lists the profiles with their contents and how many devices are found today, shows each stored setting with the reason it would be skipped, and saves, updates (change list first), applies (a result per setting), renames, duplicates, deletes (confirmed), exports and imports. Export and import use the native dialog, opened from Rust. Devices and zones can have the user's names. The status strip names the active profile and its unsaved changes.
 
 The desktop app keeps running in the background when the user chooses it (Task 6a). It has a tray icon with the connection, the PrismForge effects and the active profile, Show or Hide, Stop all PrismForge effects and Quit. The first close of the window asks whether to keep running in the tray or to quit, and remembers the answer. Settings holds the close choice and the start-up path in four steps, each off by default: start with the system, start hidden in the tray, connect to OpenRGB at start, and the profile marked to apply on connect, named on the screen. A second start shows the running PrismForge. The app settings are a durable file beside the stores. See `docs/decisions/0004-lifecycle.md`.
 
-All tests pass on macOS. The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+The window has a new shell (plan 2, Task 7). A rail on the left holds Devices, Effects and Profiles, with Diagnostics and Settings at its foot, in every connection state. A status strip at the top of the page shows the connection, the active profile with its unsaved changes, a running profile apply, the profile set to apply on connect and a striped demo marker; its chips open panels with the actions of each state. One notice slot under the strip replaces the stacked strips. Effects without a connection shows how to connect. Diagnostics docks beside the page from 1400 px wide and covers it below that. Ctrl+1, Ctrl+2, Ctrl+4, Ctrl+, and F6 work from the keyboard; Ctrl+3 and Ctrl+5 are kept for Setup and Automation. The design tokens are in `apps/desktop/src/lib/tokens.css`. `pnpm preview:ui` shows the real interface in a browser with simulated data. See `docs/decisions/0005-shell-and-design-tokens.md`.
+
+All tests pass on macOS. The Task 7 commits have no Windows CI result yet. The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -53,6 +55,7 @@ All tests pass on macOS. The Task 6a commits have no Windows CI result yet. The 
 | Every profile result, dialog and draft on screen belongs to one session and one store. It goes when the session ends or the store changes between demo and real. Disconnect clears the apply-on-connect result. | `apps/desktop/README.md` |
 | Apply on connect applies once per user connect. A reconnect after a loss does not apply again. The shell publishes, per session, whether it is not applicable, not armed, armed (with the profile), blocked by an unreadable marked profile, or fired (with its result); every interface sentence about apply on connect comes from that state. | same |
 | Export and import take no path from the window. A path inside the configuration folder is refused; an import above 1 MiB is refused before it is read. | same |
+| Navigation is a left rail with fixed items and one status strip at the top of the page. Global state and its actions sit in the strip; notices share one slot. Colours, type, spacing, radii, shadows, motion and layers come from one token file. The interface preview is for development only and never enters the build. | `docs/decisions/0005-shell-and-design-tokens.md` |
 | Applying the same effect id to the same target keeps its start time, so a changed setting does not restart the animation. | `docs/decisions/0003-effects-engine.md` |
 | The preview is rendered in Rust in bounded batches by the engine's own strip renderer. The interface only plays frames and stops when hidden or closed. | same |
 | The effects screen renders controls only from the effect definitions. Rust validation is the authority. The screen states only what the user declared and what PrismForge did. | same |
@@ -73,7 +76,22 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `518f2db`, the last product code commit of Task 6a fix round 1, including `pnpm tauri:build`.
+Task 7 run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `e52213c`, the last code commit of Task 7 fix round 1.
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all --check` | Pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
+| `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
+| `cargo test --workspace` | Pass: 330 tests. 98 in `prismforge-desktop`, with 6 exit tests: a user quit ends after at most 10 seconds when the stop hangs, and the stop at `Exit` does not wait again after it. |
+| `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 201 interface tests (53 for the shell in `src/lib/shell/shell.test.ts`, 3 for panel placement) |
+| `pnpm check:build` in `apps/desktop` | Pass: "The production build in dist holds no module from src/dev-preview or src/test (247 modules, 3 files checked)". With `import { catalog } from "./test/fixtures/catalog"` added to `src/main.ts` it fails and names `src/test/fixtures/catalog.ts`. |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `e52213c`: `PrismForge.app` (15.40 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.46 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. |
+
+The shell was looked at in the interface preview in Orca's browser (Chromium on macOS) at 1280 × 800, 1200 × 780, 920 × 600 and the 200 % equivalents 640 × 400 and 460 × 300, also with a long server address and profile name. The first pass missed three faults that the review found: a chip panel that left the window at 200 %, "Diagnostics" cut in the rail at 460 × 300, and a second scroll area on Devices. Fix round 1 removed them, and a measurement in the same preview found every panel inside the window, no cut rail label and one scroll area for the page. A real Tab pass in the preview reached: Skip to content, the five rail items, the two chips, then the page. F6 went to the rail, the strip and the page. These are browser checks, not native-app or Windows checks. The native app was not started for Task 7.
+
+Task 6a run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `518f2db`, the last product code commit of Task 6a fix round 1, including `pnpm tauri:build`.
 
 | Command | Result |
 |---|---|
@@ -148,7 +166,7 @@ Not done:
 
 ## Next steps
 
-1. The UI and UX sweep with the reworked navigation bar, which the owner asked for after Task 6a.
+1. Plan 2, Task 8: the screen sweep on top of the new shell. Look at the Task 7 shell in the native window on macOS and on Windows.
 2. Check Task 6a by hand on macOS and on Windows: the first close, hide and show from the tray, Stop all, Quit from the tray and the keyboard, a second start while hidden, and the start-up path with a test account or a disposable VM (start with the system, start hidden, connect at start, a marked profile). Remove the start entry afterwards and confirm that no PrismForge process is left.
 3. With the owner's consent and screen-capture permission, take the four missing screenshots and one of the effects screen, look at the preview animation, and check the current build by hand, including closing the window during an identify.
 4. Task 4: the Effects plugin provider (list, start and stop of plugin effects) with explicit ownership, and the static and animated performance measurements.
@@ -202,6 +220,9 @@ Not done:
 - **A backend call in progress still delays a command.** While effects run, a command waits at most for the one output call in progress: direct mode and each frame are separate calls. Other work still runs several calls before the next command: the end of an identify (restore steps and a refresh) and a reconnect (connect and a refresh). A hung call waits for the client timeout (2 seconds by default).
 - **Shutdown restore stops after 5 seconds.** Devices not restored by then keep the last effect frame. The session keeps their remembered state for the next take-over until the inventory reports another mode than Direct Mode. Until then, identify reports "previous state unknown" for them.
 - **External control is only the user's statement.** PrismForge cannot see the Effects plugin or any other writer. While the user declares a device external, PrismForge sends it nothing: effects, identify and hardware-mode selection are refused.
+- **The shell is not seen in the native window.** Task 7 was checked in the browser preview only: no native window chrome, no WebView2, no forced colours, no screen reader. Focus rings were not visible in the preview screenshots, because the preview tab does not hold system focus.
+- **The strip divider can stand alone.** When the strip wraps at 200 % text, the divider between the chips ends the first row.
+- **Screen copy is still long.** The audit's per-screen findings (E1 to E16, P1 to P10, C1 to C9, D2 to D10) are for Task 8. The Effects paragraph now states the stored close choice, but its full rewrite (E2) is Task 8.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## Missing information from the owner

@@ -59,8 +59,8 @@
     gap: 3px;
     padding: 12px 14px;
     border-radius: var(--radius-m);
-    background: linear-gradient(180deg, #0f1014, #16181e);
-    box-shadow: inset 0 0 0 1px var(--ink-3);
+    background: linear-gradient(180deg, var(--surface-stage), var(--surface-stage-edge));
+    box-shadow: inset 0 0 0 1px var(--surface-3);
   }
 
   .led {
@@ -75,12 +75,12 @@
   }
 
   .led.off {
-    background: var(--ink-2);
-    box-shadow: inset 0 0 0 1px var(--ink-3);
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--surface-3);
   }
 
   .caption {
     color: var(--text-faint);
-    font-size: 13px;
+    font-size: var(--font-s);
   }
 </style>

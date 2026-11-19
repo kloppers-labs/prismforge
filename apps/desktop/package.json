@@ -10,9 +10,11 @@
   },
   "scripts": {
     "dev": "vite",
+    "preview:ui": "vite --config vite.preview.config.ts",
     "build": "vite build",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.node.json",
     "test": "vitest run",
+    "check:build": "node scripts/check-production-build.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

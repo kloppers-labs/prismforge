@@ -1,5 +1,6 @@
 import type { OpenRgbAddress } from "../../lib/api/bindings/OpenRgbAddress";
 import type { StoreNotice } from "../../lib/api/bindings/StoreNotice";
+import type { StopReport } from "../../lib/api/bindings/StopReport";
 import type { StopResult } from "../../lib/api/bindings/StopResult";
 import { failureText, fileProblemText } from "../../lib/errors";
 import { stopText } from "../effects/present";
@@ -46,6 +47,30 @@ export function settingsNoticeText(notice: StoreNotice): string[] {
   }
   const failure = event.WriteFailed.failure;
   return [`PrismForge could not save ${failure.file}: ${failure.detail}.`, "The previous version is still in place."];
+}
+
+export type CloseKnown = { loaded: boolean; tray: boolean; onClose: "Background" | "Quit" | null };
+
+export function closeText({ loaded, tray, onClose }: CloseKnown): string {
+  if (!loaded) {
+    return "Quitting PrismForge stops its effects.";
+  }
+  if (!tray || onClose === "Quit") {
+    return "Closing the window quits PrismForge and stops its effects.";
+  }
+  if (onClose === "Background") {
+    return "Closing the window keeps PrismForge and its effects running in the background. Quitting stops its effects.";
+  }
+  return "The first time you close the window, PrismForge asks whether to keep running or to quit. Quitting stops its effects.";
+}
+
+export function trayStopTitle(report: StopReport): string {
+  if (report.stops.length === 0) {
+    return "Stop all PrismForge effects, from the tray: no PrismForge effect was running.";
+  }
+  return report.stops.some((stop) => "Failed" in stop.result)
+    ? "Stop all PrismForge effects, from the tray: some effects were not stopped."
+    : "Stop all PrismForge effects, from the tray: every effect was stopped.";
 }
 
 export function stopResultText(result: StopResult, server: string): string[] {

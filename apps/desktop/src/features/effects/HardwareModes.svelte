@@ -96,7 +96,7 @@
   }
 
   .tag {
-    font-size: 12px;
+    font-size: var(--font-xs);
     color: var(--text-dim);
   }
 

@@ -1,0 +1,80 @@
+:root {
+  --surface-0: #15171c;
+  --surface-1: #1b1e25;
+  --surface-2: #232731;
+  --surface-3: #2d323e;
+  --surface-stage: #0f1014;
+  --surface-stage-edge: #16181e;
+  --backdrop: rgb(10 11 14 / 72%);
+
+  --line-subtle: #363c4a;
+  --line-control: #727a8c;
+  --line-control-hover: #8b93a6;
+
+  --text-strong: #ffffff;
+  --text: #ece9e2;
+  --text-dim: #a9aebb;
+  --text-faint: #8b91a1;
+
+  --accent: #8ab4ff;
+  --focus: var(--accent);
+  --ok: #63d197;
+  --working: #8ab4ff;
+  --warning: #f2bd55;
+  --problem: #ff8576;
+  --ok-surface: #1a2a24;
+  --warning-surface: #2a2519;
+  --problem-surface: #2a1d1f;
+  --warning-line: #6b5a33;
+  --problem-line: #7a3a33;
+  --demo: #f2bd55;
+  --demo-alt: #e3ad45;
+  --demo-ink: #22190a;
+  --demo-stripes: repeating-linear-gradient(-45deg, var(--demo) 0 6px, var(--demo-alt) 6px 12px);
+  --spectrum: linear-gradient(90deg, #ff5a4e, #ffb340, #f4e04d, #4fd18b, #3fa9ff, #9b7bff);
+  --spectrum-vertical: linear-gradient(180deg, #ff5a4e, #ffb340, #f4e04d, #4fd18b, #3fa9ff, #9b7bff);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --font: system-ui, "Segoe UI Variable Text", "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+  --font-2xs: 11px;
+  --font-xs: 12px;
+  --font-s: 13px;
+  --font-m: 14px;
+  --font-l: 18px;
+  --font-xl: 24px;
+  --weight-regular: 400;
+  --weight-strong: 600;
+  --weight-heading: 700;
+  --leading-tight: 1.25;
+  --leading-body: 1.5;
+
+  --radius-xs: 4px;
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-3: -18px 0 40px rgb(0 0 0 / 0.35);
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --z-sticky: 5;
+  --z-drawer: 10;
+  --z-dialog: 20;
+  --z-popover: 30;
+
+  --control-h: 32px;
+  --control-h-s: 28px;
+  --target-min: 24px;
+  --rail-w: 184px;
+  --rail-w-compact: 72px;
+  --drawer-w: 400px;
+}
