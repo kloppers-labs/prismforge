@@ -6,7 +6,7 @@ PrismForge has no subscription, no account, no advertisements and no telemetry.
 
 ## Status
 
-PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone. PrismForge has no profiles or layout yet, so nothing is saved.
+PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone. Profiles exist in the Rust core but not yet in the app, so the app saves nothing yet. It has no layout yet.
 
 | Part | Status |
 |---|---|
@@ -20,7 +20,9 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | Effect engine: six original effects, output scheduler at 30 FPS, output ownership | Built in Rust. Tested with the demo backend and the fake server in simulated time only. |
 | Effects screen: targets, generated parameter controls, preview, apply and stop, hardware modes, another program's control, frame rate | Built. Run by hand in demo mode on macOS (Apple Silicon) through the accessibility tree only. |
 | Effects plugin provider, performance measurements | Not started |
-| Profiles, layout, tray, autostart | Not started |
+| Profiles in the Rust core: versioned files, backups and recovery, device registry on disk, capture, apply with a result per setting, export and import without private data | Built. Tested on real files in temporary folders with the demo backend and the fake server only. Not in the app yet. |
+| Profile screen in the app | Not started |
+| Layout, tray, autostart | Not started |
 
 ## Requirements
 

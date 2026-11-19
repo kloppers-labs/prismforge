@@ -4,9 +4,11 @@ Last update: 2026-11-18.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built. Task 3a, the profile core in Rust, is built; the desktop app does not use it yet (Task 3b).
 
 The repository has a Rust workspace with four crates and a desktop app. `prismforge-effects` holds six original built-in effects as pure functions, their typed control definitions and the validation of stored effect instances. `prismforge-core` holds the device types, the identity matching, the backend contract, the scene and ownership types, and the session. The session owns the backend, reconnects, keeps a readable snapshot, runs the identify action, and runs effects through an output scheduler with explicit output ownership. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
+
+`prismforge-core` also holds the profile core (Task 3a): profile schema version 1, a durable local store with backups and recovery, the known-device registry on disk, capture of the session as a profile, apply through the session commands with a result per setting, and export and import without private machine data. `Profiles` runs every file operation outside the session task. See `docs/decisions/0002-profile-and-identity.md`.
 
 The session has commands for effects: list the effect definitions, apply or replace an effect on a device or zone, stop it, set the frame rate, declare or clear external control, and select a hardware mode. Applying the same effect to the same target again keeps its start time. The snapshot shows the frame rate, the scene, and the owner and output condition of each device.
 
@@ -24,10 +26,13 @@ All tests pass on macOS. Windows CI passed on the last commit of Task 4a and on 
 | Effects are the main feature. Own effect engine first, then Effects plugin support, then plugin editing only if a real-server test passes. | same |
 | The licence is GPL-3.0-or-later. | `docs/provenance.md` |
 | Identify restores the previous mode with a mode re-apply. PrismForge never saves a mode to device memory. Mode writes with user-edited settings wait for a later task. | this file |
+| Profiles, the known-device registry and settings are versioned JSON files in one folder, one file per profile. Writes go through a synced temporary file and a rename, and keep a backup. A damaged file falls back to its backup; damaged files are renamed, never deleted. A newer major version is never written. | `docs/decisions/0002-profile-and-identity.md` |
+| A stored device is matched to hardware on its identifying fields with the registry rules. Unresolved devices stay in the profile and are reported. An export has no serial, location, local reference, device name or profile id. | same |
+| Applying a profile is an explicit command and reports each setting. Apply on connect is off by default and applies one marked profile once per connect. Loading and import write nothing to hardware. | same |
 | Effects are pure functions of values, time, LED position and seed. The six built-in effects are original code. | `docs/decisions/0003-effects-engine.md` |
 | The session task also owns output: one batched write per device or zone per tick, 30 FPS by default, clamped to 1 to 60. Late ticks are skipped and counted, never queued. Static effects are written once. | same |
 | One owner per device: a PrismForge effect, a hardware mode selected through PrismForge, or another program the user declared. A declared device refuses effects until the user hands it over. Stopping the last effect restores the remembered state. | same |
-| One session task owns the backend. The desktop shell reads snapshots and sends commands through a queue with a fixed size. | this file |
+| One session task owns the backend. The desktop shell reads snapshots and sends commands through a queue with a fixed size. The session publishes the snapshot that shows a command's result before it replies, and sends a snapshot only when it changed. | this file |
 | Demo mode uses a simulated backend. Each simulated device carries the origin "simulated". A failed real connection never shows demo devices. | this file |
 | The desktop shell owns at most one session. A new session starts only after the previous one has stopped and its identify is restored. Disconnect ends the session. | `apps/desktop/README.md` |
 | The window gets the latest snapshot at most once per 50 ms. Each view has a rising revision, and the interface ignores older views. | `apps/desktop/README.md` |
@@ -44,7 +49,7 @@ The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 1. Task 1: OpenRGB boundary. **Complete.**
 2. Task 2: desktop connection and inventory slice. **Built.** Built and tested in Windows CI. A run on Windows, the missing screenshots and two hand checks are still open.
 3. Task 4: effect engine, output scheduler and output ownership. **4a built** (engine, scheduler, ownership, session commands). **4b built** (Tauri commands, effects screen, generated parameter controls, preview, ownership hand-over). The Effects plugin provider and the measurements come next.
-4. Task 3: profiles.
+4. Task 3: profiles. **3a built** (schema, store, registry on disk, capture, apply, export and import, in Rust). 3b adds the Tauri commands and the profile screen.
 5. Task 5: component setup and layout.
 6. Task 6: lifecycle, packaging and validation on the target machine.
 7. After the core engine: more colour, wave and pattern effects; audio-reactive effects; screen-reactive effects; Effects plugin provider and the test of plugin editing.
@@ -53,14 +58,14 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18, at the last code commit of Task 4b.
+Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-18, at the last code commit of Task 4b, and again for the Rust test count at the end of Task 3a. `pnpm tauri:build` was not run again for Task 3a.
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 193 tests. 36 in `prismforge-effects` (5 for the preview), 76 in `prismforge-core` (35 of them for output and ownership), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 242 tests at the end of Task 3a fix round 3. 36 in `prismforge-effects` (5 for the preview), 125 in `prismforge-core` (35 of them for output and ownership, 47 for profiles and the store, 1 for the registry seed, 1 for reply-after-publish), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 23 in `prismforge-desktop` (6 shell, 9 effect commands, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 70 interface tests (22 for the effects screen, 10 for automatic re-apply, 6 for result texts, 6 for the preview) |
@@ -76,7 +81,7 @@ Windows CI (`windows-latest`) runs format, both lint runs, `cargo test --workspa
 | `2fd05a1` | 44389727399 | Last commit of Task 4a |
 | `b436973` | 44396160088 | Last commit of Task 4b before review fix round 1 |
 
-The review fix round 1 commits after `b436973` have no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
+The review fix round 1 commits after `b436973` have no CI result. The controller reported that Windows CI passed on `ce6b1a8` (Task 3a fix round 1). The Task 3a fix round 2 and 3 commits have no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
 
 Checked by hand in the native macOS app built at commit `e19e8dc`, in demo mode. Later commits changed wording, the visible reason next to Stop, and the rules for automatic re-apply and result texts (review fix round 1). Interface tests cover those changes; they were not checked by hand. The app was started in the background with `open -g` and driven through the macOS accessibility tree only. No screenshot was taken and the window was never brought to the front. The checks read element text and states, not pixels:
 
@@ -117,7 +122,7 @@ Not done:
 3. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
 4. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
 5. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
-6. Add persistence for the list of known devices. The profiles task needs it.
+6. Task 3b: Tauri commands and a profile screen on top of `Profiles`. Order for each session: seed the backend with `Profiles::known_devices`, create the session, start `keep_registry` with `handle.known_devices()` (before or after connect; it writes the current registry at once), then connect. Run a `ConnectTrigger` watcher beside the session. The keeper holds only a receiver and ends with the session; the watcher holds a handle, so abort it before the session ends. Do not accept output commands while a profile apply runs: a user command sent during the apply is not counted as a pending change. Show `preview_update` before the save and the `changes` after it. Use `StoreSummary::active` to offer update only for the active profile, and `unsaved_changes` to show that there is something to save. Pass the per-user configuration folder.
 
 ## Known issues
 
@@ -130,7 +135,11 @@ Not done:
 - **Identify restore is best effort.** It uses the mode and colours that the last inventory reported. If another program changed the device after that refresh, identify restores the older state. PrismForge cannot see other writers, such as the Effects plugin. The session refreshes the inventory after each identify. If an earlier identify was not restored and the device still reports Direct Mode, the next identify reports "partly restored, previous state unknown".
 - **Reconnect does not stop by itself.** The session retries with a delay that grows to a fixed cap (30 seconds by default) until the user disconnects. A server that reports a protocol below 6 is not retried. A server that does not answer the version request is retried; while it retries, the state shows "unsupported protocol" without a version, because an old server and a hung server look the same.
 - **An identify during a device rescan can fail once.** If a device-list change is pending, identify reports "unchanged" with a stale-inventory error and writes nothing. The session refreshes by itself within about 250 ms. A second try then works.
-- **The list of known devices is in memory only.** After an application restart, a device with a serial number that moved to a new location gets a new reference.
+- **The desktop app does not save the list of known devices yet.** The store, the seeding and the read-back exist in Rust (Task 3a). Until the shell uses them (Task 3b), a device with a serial number that moved to a new location gets a new reference after an application restart.
+- **Profiles are not in the app yet.** The Rust core can save, apply, export and import them. The screen and the commands come with Task 3b.
+- **An export cannot tell identical devices apart.** It has no serial numbers or locations. On the importing computer, two devices of the same model with the same zones stay unresolved.
+- **A profile update adds only what the user did in this session.** The session records each user command for output (apply, stop, hardware mode, declaration, hand-back, frame rate). An update applies the records after the profile's baseline to the stored profile. Everything else stays as loaded. It needs the active profile (the one applied or saved in this session) and refuses any other. The records live in memory for one session. After an app restart, apply or create a profile before the next update.
+- **Power loss is not tested.** The store syncs the temporary file before the rename, and the tests fail each write step, but no test cuts power.
 - **Native screenshots are incomplete.** `docs/screenshots/connection.png` is a capture of the native macOS window. The demo inventory, identify outcome, diagnostics and connection failure screenshots are missing: Stage Manager kept the background window as a thumbnail, and later the screen was locked. The window must be in front to capture it, which needs the owner's consent.
 - **The retry number is the next retry.** The session counts retries from 1 after each loss. The interface says "retry N comes next" and never counts failed attempts. The counters in Diagnostics count all connects of the session.
 - **Ambiguous devices cannot be resolved yet.** The app explains them and turns Identify off for them. A way to tell identical devices apart by hand does not exist.
@@ -139,7 +148,7 @@ Not done:
 - **Closing during an identify waits for the restore.** The app holds the exit until the session has stopped, so the window can close a moment before the process ends.
 - **One target at a time.** The effects screen applies an effect to one device or zone. Several targets need several applies. A device with one zone lists only "Whole device".
 - **The preview is a line of LEDs.** It shows the pattern on up to 60 LEDs in a line, not the real device or its layout.
-- **Nothing is saved.** Effects, ownership statements and the frame rate end with the session. Profiles come later.
+- **Nothing is saved in the app yet.** Effects, ownership statements and the frame rate end with the session until Task 3b connects the profile store.
 - **A program name is free text.** The label for "another program" is the user's own words, trimmed and cut to 60 characters. Without a name it is "another program".
 - **No real-machine evidence for effects.** All scheduler numbers come from simulated time. Real frame timing and CPU use are not measured.
 - **Colour frames are not confirmed.** The client does not read the acknowledgement of a colour write. "Frames written" counts frames sent without an error, not frames OpenRGB applied.
@@ -147,7 +156,6 @@ Not done:
 - **A backend call in progress still delays a command.** While effects run, a command waits at most for the one output call in progress: direct mode and each frame are separate calls. Other work still runs several calls before the next command: the end of an identify (restore steps and a refresh) and a reconnect (connect and a refresh). A hung call waits for the client timeout (2 seconds by default).
 - **Shutdown restore stops after 5 seconds.** Devices not restored by then keep the last effect frame. The session keeps their remembered state for the next take-over until the inventory reports another mode than Direct Mode. Until then, identify reports "previous state unknown" for them.
 - **External control is only the user's statement.** PrismForge cannot see the Effects plugin or any other writer. While the user declares a device external, PrismForge sends it nothing: effects, identify and hardware-mode selection are refused.
-- **Ownership and the scene are in memory only.** They end with the session. Profiles come later.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## Missing information from the owner

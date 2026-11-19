@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use prismforge_effects::EffectInstance;
 use tokio::time::Instant;
 
 use crate::backend::RgbBackend;
@@ -12,51 +13,94 @@ use crate::session::identify::RestoreOutcome;
 use crate::session::output::{Claim, EffectOutput, Running};
 use crate::session::previous::PreviousState;
 use crate::session::runner::{Session, not_restored_after_loss};
-use crate::session::{OutputCommand, OutputError, SessionError};
+use crate::session::{Intent, Origin, OutputCommand, OutputError, SessionError, Slot};
 
 const RELEASE_LIMIT: Duration = Duration::from_secs(5);
 
 impl<B: RgbBackend + Send + 'static> Session<B> {
     pub(super) async fn on_output(&mut self, command: OutputCommand) {
         match command {
-            OutputCommand::Apply { assignment, reply } => {
-                let _ = reply.send(self.apply(assignment).await);
+            OutputCommand::Apply {
+                assignment,
+                origin,
+                reply,
+            } => {
+                let before = self.held_for(origin);
+                let target = assignment.target.clone();
+                let result = self.apply(assignment).await;
+                if let Ok(instance) = &result {
+                    let own = (Slot::Effect(target), Intent::Applied(instance.clone()));
+                    self.record_user(before, own);
+                }
+                self.answer(reply, result.map(|_| ()));
             }
             OutputCommand::Stop { target, reply } => {
-                let _ = reply.send(self.stop_effect(target).await);
+                let before = self.held_for(Origin::User);
+                let result = self.stop_effect(target.clone()).await;
+                if result.is_ok() {
+                    self.record_user(before, (Slot::Effect(target), Intent::Stopped));
+                }
+                self.answer(reply, result);
             }
             OutputCommand::SelectMode {
                 device,
                 mode,
+                origin,
                 reply,
             } => {
-                let _ = reply.send(self.select_mode(device, mode).await);
+                let before = self.held_for(origin);
+                let result = self.select_mode(device.clone(), mode).await;
+                if result.is_ok() {
+                    let name = self.mode_name(&device, mode);
+                    let own = (
+                        Slot::Mode(device),
+                        Intent::ModeSelected { index: mode, name },
+                    );
+                    self.record_user(before, own);
+                }
+                self.answer(reply, result);
             }
             OutputCommand::DeclareExternal {
                 device,
                 label,
+                origin,
                 reply,
             } => {
-                let _ = reply.send(self.declare_external(device, label));
+                let before = self.held_for(origin);
+                let result = self.declare_external(device.clone(), label.clone());
+                if result.is_ok() {
+                    self.record_user(before, (Slot::External(device), Intent::Declared { label }));
+                }
+                self.answer(reply, result);
             }
             OutputCommand::ClearExternal { device, reply } => {
                 if matches!(
                     self.output.claims.get(&device),
                     Some(Claim::External { .. })
                 ) {
+                    let before = self.held_for(Origin::User);
                     self.output.claims.remove(&device);
+                    self.record_user(before, (Slot::External(device), Intent::HandedBack));
                 }
-                let _ = reply.send(Ok(()));
+                self.answer(reply, Ok(()));
             }
-            OutputCommand::SetFrameRate { frame_rate, reply } => {
-                let _ = reply.send(Ok(self.output.set_frame_rate(frame_rate)));
+            OutputCommand::SetFrameRate {
+                frame_rate,
+                origin,
+                reply,
+            } => {
+                let before = self.held_for(origin);
+                let in_use = self.output.set_frame_rate(frame_rate);
+                self.record_user(before, (Slot::FrameRate, Intent::FrameRate(in_use)));
+                self.answer(reply, Ok(in_use));
             }
         }
     }
 
     /// Takes the device over on first use: remembers its reported state, then enables direct mode.
-    async fn apply(&mut self, assignment: Assignment) -> Result<(), OutputError> {
+    async fn apply(&mut self, assignment: Assignment) -> Result<EffectInstance, OutputError> {
         let effect = prismforge_effects::prepare(&assignment.effect)?;
+        let complete = effect.instance().clone();
         let target = assignment.target;
         let device = target.device.clone();
         self.ensure_free(&device)?;
@@ -90,7 +134,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         } else if let Some(output) = self.output.effect_mut(&device) {
             output.assign(running(target, effect));
         }
-        Ok(())
+        Ok(complete)
     }
 
     async fn stop_effect(

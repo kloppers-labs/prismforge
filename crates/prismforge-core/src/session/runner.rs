@@ -9,12 +9,14 @@ use crate::backend::{BackendEvent, RgbBackend};
 use crate::connection::{ConnectionState, LossCause, StateReason};
 use crate::device::DeviceRef;
 use crate::error::BackendError;
+use crate::identity::KnownDevice;
 use crate::inventory::{Inventory, InventoryDevice};
 use crate::scene::Scene;
 use crate::session::diagnostics::{
     Counters, Diagnostics, ErrorRecord, EventRing, Operation, SessionEventKind,
 };
 use crate::session::identify::{IdentifyOutcome, IdentifyPlan, RestoreFailure, RestoreOutcome};
+use crate::session::intent::Intents;
 use crate::session::output::Output;
 use crate::session::snapshot::{OutputStatus, SessionSnapshot};
 use crate::session::{Command, Reply, SessionConfig, SessionError};
@@ -22,6 +24,7 @@ use crate::session::{Command, Reply, SessionConfig, SessionError};
 mod claims;
 mod frames;
 mod identifying;
+mod intents;
 mod publishing;
 mod restoring;
 
@@ -31,6 +34,7 @@ pub struct Session<B> {
     config: SessionConfig,
     commands: mpsc::Receiver<Command>,
     snapshot: Arc<watch::Sender<SessionSnapshot>>,
+    known: Arc<watch::Sender<Vec<KnownDevice>>>,
     refused_busy: Arc<AtomicU64>,
     started: Instant,
     link: Link,
@@ -44,6 +48,7 @@ pub struct Session<B> {
     counters: Counters,
     events: EventRing,
     output: Output,
+    intents: Intents,
 }
 
 enum Link {
@@ -97,6 +102,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         };
         Self {
             events: EventRing::new(config.event_capacity),
+            known: Arc::new(watch::channel(backend.known_devices().to_vec()).0),
             backend,
             config,
             commands,
@@ -113,11 +119,22 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             last_error: None,
             counters: Counters::default(),
             output,
+            intents: Intents::default(),
         }
+    }
+
+    /// Publishes first, so a caller that sees the reply also sees its result in the snapshot.
+    pub(super) fn answer<T, E>(&self, reply: Reply<T, E>, result: Result<T, E>) {
+        self.publish();
+        let _ = reply.send(result);
     }
 
     pub(crate) fn publisher(&self) -> Arc<watch::Sender<SessionSnapshot>> {
         self.snapshot.clone()
+    }
+
+    pub(crate) fn registry(&self) -> Arc<watch::Sender<Vec<KnownDevice>>> {
+        self.known.clone()
     }
 
     /// Runs until every [`SessionHandle`](crate::session::SessionHandle) is dropped.
@@ -196,19 +213,23 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         match command {
             Command::Connect(reply) => {
                 let result = self.connect().await;
-                let _ = reply.send(result.map_err(SessionError::from));
+                self.answer(reply, result.map_err(SessionError::from));
+            }
+            Command::Intents { after, reply } => {
+                let log = self.intents.after(after);
+                self.answer(reply, Ok(log));
             }
             Command::Disconnect(reply) => {
                 self.stop().await;
                 self.push(SessionEventKind::Disconnected);
-                let _ = reply.send(Ok(()));
+                self.answer(reply, Ok(()));
             }
             Command::Refresh(reply) => {
                 let result = match self.link {
                     Link::Connected => self.refresh_or_lose(1).await,
                     _ => Err(BackendError::NotConnected),
                 };
-                let _ = reply.send(result.map_err(SessionError::from));
+                self.answer(reply, result.map_err(SessionError::from));
             }
             Command::Identify { request, reply } => self.start_identify(request, reply).await,
             Command::Output(command) => self.on_output(command).await,
@@ -337,6 +358,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
         self.output.after_inventory(&inventory);
         self.inventory = Some(inventory);
+        let known = self.backend.known_devices();
+        self.known.send_if_modified(|published| {
+            let changed = published.as_slice() != known;
+            if changed {
+                *published = known.to_vec();
+            }
+            changed
+        });
     }
 
     fn connection_lost(&mut self, reason: StateReason, retry_attempt: u32) {

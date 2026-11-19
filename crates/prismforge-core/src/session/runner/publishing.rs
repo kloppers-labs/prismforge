@@ -11,6 +11,7 @@ use crate::session::snapshot::{
 };
 
 impl<B: RgbBackend + Send + 'static> Session<B> {
+    /// Wakes subscribers only when the snapshot differs from the one they have.
     pub(super) fn publish(&self) {
         let connection = match &self.link {
             Link::Idle { reason } => ConnectionState::Disconnected {
@@ -46,10 +47,15 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             },
         };
         let refused = self.refused_busy.load(Ordering::Relaxed);
-        self.snapshot.send_modify(|snapshot| {
+        self.snapshot.send_if_modified(|snapshot| {
+            let mut next = next;
             let published = snapshot.diagnostics.counters.commands_refused_busy;
-            *snapshot = next;
-            snapshot.diagnostics.counters.commands_refused_busy = published.max(refused);
+            next.diagnostics.counters.commands_refused_busy = published.max(refused);
+            let changed = *snapshot != next;
+            if changed {
+                *snapshot = next;
+            }
+            changed
         });
     }
 

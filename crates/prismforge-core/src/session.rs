@@ -1,5 +1,6 @@
 mod diagnostics;
 mod identify;
+mod intent;
 mod output;
 mod previous;
 mod reconnect;
@@ -19,6 +20,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 use crate::backend::RgbBackend;
 use crate::device::DeviceRef;
 use crate::error::BackendError;
+use crate::identity::KnownDevice;
 use crate::ownership::OutputOwner;
 use crate::scene::{Assignment, OutputTarget};
 
@@ -26,6 +28,7 @@ pub use diagnostics::{
     Counters, Diagnostics, ErrorRecord, Operation, SessionEvent, SessionEventKind,
 };
 pub use identify::{IDENTIFY_COLOR, IdentifyOutcome, RestoreFailure, RestoreOutcome};
+pub(crate) use intent::{Intent, IntentLog, IntentRecord, Origin, Slot};
 pub use output::{MAX_FRAME_RATE, MIN_FRAME_RATE};
 pub use reconnect::ReconnectPolicy;
 pub use runner::Session;
@@ -111,11 +114,16 @@ pub(crate) enum Command {
         reply: Reply<IdentifyOutcome>,
     },
     Output(OutputCommand),
+    Intents {
+        after: u64,
+        reply: Reply<IntentLog>,
+    },
 }
 
 pub(crate) enum OutputCommand {
     Apply {
         assignment: Assignment,
+        origin: Origin,
         reply: Reply<(), OutputError>,
     },
     Stop {
@@ -125,11 +133,13 @@ pub(crate) enum OutputCommand {
     SelectMode {
         device: DeviceRef,
         mode: usize,
+        origin: Origin,
         reply: Reply<(), OutputError>,
     },
     DeclareExternal {
         device: DeviceRef,
         label: String,
+        origin: Origin,
         reply: Reply<(), OutputError>,
     },
     ClearExternal {
@@ -138,6 +148,7 @@ pub(crate) enum OutputCommand {
     },
     SetFrameRate {
         frame_rate: u32,
+        origin: Origin,
         reply: Reply<u32, OutputError>,
     },
 }
@@ -147,16 +158,28 @@ pub(crate) enum OutputCommand {
 pub struct SessionHandle {
     commands: mpsc::Sender<Command>,
     snapshot: Arc<watch::Sender<SessionSnapshot>>,
+    known: Arc<watch::Sender<Vec<KnownDevice>>>,
     refused_busy: Arc<AtomicU64>,
+    id: u64,
 }
 
 impl SessionHandle {
+    /// Unique per session in this process; clones of one handle share it.
+    pub fn session_id(&self) -> u64 {
+        self.id
+    }
+
     pub fn snapshot(&self) -> SessionSnapshot {
         self.snapshot.borrow().clone()
     }
 
     pub fn subscribe(&self) -> watch::Receiver<SessionSnapshot> {
         self.snapshot.subscribe()
+    }
+
+    /// The backend's known-device registry; it changes only after an inventory refresh.
+    pub fn known_devices(&self) -> watch::Receiver<Vec<KnownDevice>> {
+        self.known.subscribe()
     }
 
     pub fn connect(&self) -> impl Future<Output = Result<(), SessionError>> + Send + use<> {
@@ -196,8 +219,23 @@ impl SessionHandle {
         target: OutputTarget,
         effect: EffectInstance,
     ) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
+        self.apply_effect_as(Origin::User, target, effect)
+    }
+
+    pub(crate) fn apply_effect_as(
+        &self,
+        origin: Origin,
+        target: OutputTarget,
+        effect: EffectInstance,
+    ) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
         let assignment = Assignment { target, effect };
-        self.send(move |reply| Command::Output(OutputCommand::Apply { assignment, reply }))
+        self.send(move |reply| {
+            Command::Output(OutputCommand::Apply {
+                assignment,
+                origin,
+                reply,
+            })
+        })
     }
 
     /// Stops the effect on `target`; once a device has none left, restores what it showed before.
@@ -214,10 +252,20 @@ impl SessionHandle {
         device: DeviceRef,
         mode: usize,
     ) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
+        self.select_mode_as(Origin::User, device, mode)
+    }
+
+    pub(crate) fn select_mode_as(
+        &self,
+        origin: Origin,
+        device: DeviceRef,
+        mode: usize,
+    ) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
         self.send(move |reply| {
             Command::Output(OutputCommand::SelectMode {
                 device,
                 mode,
+                origin,
                 reply,
             })
         })
@@ -229,10 +277,20 @@ impl SessionHandle {
         device: DeviceRef,
         label: String,
     ) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
-        self.send(|reply| {
+        self.declare_external_as(Origin::User, device, label)
+    }
+
+    pub(crate) fn declare_external_as(
+        &self,
+        origin: Origin,
+        device: DeviceRef,
+        label: String,
+    ) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
+        self.send(move |reply| {
             Command::Output(OutputCommand::DeclareExternal {
                 device,
                 label,
+                origin,
                 reply,
             })
         })
@@ -251,7 +309,29 @@ impl SessionHandle {
         &self,
         frame_rate: u32,
     ) -> impl Future<Output = Result<u32, OutputError>> + Send + use<> {
-        self.send(move |reply| Command::Output(OutputCommand::SetFrameRate { frame_rate, reply }))
+        self.set_frame_rate_as(Origin::User, frame_rate)
+    }
+
+    pub(crate) fn set_frame_rate_as(
+        &self,
+        origin: Origin,
+        frame_rate: u32,
+    ) -> impl Future<Output = Result<u32, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::SetFrameRate {
+                frame_rate,
+                origin,
+                reply,
+            })
+        })
+    }
+
+    /// The user's intent records after `after`, answered by the session loop in command order.
+    pub(crate) fn intents_after(
+        &self,
+        after: u64,
+    ) -> impl Future<Output = Result<IntentLog, SessionError>> + Send + use<> {
+        self.send(move |reply| Command::Intents { after, reply })
     }
 
     fn send<T, E, F>(&self, command: F) -> impl Future<Output = Result<T, E>> + Send + use<T, E, F>
@@ -286,11 +366,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
     pub fn new(backend: B, config: SessionConfig) -> (SessionHandle, Self) {
         let (commands, receiver) = mpsc::channel(config.command_capacity.max(1));
         let refused_busy = Arc::new(AtomicU64::new(0));
+        static SESSIONS: AtomicU64 = AtomicU64::new(0);
         let session = Self::start(backend, config, receiver, refused_busy.clone());
         let handle = SessionHandle {
             commands,
             snapshot: session.publisher(),
+            known: session.registry(),
             refused_busy,
+            id: SESSIONS.fetch_add(1, Ordering::Relaxed),
         };
         (handle, session)
     }

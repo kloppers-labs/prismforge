@@ -349,6 +349,22 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
         self.inventory.as_ref()
     }
 
+    fn known_devices(&self) -> &[KnownDevice] {
+        &self.known
+    }
+
+    fn seed_known_devices(&mut self, known: Vec<KnownDevice>) {
+        for device in known {
+            if !self
+                .known
+                .iter()
+                .any(|existing| existing.reference == device.reference)
+            {
+                self.known.push(device);
+            }
+        }
+    }
+
     fn capabilities(&self, device: &DeviceRef) -> Result<&DeviceCapabilities, BackendError> {
         let index = self.lookup(device)?;
         let inventory = self

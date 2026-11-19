@@ -1,0 +1,134 @@
+{
+  "future_profile_field": { "layout": [1, 2, 3] },
+  "format": "prismforge.profile",
+  "schema_version": { "major": 1, "minor": 1 },
+  "id": "p-golden",
+  "name": "Evening",
+  "frame_rate": 45,
+  "devices": [
+    {
+      "future_device_field": "kept",
+      "reference": "dev-desk",
+      "label": "Desk",
+      "kind": "Motherboard",
+      "vendor": "Fixture Vendor",
+      "model": "Strip desk",
+      "serial": "SN-desk",
+      "location": "usb:desk",
+      "zones": [
+        { "name": "Front", "kind": "Linear", "leds_min": 8, "leds_max": 8 },
+        { "future_zone_field": [1, 2], "name": "Back", "kind": "LinearLoop", "leds_min": 4, "leds_max": 4 }
+      ]
+    },
+    {
+      "reference": "dev-panel",
+      "label": "Panel",
+      "kind": "Keyboard",
+      "vendor": "Fixture Vendor",
+      "model": "Panel",
+      "serial": null,
+      "location": "hid:panel",
+      "zones": [
+        { "name": "Grid", "kind": "Matrix", "leds_min": 16, "leds_max": 16 },
+        { "name": "Edge", "kind": { "Other": 9 }, "leds_min": 2, "leds_max": 2 }
+      ]
+    },
+    {
+      "reference": "dev-away",
+      "label": "Strip away",
+      "kind": "LedStrip",
+      "vendor": "Fixture Vendor",
+      "model": "Strip away",
+      "serial": "SN-away",
+      "location": "usb:away",
+      "zones": [{ "name": "Strip", "kind": "Linear", "leds_min": 5, "leds_max": 5 }]
+    },
+    {
+      "reference": "dev-card",
+      "label": "Graphics",
+      "kind": "LedStrip",
+      "vendor": "Fixture Vendor",
+      "model": "Graphics",
+      "serial": "SN-card",
+      "location": null,
+      "zones": [{ "name": "Logo", "kind": "Single", "leds_min": 1, "leds_max": 1 }]
+    },
+    {
+      "reference": "dev-plugin",
+      "label": "Plugin strip",
+      "kind": "LedStrip",
+      "vendor": "Fixture Vendor",
+      "model": "Plugin strip",
+      "serial": null,
+      "location": null,
+      "zones": [{ "name": "Strip", "kind": "Linear", "leds_min": 3, "leds_max": 3 }]
+    },
+    {
+      "reference": "dev-lamp",
+      "label": "Lamp",
+      "kind": "LedStrip",
+      "vendor": "Fixture Vendor",
+      "model": "Lamp",
+      "serial": "SN-lamp",
+      "location": "usb:lamp",
+      "zones": [{ "name": "Bar", "kind": "Segmented", "leds_min": 10, "leds_max": 10 }]
+    }
+  ],
+  "assignments": [
+    {
+      "device": "dev-desk",
+      "future_assignment_field": { "a": 1, "b": null },
+      "zone": 0,
+      "effect": {
+        "effect": "rainbow-wave",
+        "values": {
+          "brightness": { "Number": 80 },
+          "direction": { "Direction": "Backward" },
+          "speed": { "Number": 12 }
+        }
+      }
+    },
+    {
+      "device": "dev-desk",
+      "zone": 1,
+      "effect": {
+        "future_effect_field": 7,
+        "effect": "gradient",
+        "values": {
+          "brightness": { "Number": 100 },
+          "direction": { "Direction": "Forward" },
+          "palette": { "Palette": [{ "r": 255, "g": 0, "b": 0 }, { "r": 0, "g": 0, "b": 255 }] }
+        }
+      }
+    },
+    {
+      "device": "dev-panel",
+      "zone": null,
+      "effect": { "effect": "solid", "values": { "color": { "Color": { "r": 12, "g": 34, "b": 56 } } } }
+    },
+    {
+      "device": "dev-away",
+      "zone": null,
+      "effect": {
+        "effect": "moving-highlight",
+        "values": {
+          "background": { "Color": { "r": 0, "g": 0, "b": 0 } },
+          "color": { "Color": { "r": 255, "g": 255, "b": 255 } },
+          "future_control": { "Gradient": [1, 2] },
+          "width": { "Number": 25 }
+        }
+      }
+    },
+    {
+      "device": "dev-card",
+      "zone": 0,
+      "effect": { "effect": "fire", "values": { "heat": { "Number": 3 } } }
+    }
+  ],
+  "modes": [
+    { "device": "dev-lamp", "index": 2, "name": "Breathing", "future_mode_field": true }
+  ],
+  "external": [
+    { "future_external_field": "x", "device": "dev-plugin", "label": "OpenRGB Effects plugin" }
+  ]
+}

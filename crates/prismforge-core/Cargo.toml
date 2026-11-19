@@ -13,14 +13,15 @@ ts = ["dep:ts-rs", "prismforge-effects/ts"]
 [dependencies]
 prismforge-effects.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 ts-rs = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["macros", "sync", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
 prismforge-openrgb.workspace = true
 prismforge-testkit.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "sync", "test-util", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "test-util", "time"] }
 
 [lints]
 workspace = true

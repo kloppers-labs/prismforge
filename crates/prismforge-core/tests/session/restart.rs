@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use prismforge_core::RgbBackend;
 use prismforge_core::session::RestoreOutcome;
 use prismforge_core::{ConnectionState, LossCause, StateReason};
 use prismforge_testkit::FakeServer;
@@ -65,4 +66,42 @@ async fn backend_restart_reconnects_and_keeps_references_on_their_devices() {
         .map(|packet| (packet.session, packet.device_id))
         .collect();
     assert_eq!(ids, [(0, 0), (0, 0), (0, 0), (1, 1), (1, 1), (1, 1)]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn seeded_registry_keeps_a_reference_when_a_serial_device_moves() {
+    let first_server = FakeServer::new();
+    first_server.add_device(0, strip("alpha", 3));
+    let first = support::connected_openrgb(&first_server).await;
+    let alpha = reference(&first.snapshot(), "SN-alpha");
+    let registry = first.known_devices().borrow().clone();
+    drop(first);
+
+    let moved = || strip("alpha", 3).location("usb:moved");
+    let unseeded_server = FakeServer::new();
+    unseeded_server.add_device(0, moved());
+    let unseeded = support::connected_openrgb(&unseeded_server).await;
+
+    let seeded_server = FakeServer::new();
+    seeded_server.add_device(0, moved());
+    let mut backend = support::openrgb(&seeded_server);
+    backend.seed_known_devices(registry.clone());
+    let seeded = support::start(backend, support::config());
+    seeded.connect().await.expect("connect");
+
+    assert_eq!(registry.len(), 1);
+    assert_eq!(registry[0].reference, alpha);
+    assert_eq!(
+        registry[0].fingerprint.location.as_deref(),
+        Some("usb:alpha")
+    );
+    assert_ne!(reference(&unseeded.snapshot(), "SN-alpha"), alpha);
+    assert_eq!(reference(&seeded.snapshot(), "SN-alpha"), alpha);
+    let readback = seeded.known_devices().borrow().clone();
+    assert_eq!(readback.len(), 1);
+    assert_eq!(readback[0].reference, alpha);
+    assert_eq!(
+        readback[0].fingerprint.location.as_deref(),
+        Some("usb:moved")
+    );
 }
