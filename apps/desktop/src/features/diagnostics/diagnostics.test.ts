@@ -37,7 +37,7 @@ test("shows_the_last_error_and_real_counters", async () => {
   expect(within(counters).getByText("Failed connects").nextElementSibling?.textContent).toBe("3");
   expect(within(drawer).getAllByText(/RetryScheduled retry \d+ in \d+ ms/).length).toBeGreaterThan(0);
 
-  await fireEvent.keyDown(window, { key: "Escape" });
+  await fireEvent.keyDown(drawer, { key: "Escape" });
   expect(screen.queryByRole("complementary", { name: "Diagnostics" })).toBeNull();
 });
 

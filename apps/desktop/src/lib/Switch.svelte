@@ -73,6 +73,17 @@
     padding: 0 6px;
   }
 
+  @media (forced-colors: active) {
+    .thumb {
+      forced-color-adjust: none;
+      background: CanvasText;
+    }
+
+    [aria-checked="true"] .thumb {
+      background: Highlight;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .thumb {
       transition: none;

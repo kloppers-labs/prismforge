@@ -17,7 +17,9 @@
   import { overlays } from "./lib/overlays.svelte";
   import { AppState, type Screen } from "./lib/state/app.svelte";
 
-  const COVER_QUERY = "(max-width: 1399px)";
+  const COVER_QUERY = "(max-width: 1181px)";
+  const COMPACT_QUERY = "(max-width: 1099px)";
+  const SQUEEZE_QUERY = "(max-width: 1399px)";
 
   const app = new AppState();
 
@@ -39,17 +41,25 @@
   let diagnosticsButton: HTMLButtonElement | undefined = $state();
   let lastPageFocus: HTMLElement | null = null;
   let covered = $derived(app.covering && overlays.dialogs === 0);
+  let compactWindow = $state(false);
+  let squeezed = $state(false);
+  let docked = $derived(app.diagnosticsOpen && !app.layoutCovers);
+  let narrowDock = $derived(docked && squeezed);
 
-  $effect(() => {
-    const query = window.matchMedia?.(COVER_QUERY);
+  function follow(media: string, set: (matches: boolean) => void) {
+    const query = window.matchMedia?.(media);
     if (!query) {
       return;
     }
-    app.layoutCovers = query.matches;
-    const change = (event: MediaQueryListEvent) => (app.layoutCovers = event.matches);
+    set(query.matches);
+    const change = (event: MediaQueryListEvent) => set(event.matches);
     query.addEventListener("change", change);
     return () => query.removeEventListener("change", change);
-  });
+  }
+
+  $effect(() => follow(COVER_QUERY, (matches) => (app.layoutCovers = matches)));
+  $effect(() => follow(COMPACT_QUERY, (matches) => (compactWindow = matches)));
+  $effect(() => follow(SQUEEZE_QUERY, (matches) => (squeezed = matches)));
 
   $effect(() => {
     if (overlays.dialogs > 0) {
@@ -75,7 +85,9 @@
     }
     if (event.key === "F6" && !event.ctrlKey && !event.altKey && !event.metaKey) {
       event.preventDefault();
-      cycleRegion(covered ? [rail, strip, drawer] : [rail, strip, notices, main, drawer], event.shiftKey);
+      if (overlays.dialogs === 0) {
+        cycleRegion(covered ? [rail, strip, notices, drawer] : [rail, strip, notices, main, drawer], event.shiftKey);
+      }
       return;
     }
     const area = areaFor(event);
@@ -115,8 +127,9 @@
     void revealPageFocus();
   }
 
-  function skipToContent() {
+  async function skipToContent() {
     app.uncover();
+    await tick();
     main?.focus();
   }
 
@@ -132,6 +145,7 @@
 <div class="app">
   <button type="button" class="skip" onclick={skipToContent}>Skip to content</button>
   <Rail
+    compact={compactWindow || narrowDock}
     screen={app.screen}
     diagnosticsOpen={app.diagnosticsOpen}
     ongo={(screen) => app.go(screen)}
@@ -142,7 +156,7 @@
 
   <div class="content">
     <StatusStrip {app} onconnect={connectForm} bind:region={strip} />
-    <div class="notices" inert={covered}>
+    <div class="notices">
       <NoticeSlot {app} {labels} bind:region={notices} />
     </div>
 
@@ -167,7 +181,7 @@
     </main>
 
     {#if app.diagnosticsOpen}
-      <div class="drawer" bind:this={drawer}>
+      <div class="drawer" class:docked class:narrow={narrowDock} bind:this={drawer}>
         <DiagnosticsDrawer {session} {store} onclose={closeDiagnostics} />
       </div>
     {/if}
@@ -231,16 +245,19 @@
 
   .drawer {
     grid-column: 1 / -1;
-    grid-row: 2 / 4;
+    grid-row: 3;
     min-height: 0;
     display: flex;
     z-index: var(--z-drawer);
   }
 
-  @media (min-width: 1400px) {
-    .drawer {
-      grid-column: 2;
-      width: var(--drawer-w);
-    }
+  .drawer.docked {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    width: var(--drawer-w);
+  }
+
+  .drawer.docked.narrow {
+    width: var(--drawer-w-compact);
   }
 </style>

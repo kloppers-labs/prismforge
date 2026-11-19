@@ -30,7 +30,7 @@
   });
   onDestroy(() => {
     overlays.dialogs -= 1;
-    opener?.focus();
+    (opener?.isConnected ? opener : document.getElementById("content"))?.focus();
   });
 
   function onkeydown(event: KeyboardEvent) {

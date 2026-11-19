@@ -25,8 +25,10 @@
     <DemoMarker />
   {/if}
   {#if profile}
-    <span class="divider" aria-hidden="true"></span>
-    <ProfileChip {app} status={profile} />
+    <span class="profile">
+      <span class="divider" aria-hidden="true"></span>
+      <ProfileChip {app} status={profile} />
+    </span>
   {/if}
   <p class="visually-hidden" role="status" aria-label="Status summary">{announcement}</p>
 </section>
@@ -63,6 +65,14 @@
     height: 3px;
     background: var(--demo-stripes);
     opacity: 1;
+  }
+
+  .profile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    max-width: 100%;
   }
 
   .divider {

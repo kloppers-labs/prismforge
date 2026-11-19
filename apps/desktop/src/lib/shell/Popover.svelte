@@ -105,7 +105,7 @@
   }
 </script>
 
-<svelte:window {onpointerdown} />
+<svelte:window {onpointerdown} onresize={() => open && place()} />
 
 <div class="popover" bind:this={root} {onfocusout}>
   <button
@@ -192,7 +192,7 @@
     box-shadow: var(--shadow-2);
   }
 
-  .panel:focus {
-    outline: none;
+  .panel:focus-visible {
+    outline-offset: -2px;
   }
 </style>

@@ -2,7 +2,9 @@ import type { LossCause } from "../../lib/api/bindings/LossCause";
 import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { StateReason } from "../../lib/api/bindings/StateReason";
 
-export type Tone = "ok" | "working" | "waiting" | "warning" | "problem";
+import type { Tone } from "../../lib/tone";
+
+export type { Tone };
 
 export type ConnectionSummary = {
   tone: Tone;

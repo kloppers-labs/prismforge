@@ -38,7 +38,7 @@ No shortcut changes when they arrive. The compact rail has room for both: seven 
 
 - `src/lib/shell/shell.test.ts`: 53 interface tests through the real components with only the Tauri transport mocked, on fixtures generated from Rust, and `src/lib/shell/placement.test.ts` for the panel placement.
 - Screenshots of the interface preview (`pnpm preview:ui`) at 1280 × 800, 1200 × 780, 920 × 600 and the 200 % equivalents 640 × 400 and 460 × 300, with a long server address and profile name, and with Diagnostics at 1100, 1200 and 1440 px wide, in Chromium on macOS. Measured in the same preview: every chip panel stays inside the window, no rail label is cut, and the page has one scroll area. They are design evidence only.
-- The layout has no fixed widths that force an overlap: the strip wraps its chips, the place text can shorten while the state word cannot, and the rail scrolls when the window is short.
+- The layout has no fixed widths that force an overlap: the strip wraps its chips, the place text can shorten while the state word cannot, and the rail tightens its items instead of scrolling when the window is short.
 
 ## Not verified
 

@@ -104,7 +104,7 @@ export function profileStatus(view: ShellView, store: StoreView | null): Profile
     return {
       title: `Applying ${applying.name}`,
       detail: applying.automatic ? "on connect" : null,
-      name: `Profile: applying ${applying.name}`,
+      name: `Profile: applying ${applying.name}${applying.automatic ? " on connect" : ""}`,
       lines: [applyingText(view) ?? ""],
       busy: true,
       saveable: null,
@@ -128,6 +128,9 @@ export function profileStatus(view: ShellView, store: StoreView | null): Profile
     return null;
   }
   const armed = typeof view.on_connect === "object" && "Armed" in view.on_connect ? view.on_connect.Armed.name : null;
+  if (view.session === null && armed === null) {
+    return null;
+  }
   const detail = armed ? `${armed} applies on connect` : null;
   return {
     title: "No active profile",

@@ -99,9 +99,16 @@ export class AppState {
     }
   }
 
-  go(screen: Screen) {
+  async go(screen: Screen): Promise<void> {
+    if (screen === "profiles") {
+      return this.openProfiles();
+    }
     this.uncover();
-    return screen === "profiles" ? this.openProfiles() : (this.screen = screen);
+    this.screen = screen;
+  }
+
+  dismissProblem() {
+    this.problem = null;
   }
 
   openProfiles() {

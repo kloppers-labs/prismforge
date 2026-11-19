@@ -19,6 +19,12 @@
     font-weight: var(--weight-heading);
   }
 
+  @media (forced-colors: active) {
+    .badge {
+      border: 2px dashed CanvasText;
+    }
+  }
+
   .detail {
     color: var(--text-dim);
     font-size: var(--font-s);

@@ -4,18 +4,9 @@ import type { StopReport } from "../../lib/api/bindings/StopReport";
 import type { StopResult } from "../../lib/api/bindings/StopResult";
 import { failureText, fileProblemText } from "../../lib/errors";
 import { stopText } from "../effects/present";
+import { trayName } from "../../lib/platform";
 
-export function isMac(): boolean {
-  return /Mac/i.test(navigator.userAgent);
-}
-
-export function quitShortcut(): string {
-  return isMac() ? "Command-Q" : "Ctrl+Q";
-}
-
-export function trayName(): string {
-  return isMac() ? "the menu bar" : "the system tray";
-}
+export { isMac, quitShortcut, trayName } from "../../lib/platform";
 
 export function addressText(address: OpenRgbAddress): string {
   return `${address.host}:${address.port}`;

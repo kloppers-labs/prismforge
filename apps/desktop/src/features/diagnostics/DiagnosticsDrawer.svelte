@@ -8,6 +8,7 @@
   let { session, store, onclose }: { session: SessionSnapshot | null; store: StoreView | null; onclose: () => void } = $props();
 
   let heading: HTMLHeadingElement | undefined = $state();
+  let root: HTMLElement | undefined = $state();
   let counters = $derived(
     session
       ? [
@@ -29,7 +30,8 @@
   onMount(() => heading?.focus());
 
   function onkeydown(event: KeyboardEvent) {
-    if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("[aria-modal='true']")) {
+    const inside = event.target instanceof Node && root?.contains(event.target);
+    if (event.key === "Escape" && inside && !event.defaultPrevented && !document.querySelector("[aria-modal='true']")) {
       onclose();
     }
   }
@@ -37,7 +39,7 @@
 
 <svelte:window {onkeydown} />
 
-<aside id="diagnostics-drawer" class="drawer" aria-labelledby="diagnostics-title">
+<aside id="diagnostics-drawer" class="drawer" aria-labelledby="diagnostics-title" bind:this={root}>
   <header>
     <h2 id="diagnostics-title" tabindex="-1" data-region-focus bind:this={heading}>Diagnostics</h2>
     <button type="button" onclick={onclose}>Close</button>

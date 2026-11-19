@@ -20,7 +20,7 @@ The desktop app keeps running in the background when the user chooses it (Task 6
 
 The window has a new shell (plan 2, Task 7). A rail on the left holds Devices, Effects and Profiles, with Diagnostics and Settings at its foot, in every connection state. A status strip at the top of the page shows the connection, the active profile with its unsaved changes, a running profile apply, the profile set to apply on connect and a striped demo marker; its chips open panels with the actions of each state. One notice slot under the strip replaces the stacked strips. Effects without a connection shows how to connect. Diagnostics docks beside the page from 1400 px wide and covers it below that. Ctrl+1, Ctrl+2, Ctrl+4, Ctrl+, and F6 work from the keyboard; Ctrl+3 and Ctrl+5 are kept for Setup and Automation. The design tokens are in `apps/desktop/src/lib/tokens.css`. `pnpm preview:ui` shows the real interface in a browser with simulated data. See `docs/decisions/0005-shell-and-design-tokens.md`.
 
-All tests pass on macOS. The Task 7 commits have no Windows CI result yet. The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+All tests pass on macOS. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -116,6 +116,7 @@ Windows CI (`windows-latest`) runs format, both lint runs, `cargo test --workspa
 | `548677b` | 44320629268 | Task 2b, first Windows CI |
 | `2fd05a1` | 44389727399 | Last commit of Task 4a |
 | `b436973` | 44396160088 | Last commit of Task 4b before review fix round 1 |
+| `c8c661a` | 44492091594 | Last commit of Task 7 |
 
 The review fix round 1 commits after `b436973` have no CI result. The controller reported that Windows CI passed on `ce6b1a8` (Task 3a fix round 1). The Task 3a fix round 2 and 3 commits have no CI result yet. This is build and test evidence only. Nobody has installed or run the app on Windows.
 
