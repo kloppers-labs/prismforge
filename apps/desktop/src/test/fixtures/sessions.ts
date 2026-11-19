@@ -5155,7 +5155,8 @@ export const demoEffectsRunning: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -5176,7 +5177,8 @@ export const demoEffectsRunning: SessionSnapshot = {
                 }
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -5213,7 +5215,8 @@ export const demoEffectsRunning: SessionSnapshot = {
                 "Number": 20
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         }
       ]
     },
@@ -6229,7 +6232,8 @@ export const demoEffectIdentifying: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -6250,7 +6254,8 @@ export const demoEffectIdentifying: SessionSnapshot = {
                 }
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -6287,7 +6292,8 @@ export const demoEffectIdentifying: SessionSnapshot = {
                 "Number": 20
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         }
       ]
     },
@@ -7323,7 +7329,8 @@ export const demoEffectsNotConnected: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -7344,7 +7351,8 @@ export const demoEffectsNotConnected: SessionSnapshot = {
                 }
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -7381,7 +7389,8 @@ export const demoEffectsNotConnected: SessionSnapshot = {
                 "Number": 20
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         }
       ]
     },
@@ -8453,7 +8462,8 @@ export const demoBatchRunning: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -8476,7 +8486,8 @@ export const demoBatchRunning: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -8499,7 +8510,8 @@ export const demoBatchRunning: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         }
       ]
     },
@@ -10414,7 +10426,8 @@ export const demoBatchDuringIdentify: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -10437,7 +10450,8 @@ export const demoBatchDuringIdentify: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -10460,7 +10474,8 @@ export const demoBatchDuringIdentify: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         }
       ]
     },
@@ -11193,7 +11208,8 @@ export const openRgbKeyboardRunning: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         },
         {
           "target": {
@@ -11216,7 +11232,8 @@ export const openRgbKeyboardRunning: SessionSnapshot = {
                 "Number": 1
               }
             }
-          }
+          },
+          "mode": "EachDevice"
         }
       ]
     },

@@ -92,7 +92,9 @@ pub(crate) fn all_added(profile: &Profile) -> Vec<SettingChange> {
 fn perform(profile: &mut Profile, key: &DeviceRef, zone: Option<usize>, intent: &Intent) {
     let on_device = |device: &DeviceRef| device == key;
     match intent {
-        Intent::Applied(instance) => {
+        Intent::Applied {
+            effect: instance, ..
+        } => {
             profile.modes.retain(|mode| !on_device(&mode.device));
             profile
                 .external

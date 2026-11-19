@@ -2,6 +2,7 @@ use prismforge_effects::EffectInstance;
 
 use crate::backend::RgbBackend;
 use crate::device::DeviceRef;
+use crate::scene::ApplyMode;
 use crate::session::output::Claim;
 use crate::session::runner::Session;
 use crate::session::{Intent, Origin, Slot};
@@ -9,7 +10,7 @@ use crate::session::{Intent, Origin, Slot};
 /// What one slot holds in the session's ownership state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Held {
-    Effect(EffectInstance),
+    Effect(EffectInstance, ApplyMode),
     Mode(usize),
     External(String),
     FrameRate(u32),
@@ -70,7 +71,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 Claim::Effect(output) => held.extend(output.effects.iter().map(|running| {
                     (
                         Slot::Effect(running.target.clone()),
-                        Held::Effect(running.effect.instance().clone()),
+                        Held::Effect(running.effect.instance().clone(), running.layout.mode()),
                     )
                 })),
                 Claim::HardwareMode { mode } => {
@@ -89,7 +90,10 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
 
     fn intent_for(&self, slot: &Slot, held: &Held) -> Intent {
         match held {
-            Held::Effect(instance) => Intent::Applied(instance.clone()),
+            Held::Effect(effect, mode) => Intent::Applied {
+                effect: effect.clone(),
+                mode: mode.clone(),
+            },
             Held::Mode(mode) => Intent::ModeSelected {
                 index: *mode,
                 name: match slot {
@@ -107,7 +111,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
 
 fn ended(held: &Held) -> Intent {
     match held {
-        Held::Effect(_) => Intent::Stopped,
+        Held::Effect(..) => Intent::Stopped,
         Held::Mode(_) => Intent::ModeEnded,
         Held::External(_) => Intent::HandedBack,
         Held::FrameRate(rate) => Intent::FrameRate(*rate),

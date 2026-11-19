@@ -29,4 +29,4 @@ pub use identity::{
 pub use inventory::{DeviceIdentity, DeviceIssue, Inventory, InventoryDevice, IssueReason};
 pub use ownership::OutputOwner;
 pub use prismforge_effects::Rgb;
-pub use scene::{Assignment, OutputTarget, Scene};
+pub use scene::{ApplyMode, Assignment, OutputTarget, Scene};
