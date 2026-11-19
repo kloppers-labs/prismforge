@@ -63,6 +63,7 @@
     <button
       type="button"
       class="primary"
+      data-mirror="effect.apply"
       disabled={blocked !== null || !effects.checked?.instance || effects.working !== null}
       aria-describedby="edit-mode"
       onclick={() => effects.apply()}
@@ -71,6 +72,7 @@
     </button>
     <button
       type="button"
+      data-mirror="target.stop"
       disabled={stopReason !== null || effects.working !== null}
       aria-describedby={stopReason ? "stop-blocked" : undefined}
       onclick={() => effects.stop()}

@@ -2,8 +2,8 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
-import { effectHandlers } from "../../test/effects";
-import { demoConnected, openRgbConnected } from "../../test/fixtures/sessions";
+import { effectHandlers, openEffects } from "../../test/effects";
+import { demoConnected, demoEffectsRunning, openRgbConnected } from "../../test/fixtures/sessions";
 import { storeTwo, storeUnsaved } from "../../test/fixtures/stores";
 import { itemIds, mirrored } from "../../test/menus";
 import { connectionChip, findStrip, waitForConnection } from "../../test/shell";
@@ -30,6 +30,7 @@ const DEVICE_IDS = [
   "zone.rename",
   "zone.reported-name",
 ];
+const EFFECT_IDS = ["target.choose", "target.stop", "target.hand-back", "target.modes", "target.leave", "effect.choose", "effect.apply"];
 
 test("every_status_strip_menu_item_has_a_visible_counterpart_in_its_panel", async () => {
   covered.clear();
@@ -69,6 +70,24 @@ test("every_devices_menu_item_has_a_visible_counterpart_on_the_devices_screen", 
   expect([...covered].sort()).toEqual([...DEVICE_IDS].sort());
 });
 
+test("every_effects_menu_item_has_a_visible_counterpart_on_the_effects_screen", async () => {
+  covered.clear();
+  fakeShell(demoEffectsRunning, effectHandlers());
+  render(App);
+  const targets = await openEffects();
+  const row = (device: string, index = 0) => within(within(targets).getAllByRole("group", { name: device })[index]!).getByRole("button", { name: /^Whole device/ });
+
+  await fireEvent.click(row("Demo Memory Module", 1));
+  await expectMirrored(await itemIds(row("Demo Memory Module", 1)));
+
+  await fireEvent.click(row("Demo Graphics Card"));
+  await expectMirrored(await itemIds(row("Demo Graphics Card")));
+  const card = screen.getByRole("radio", { name: "Gradient" }).closest("label") as HTMLElement;
+  await expectMirrored(await itemIds(card));
+
+  expect([...covered].sort()).toEqual([...EFFECT_IDS].sort());
+});
+
 test("the_registry_holds_only_items_that_a_menu_offers", () => {
-  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS].sort());
+  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS, ...EFFECT_IDS].sort());
 });

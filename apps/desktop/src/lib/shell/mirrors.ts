@@ -13,6 +13,13 @@ export const MIRRORS = {
   "zone.identify": "Identify in the zone's row",
   "zone.rename": "Rename in the zone's row",
   "zone.reported-name": "Reported name in the zone's row",
+  "target.choose": "the target's row in the target list",
+  "target.stop": "Stop effect in the effect bar",
+  "target.hand-back": "Hand back to PrismForge in the hand-back notice",
+  "target.modes": "the Hardware modes disclosure",
+  "target.leave": "Leave this device to another program, in the Used by another program disclosure",
+  "effect.choose": "the effect's card",
+  "effect.apply": "Apply effect in the effect bar",
 } as const;
 
 export type MirrorId = keyof typeof MIRRORS;

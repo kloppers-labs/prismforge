@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import Details from "../../lib/Details.svelte";
   import { failureText } from "../../lib/errors";
@@ -14,6 +14,7 @@
   import ExternalControl from "./ExternalControl.svelte";
   import HandBack from "./HandBack.svelte";
   import HardwareModes from "./HardwareModes.svelte";
+  import { effectMenu, targetMenu, type EffectsMenuContext, type Reveal } from "./menu";
   import { applyBlocked, applyingText, declaredBy, deviceOf } from "./present";
   import TargetList from "./TargetList.svelte";
   import TargetStatus from "./TargetStatus.svelte";
@@ -35,6 +36,22 @@
   let held = $derived(applyingText(app.view));
   let blocked = $derived(device && target ? (held ?? applyBlocked(session, device, target.zone)) : null);
   let left = $derived(ref === null ? null : declaredBy(session, ref));
+  let modesOpen = $state(false);
+  let externalOpen = $state(false);
+  let menus: EffectsMenuContext = $derived({ effects, session, names: app.names, held, reveal });
+
+  async function reveal(part: Reveal) {
+    await tick();
+    if (part === "modes") {
+      modesOpen = true;
+    } else {
+      externalOpen = true;
+    }
+    await tick();
+    const control = part === "modes" ? document.querySelector<HTMLElement>("[data-mirror='target.modes']") : document.getElementById("program-name");
+    control?.scrollIntoView?.({ block: "nearest" });
+    control?.focus();
+  }
 
   onMount(() => {
     effects.load();
@@ -43,7 +60,13 @@
 </script>
 
 <div class="two-pane">
-  <TargetList {session} selected={target} names={app.names} onselect={(next) => effects.select(next)} />
+  <TargetList
+    {session}
+    selected={target}
+    names={app.names}
+    onselect={(next) => effects.select(next)}
+    menu={(each, next) => targetMenu(menus, each, next)}
+  />
   <div class="workspace">
     <h1 class="visually-hidden">Effects</h1>
     {#if !catalog}
@@ -70,7 +93,14 @@
             {:else}
               <TargetStatus {session} {device} zone={target.zone} />
             {/if}
-            <EffectEditor {effects} {catalog} {device} zone={target.zone} locked={left !== null} />
+            <EffectEditor
+              {effects}
+              {catalog}
+              {device}
+              zone={target.zone}
+              locked={left !== null}
+              menu={(definition) => effectMenu(menus, definition, device, blocked)}
+            />
             <div class="how">
               <p>Runs while PrismForge runs and is connected.</p>
               <Details summary="How effects run">
@@ -82,11 +112,11 @@
             </div>
             <section class="other" aria-labelledby="other-title">
               <h3 id="other-title">Other ways to light this device</h3>
-              <Details summary="Hardware modes, which run on the device itself">
+              <Details summary="Hardware modes, which run on the device itself" mirror="target.modes" bind:open={modesOpen}>
                 <HardwareModes {effects} {session} {device} {held} />
               </Details>
               {#if left === null}
-                <Details summary="Used by another program">
+                <Details summary="Used by another program" bind:open={externalOpen}>
                   <ExternalControl {effects} {session} {device} {held} />
                 </Details>
               {/if}

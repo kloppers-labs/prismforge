@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { EffectDefinition } from "../../lib/api/bindings/EffectDefinition";
+  import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
 
   let {
     effects,
@@ -7,23 +8,26 @@
     running,
     disabled,
     onchoose,
+    menu,
   }: {
     effects: EffectDefinition[];
     chosen: string | null;
     running: string | null;
     disabled: boolean;
     onchoose: (id: string) => void;
+    menu: (effect: EffectDefinition) => Menu | null;
   } = $props();
 </script>
 
 <fieldset class="picker" aria-labelledby="effect-title" {disabled}>
   {#each effects as effect (effect.id)}
-    <label class="pick card" class:off={disabled}>
+    <label class="pick card" class:off={disabled} use:contextMenu={() => menu(effect)}>
       <span class="head">
         <input
           type="radio"
           name="effect"
           value={effect.id}
+          data-mirror="effect.choose"
           checked={effect.id === chosen}
           aria-labelledby="effect-{effect.id}-name"
           aria-describedby="effect-{effect.id}-about"
