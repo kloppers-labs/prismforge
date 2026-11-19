@@ -48,7 +48,7 @@ pub enum SetupProblem {
         needed: u64,
         available: u64,
     },
-    /// A new or moved output must name a device or zone the session reports now.
+    /// An output that is new or whose parts changed must name a device or zone the session reports now.
     #[error("output {output} names a device or zone that is not reported now")]
     UnknownTarget { output: OutputId },
 }

@@ -10,5 +10,6 @@ mod property;
 mod quiet;
 mod service;
 mod session;
+mod setup_store;
 mod support;
 mod update;

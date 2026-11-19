@@ -83,6 +83,41 @@ impl Setup {
         })
     }
 
+    /// An output that is new, or whose parts changed since `before`, must name a device or zone reported now and fit it.
+    pub(crate) fn check_changed_outputs(
+        &self,
+        before: &Setup,
+        devices: &[SessionDevice],
+    ) -> Result<(), SetupProblem> {
+        for output in &self.outputs {
+            let unchanged =
+                before.outputs.iter().any(|old| {
+                    old == output
+                        && output.branches.iter().flatten().all(|component| {
+                            before.led_count(component) == self.led_count(component)
+                        })
+                });
+            if unchanged {
+                continue;
+            }
+            let state = target_state(
+                &output.device,
+                output.zone,
+                output.zone_name.as_ref(),
+                devices,
+            );
+            if state != MemberState::Resolved {
+                return Err(SetupProblem::UnknownTarget {
+                    output: output.id.clone(),
+                });
+            }
+            if let Some(problem) = self.device_problem(output, devices) {
+                return Err(problem);
+            }
+        }
+        Ok(())
+    }
+
     fn check_ids(&self) -> Result<(), SetupProblem> {
         let components = self
             .components

@@ -12,6 +12,7 @@ use crate::profile::{
     all_added, apply, is_live, update,
 };
 use crate::session::{IntentLog, SessionDevice, SessionEventKind, SessionHandle, SessionSnapshot};
+use crate::setup::Setup;
 use crate::store::notice::{NoticeEvent, StoreNotice};
 use crate::store::summary::{
     ExportReport, ImportError, ImportReport, ProfileDetails, StoreSummary,
@@ -328,6 +329,22 @@ impl Profiles {
     ) -> Result<(), StoreError> {
         let device = device.clone();
         self.with(move |store| store.set_zone_name(&device, zone, name.as_deref()))
+            .await
+    }
+
+    /// The stored setup; empty while its file needs a newer PrismForge.
+    pub async fn setup(&self) -> Setup {
+        self.with(|store| store.setup().clone()).await
+    }
+
+    /// Stores `setup`; outputs that are new or changed must fit the devices the session reports now.
+    pub async fn save_setup(
+        &self,
+        setup: Setup,
+        handle: Option<&SessionHandle>,
+    ) -> Result<(), StoreError> {
+        let devices = handle.map_or_else(Vec::new, |handle| handle.snapshot().devices);
+        self.with(move |store| store.save_setup(setup, &devices))
             .await
     }
 
