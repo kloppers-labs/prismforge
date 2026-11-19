@@ -1,8 +1,9 @@
 mod support;
 
 use std::collections::BTreeSet;
+use std::fs;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -10,7 +11,7 @@ use std::time::Duration;
 use prismforge_core::profile::ProfileId;
 use prismforge_core::store::{NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
-use prismforge_desktop::{Shell, ShellConfig, Stores, preview_effect, stop_then_exit};
+use prismforge_desktop::{OnConnect, Shell, ShellConfig, Stores, preview_effect, stop_then_exit};
 use prismforge_effects::{EffectInstance, PreviewRequest};
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
@@ -273,9 +274,16 @@ fn cases() -> Vec<Case> {
     ]
 }
 
-async fn fixture() -> Fixture {
-    let dir = TempDir::new("table");
-    let outside = TempDir::new("table-out");
+/// A store with one profile marked to apply on connect and an export of it, made once per test.
+struct Template {
+    dir: TempDir,
+    outside: TempDir,
+    id: ProfileId,
+}
+
+async fn template() -> Template {
+    let dir = TempDir::new("table-template");
+    let outside = TempDir::new("table-template-out");
     let recorder = Recorder::default();
     let shell = Shell::new(
         recorder.clone(),
@@ -293,11 +301,43 @@ async fn fixture() -> Fixture {
         .set_apply_on_connect(Some(id.clone()))
         .await
         .expect("mark");
-    let exported = outside.path().join("glow.json");
     shell
-        .export_profile(&id, exported.clone())
+        .export_profile(&id, outside.path().join("glow.json"))
         .await
         .expect("export");
+    shell.stop().await;
+    drop(shell);
+    Template { dir, outside, id }
+}
+
+fn copy_folder(from: &Path, to: &Path) {
+    fs::create_dir_all(to).expect("folder");
+    for entry in fs::read_dir(from).expect("read folder") {
+        let entry = entry.expect("entry");
+        let target = to.join(entry.file_name());
+        if entry.file_type().expect("type").is_dir() {
+            copy_folder(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), target).expect("copy");
+        }
+    }
+}
+
+/// A fresh copy of the template's store, connected, after its apply on connect has run.
+async fn fixture(template: &Template) -> Fixture {
+    let dir = TempDir::new("table");
+    copy_folder(template.dir.path(), dir.path());
+    let outside = TempDir::new("table-out");
+    let recorder = Recorder::default();
+    let shell = Shell::new(
+        recorder.clone(),
+        ShellConfig::default(),
+        Stores::new(dir.path().to_path_buf()),
+    );
+    shell.start(DemoBackend::new()).await.expect("start");
+    recorder
+        .wait_view(|view| matches!(view.on_connect, OnConnect::Fired { .. }))
+        .await;
     let server = FakeServer::new();
     server.add_device(
         0,
@@ -308,10 +348,10 @@ async fn fixture() -> Fixture {
     );
     Fixture {
         shell,
-        id,
+        id: template.id.clone(),
         unknown: ProfileId::parse("p-0000000000000000").expect("id"),
+        exported: template.outside.path().join("glow.json"),
         destination: outside.path().join("again.json"),
-        exported,
         server,
         _dir: dir,
         outside,
@@ -351,60 +391,103 @@ async fn responds(shell: &Shell<Recorder>) -> bool {
         && tokio::time::timeout(PATIENCE, shell.stop()).await.is_ok()
 }
 
-/// Joins each command with `partner` (and an apply first), and names every join that never ends.
-async fn every_command_beside(partner: Partner, with_apply: bool) {
+#[derive(Clone, Copy, Debug)]
+enum Turn {
+    Apply,
+    Command,
+    Partner,
+}
+
+const WITHOUT_APPLY: &[&[Turn]] = &[
+    &[Turn::Command, Turn::Partner],
+    &[Turn::Partner, Turn::Command],
+];
+
+const WITH_APPLY: &[&[Turn]] = &[
+    &[Turn::Apply, Turn::Command, Turn::Partner],
+    &[Turn::Apply, Turn::Partner, Turn::Command],
+    &[Turn::Command, Turn::Apply, Turn::Partner],
+    &[Turn::Command, Turn::Partner, Turn::Apply],
+    &[Turn::Partner, Turn::Apply, Turn::Command],
+    &[Turn::Partner, Turn::Command, Turn::Apply],
+];
+
+/// Joins `turns` in that poll order, every time the join is polled.
+async fn joined(turns: &[Turn], case: &Case, f: &Fixture, partner: Partner, done: &AtomicBool) {
+    let mut apply: Option<Run<'_>> = Some(Box::pin(async {
+        let _ = f.shell.apply_profile(&f.id).await;
+    }));
+    let mut command = Some((case.run)(f));
+    let mut other = Some(partner.run(f, done));
+    let mut take = |turn: &Turn| {
+        match turn {
+            Turn::Apply => apply.take(),
+            Turn::Command => command.take(),
+            Turn::Partner => other.take(),
+        }
+        .expect("each turn once")
+    };
+    match turns {
+        [first, second] => {
+            tokio::join!(biased; take(first), take(second));
+        }
+        [first, second, third] => {
+            tokio::join!(biased; take(first), take(second), take(third));
+        }
+        _ => unreachable!("two or three turns"),
+    }
+}
+
+/// Runs every case in every order beside `partner`, and names every join that never ends.
+async fn every_command_beside(partner: Partner, orders: &[&[Turn]]) {
+    let template = template().await;
     let mut hung = Vec::new();
     for case in cases() {
-        let f = fixture().await;
-        let finished = AtomicBool::new(false);
-        let apply = async {
-            if with_apply {
-                let _ = f.shell.apply_profile(&f.id).await;
+        for turns in orders {
+            let f = fixture(&template).await;
+            let done = AtomicBool::new(false);
+            let all = joined(turns, &case, &f, partner, &done);
+            let ended = tokio::time::timeout(PATIENCE, all).await.is_ok();
+            if !(ended && done.load(Ordering::SeqCst) && responds(&f.shell).await) {
+                hung.push(format!("{} ({}) {turns:?}", case.command, case.variant));
             }
-        };
-        let all = async {
-            tokio::join!(apply, (case.run)(&f), partner.run(&f, &finished));
-        };
-        let ended = tokio::time::timeout(PATIENCE, all).await.is_ok();
-        if !(ended && finished.load(Ordering::SeqCst) && responds(&f.shell).await) {
-            hung.push(format!("{} ({})", case.command, case.variant));
         }
     }
-    assert!(hung.is_empty(), "never finished: {hung:?}");
+    assert!(hung.is_empty(), "never finished: {hung:#?}");
 }
 
 #[tokio::test(start_paused = true)]
 async fn every_command_finishes_beside_a_disconnect() {
-    every_command_beside(Partner::Disconnect, false).await;
+    every_command_beside(Partner::Disconnect, WITHOUT_APPLY).await;
 }
 
 #[tokio::test(start_paused = true)]
 async fn every_command_finishes_beside_a_switch_to_openrgb() {
-    every_command_beside(Partner::Switch, false).await;
+    every_command_beside(Partner::Switch, WITHOUT_APPLY).await;
 }
 
 #[tokio::test(start_paused = true)]
 async fn every_command_finishes_beside_a_window_close() {
-    every_command_beside(Partner::WindowClose, false).await;
+    every_command_beside(Partner::WindowClose, WITHOUT_APPLY).await;
 }
 
 #[tokio::test(start_paused = true)]
 async fn every_command_finishes_beside_an_apply_and_a_disconnect() {
-    every_command_beside(Partner::Disconnect, true).await;
+    every_command_beside(Partner::Disconnect, WITH_APPLY).await;
 }
 
 #[tokio::test(start_paused = true)]
 async fn every_command_finishes_beside_an_apply_and_a_switch_to_openrgb() {
-    every_command_beside(Partner::Switch, true).await;
+    every_command_beside(Partner::Switch, WITH_APPLY).await;
 }
 
 #[tokio::test(start_paused = true)]
 async fn every_command_finishes_beside_an_apply_and_a_window_close() {
-    every_command_beside(Partner::WindowClose, true).await;
+    every_command_beside(Partner::WindowClose, WITH_APPLY).await;
 }
 
 fn source(path: &str) -> String {
-    std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path)).expect(path)
+    fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path)).expect(path)
 }
 
 fn registered() -> BTreeSet<String> {
