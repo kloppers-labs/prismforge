@@ -306,3 +306,10 @@ export function noticeText(notice: StoreNotice): string[] {
   const failure = event.WriteFailed.failure;
   return [`PrismForge could not save ${failure.file}: ${failure.detail}.`, "The previous version is still in place."];
 }
+
+export function unsavedText(unsaved: number | null): string {
+  if (unsaved === null) {
+    return "Unsaved changes unknown";
+  }
+  return unsaved === 1 ? "1 unsaved change" : `${unsaved} unsaved changes`;
+}

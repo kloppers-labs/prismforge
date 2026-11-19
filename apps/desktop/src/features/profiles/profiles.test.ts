@@ -52,6 +52,12 @@ async function chooseProfile(name: string) {
   return screen.findByRole("article", { name });
 }
 
+async function openSaveDialog() {
+  const list = await openProfiles();
+  await fireEvent.click(within(list).getByRole("button", { name: "Save current lighting…" }));
+  return screen.findByRole("dialog", { name: "Save the current lighting" });
+}
+
 function result() {
   return screen.getByRole("status", { name: "Profile result" });
 }
@@ -314,7 +320,7 @@ test("the_status_strip_shows_the_active_profile_and_unknown_unsaved_changes", as
 test("busy_is_shown_and_not_retried", async () => {
   const shell = fakeShell(demoConnected, handlers(storeEmpty, { create_profile: refuse(errors.sessionBusy) }));
   render(App);
-  await openProfiles();
+  await openSaveDialog();
 
   await fireEvent.input(screen.getByRole("textbox", { name: "Profile name" }), { target: { value: "Evening" } });
   await fireEvent.click(screen.getByRole("button", { name: "Save as new profile" }));
@@ -329,6 +335,7 @@ test("saving_the_current_lighting_names_the_new_profile", async () => {
   render(App);
   await openProfiles();
   expect(screen.getByText(/No profiles yet\./)).toBeTruthy();
+  await openSaveDialog();
   expect(screen.getByText(/The new profile holds the effects, hardware modes, program statements and frame rate in use now\./)).toBeTruthy();
 
   await fireEvent.input(screen.getByRole("textbox", { name: "Profile name" }), { target: { value: "  Evening " } });
@@ -341,7 +348,7 @@ test("saving_the_current_lighting_names_the_new_profile", async () => {
 test("save_as_new_with_an_active_profile_says_what_it_holds", async () => {
   fakeShell(demoConnected, handlers(storeUnsaved));
   render(App);
-  await openProfiles();
+  await openSaveDialog();
 
   expect(
     screen.getByText(

@@ -46,6 +46,10 @@
     gap: 4px;
   }
 
+  .import:empty {
+    display: none;
+  }
+
   .headline {
     font-weight: var(--weight-strong);
   }
