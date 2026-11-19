@@ -5,6 +5,8 @@ mod commands;
 mod effects;
 mod exit;
 mod forward;
+mod group_commands;
+mod groups;
 mod lifecycle;
 mod lifecycle_commands;
 pub mod marks;
@@ -29,6 +31,7 @@ pub use exit::{
     ExitGuard, QUIT_STOP_LIMIT, quit_then_exit, stop_at_exit, stop_then_exit, stop_within,
 };
 pub use forward::forward;
+pub use groups::{GroupView, GroupsStore, GroupsView};
 pub use lifecycle::{
     AUTOSTART_ARG, AppSettingChange, ClosePrompt, CloseStep, DeviceStop, ExitControl, Lifecycle,
     LifecycleSink, LifecycleView, SettingsState, SettingsView, StartEntry, StartEntryState,
@@ -129,6 +132,12 @@ pub fn run() {
             commands::clear_external,
             commands::set_frame_rate,
             commands::preview_effect,
+            group_commands::groups,
+            group_commands::create_group,
+            group_commands::rename_group,
+            group_commands::add_group_members,
+            group_commands::remove_group_member,
+            group_commands::delete_group,
             profile_commands::profile_store,
             profile_commands::profile_details,
             profile_commands::create_profile,

@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use prismforge_core::profile::ProfileId;
-use prismforge_core::store::{CloseAction, NoticeEvent, StoreNotice};
+use prismforge_core::store::{CloseAction, GroupId, NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_desktop::{
     AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores, TrayState, marks,
@@ -79,6 +79,20 @@ fn memory() -> OutputTarget {
         device: DeviceRef::new("demo-memory-1"),
         zone: None,
     }
+}
+
+fn unknown_group() -> GroupId {
+    GroupId::parse("g-0000000000000000").expect("group id")
+}
+
+/// A group made in this join, so the command meets whichever session the partner left.
+async fn made_group(f: &Fixture) -> GroupId {
+    f.shell
+        .create_group("Made", vec![gpu()])
+        .await
+        .ok()
+        .and_then(|view| view.groups.into_iter().find(|group| group.name == "Made"))
+        .map_or_else(unknown_group, |group| group.id)
 }
 
 fn effect(name: &str) -> EffectInstance {
@@ -208,6 +222,45 @@ fn cases() -> Vec<Case> {
         case!("preview_effect", "unknown effect", |_f| preview_effect(
             preview("no-such-effect")
         )),
+        case!("groups", "view", |f| f.shell.groups_view().await),
+        case!("create_group", "two targets", |f| f
+            .shell
+            .create_group("Desk", vec![gpu(), memory()])
+            .await),
+        case!("create_group", "unknown device", |f| f
+            .shell
+            .create_group(
+                "Nowhere",
+                vec![OutputTarget {
+                    device: DeviceRef::new("no-such-device"),
+                    zone: None,
+                }]
+            )
+            .await),
+        case!("rename_group", "made here", |f| {
+            let id = made_group(f).await;
+            f.shell.rename_group(&id, "Renamed").await
+        }),
+        case!("rename_group", "unknown", |f| f
+            .shell
+            .rename_group(&unknown_group(), "Renamed")
+            .await),
+        case!("add_group_members", "made here", |f| {
+            let id = made_group(f).await;
+            f.shell.add_group_members(&id, vec![memory()]).await
+        }),
+        case!("remove_group_member", "made here", |f| {
+            let id = made_group(f).await;
+            f.shell.remove_group_member(&id, gpu()).await
+        }),
+        case!("delete_group", "made here", |f| {
+            let id = made_group(f).await;
+            f.shell.delete_group(&id).await
+        }),
+        case!("delete_group", "unknown", |f| f
+            .shell
+            .delete_group(&unknown_group())
+            .await),
         case!("profile_store", "store", |f| f.shell.store_view().await),
         case!("profile_details", "profile", |f| f
             .shell

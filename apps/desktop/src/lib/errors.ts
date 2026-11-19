@@ -97,13 +97,25 @@ export function storeErrorText(error: StoreError): string {
   if ("NameTaken" in error) {
     return `Another profile is already called ${error.NameTaken.name}. Choose another name.`;
   }
+  if ("UnknownGroup" in error) {
+    return "This group is not in the store any more.";
+  }
+  if ("GroupNameTaken" in error) {
+    return `Another group is already called ${error.GroupNameTaken.name}. Choose another name.`;
+  }
+  if ("TooManyGroups" in error) {
+    return `PrismForge keeps at most ${error.TooManyGroups.limit} groups. Delete a group first.`;
+  }
+  if ("TooManyMembers" in error) {
+    return `A group holds at most ${error.TooManyMembers.limit} targets. Select fewer targets.`;
+  }
   if ("UnknownDevice" in error) {
     return "PrismForge has not stored this device yet. Try again after the next device scan.";
   }
   if ("UnknownZone" in error) {
     return "This zone is not on the device.";
   }
-  if ("InvalidProfile" in error || "InvalidRegistry" in error || "InvalidSettings" in error) {
+  if ("InvalidProfile" in error || "InvalidRegistry" in error || "InvalidSettings" in error || "InvalidGroups" in error) {
     return "PrismForge did not write the file, because the result would not be valid. The previous version is still in place.";
   }
   if ("NotActive" in error) {

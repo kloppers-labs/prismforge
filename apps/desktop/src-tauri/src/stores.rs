@@ -6,6 +6,7 @@ use prismforge_core::store::{DeviceNames, Profiles, StdFileOps, StoreSummary};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
+use crate::groups::GroupsStore;
 use crate::settings::SettingsStore;
 
 const REAL_FOLDER: &str = "store";
@@ -64,6 +65,8 @@ pub struct Stores {
     real: Mutex<Option<Profiles>>,
     demo: Mutex<Option<Profiles>>,
     settings: Mutex<Option<SettingsStore>>,
+    real_groups: Mutex<Option<GroupsStore>>,
+    demo_groups: Mutex<Option<GroupsStore>>,
 }
 
 impl Stores {
@@ -74,6 +77,8 @@ impl Stores {
             real: Mutex::new(None),
             demo: Mutex::new(None),
             settings: Mutex::new(None),
+            real_groups: Mutex::new(None),
+            demo_groups: Mutex::new(None),
         }
     }
 
@@ -108,6 +113,21 @@ impl Stores {
             StoreKind::Real => self.real.lock().await.clone(),
             StoreKind::Demo => self.demo.lock().await.clone(),
         }
+    }
+
+    /// The groups file of the store of `kind`; it sits beside that store's device list.
+    pub async fn groups(&self, kind: StoreKind) -> Result<GroupsStore, StoreUnavailable> {
+        let mut slot = match kind {
+            StoreKind::Real => self.real_groups.lock().await,
+            StoreKind::Demo => self.demo_groups.lock().await,
+        };
+        if let Some(groups) = slot.as_ref() {
+            return Ok(groups.clone());
+        }
+        self.hold_lock().await?;
+        Ok(slot
+            .insert(GroupsStore::open(self.folder(kind)).await)
+            .clone())
     }
 
     /// Per user, not per store: the settings file sits in the root beside both store folders.
