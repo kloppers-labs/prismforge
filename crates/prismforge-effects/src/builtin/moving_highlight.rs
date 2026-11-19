@@ -80,4 +80,14 @@ impl MovingHighlight {
         let half_width = (self.width * ring / 2.0).max(1.0);
         mix(self.background, self.color, 1.0 - distance / half_width)
     }
+
+    /// The band runs across a plane and wraps round; it is at least one LED gap wide on each side of its centre.
+    pub fn color_along(&self, seconds: f64, position: f64, pitch: f64) -> Rgb {
+        let place = self.direction.orient(position);
+        let centre = phase(seconds, self.speed);
+        let gap = (place - centre).rem_euclid(1.0);
+        let distance = gap.min(1.0 - gap);
+        let half_width = (self.width / 2.0).max(pitch);
+        mix(self.background, self.color, 1.0 - distance / half_width)
+    }
 }
