@@ -77,10 +77,17 @@ export class EffectsState {
     private readonly changed: () => void,
   ) {}
 
-  async load() {
+  private loading: Promise<void> | null = null;
+
+  load(): Promise<void> {
     if (this.catalog) {
-      return;
+      return Promise.resolve();
     }
+    this.loading ??= this.fetchCatalog().finally(() => (this.loading = null));
+    return this.loading;
+  }
+
+  private async fetchCatalog() {
     this.catalogProblem = null;
     const answer = await api.effectCatalog();
     if (answer.ok) {

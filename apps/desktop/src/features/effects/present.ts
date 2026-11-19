@@ -228,3 +228,24 @@ export function stopText(outcome: RestoreOutcome | null, server: string): StopTe
     details: [restoreFailureText(outcome.NotRestored.failure, server), "Select a hardware mode below, or set the lighting again in OpenRGB."],
   };
 }
+
+/** One line for the Devices screen: what drives this device's lighting now, as PrismForge knows it. */
+export function controlSummary(session: SessionSnapshot, device: SessionDevice, effectLabel: (id: string) => string | null): string | null {
+  const ref = reference(device);
+  const output = ref === null ? null : outputOf(session, ref);
+  if (!output || ref === null) {
+    return null;
+  }
+  const owner = output.owner;
+  if (owner === "Effect") {
+    const effects = session.output.scene.assignments.filter((assignment) => assignment.target.device === ref);
+    const names = [...new Set(effects.map((assignment) => effectLabel(assignment.effect.effect) ?? assignment.effect.effect))];
+    const what = names.length === 1 ? `the PrismForge effect ${names[0]}` : "PrismForge effects";
+    const state = shortCondition(output.condition);
+    return state === "running" || state === "idle" ? `Runs ${what}.` : `Runs ${what}, ${state} now.`;
+  }
+  if ("HardwareMode" in owner) {
+    return `Runs hardware mode ${modeName(device, owner.HardwareMode.mode)}, selected in PrismForge.`;
+  }
+  return `Left to ${owner.External.label}. PrismForge sends nothing to it.`;
+}

@@ -11,7 +11,7 @@
   let current = $derived(entries.find((entry) => entry.key === app.selected) ?? entries[0]);
 </script>
 
-<div class="inventory">
+<div class="two-pane">
   <DeviceList {entries} selected={current?.key ?? null} issues={session.issues.length} names={app.names} onselect={(key) => (app.selected = key)} />
   {#if current}
     {#key current.key}
@@ -19,12 +19,3 @@
     {/key}
   {/if}
 </div>
-
-<style>
-  .inventory {
-    display: grid;
-    grid-template-columns: minmax(260px, 320px) 1fr;
-    min-height: 0;
-    height: 100%;
-  }
-</style>

@@ -145,6 +145,29 @@ input {
   white-space: nowrap;
 }
 
+.two-pane {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.two-pane > * {
+  min-height: 0;
+}
+
+@media (max-width: 760px) {
+  .two-pane {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  }
+
+  .two-pane > :first-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+}
+
 .pick {
   position: relative;
   display: grid;

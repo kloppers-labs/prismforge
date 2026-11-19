@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import type { Names } from "../../lib/names";
-  import { hasDirectMode, isAmbiguous, kindLabel, ledCount } from "./present";
+  import { distinction, hasDirectMode, isAmbiguous, kindLabel, ledCount } from "./present";
 
   type Entry = { key: string; device: SessionDevice };
 
@@ -12,20 +12,46 @@
     names,
     onselect,
   }: { entries: Entry[]; selected: string | null; issues: number; names: Names; onselect: (key: string) => void } = $props();
+
+  let rows: HTMLButtonElement[] = $state([]);
+  let apart = $derived(distinction(entries.map((entry) => entry.device), (device) => names.device(device)));
+
+  function move(event: KeyboardEvent, index: number) {
+    const next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: entries.length - 1 }[event.key];
+    if (next === undefined) {
+      return;
+    }
+    event.preventDefault();
+    const at = Math.min(Math.max(next, 0), entries.length - 1);
+    const entry = entries[at];
+    if (entry) {
+      onselect(entry.key);
+      rows[at]?.focus();
+    }
+  }
 </script>
 
 <nav class="list" aria-labelledby="devices-title">
-  <h2 id="devices-title" class="title">Devices <span class="count numeric">{entries.length}</span></h2>
+  <h1 id="devices-title" class="title">Devices <span class="count numeric">{entries.length}</span></h1>
   <ul>
-    {#each entries as { key, device } (key)}
+    {#each entries as { key, device }, index (key)}
       <li>
-        <button type="button" aria-current={key === selected ? "true" : undefined} onclick={() => onselect(key)}>
-          <span class="name">{names.device(device)}</span>
-          <span class="meta">{kindLabel(device.descriptor.kind)}, {ledCount(device.descriptor.led_count)}</span>
+        <button
+          type="button"
+          class="pick"
+          bind:this={rows[index]}
+          tabindex={key === selected ? 0 : -1}
+          aria-current={key === selected ? "true" : undefined}
+          onclick={() => onselect(key)}
+          onkeydown={(event) => move(event, index)}
+        >
+          <span class="pick-name">{names.device(device)}</span>
+          {#if apart[index]}<span class="pick-meta">{apart[index]}</span>{/if}
+          <span class="pick-meta">{kindLabel(device.descriptor.kind)}, {ledCount(device.descriptor.led_count)}</span>
           {#if !device.available || isAmbiguous(device) || !hasDirectMode(device)}
             <span class="tags">
-              {#if !device.available}<span class="tag unavailable">Unavailable</span>{/if}
-              {#if isAmbiguous(device)}<span class="tag identical">Identical device</span>{/if}
+              {#if !device.available}<span class="tag">Unavailable</span>{/if}
+              {#if isAmbiguous(device)}<span class="tag caution">Identical device</span>{/if}
               {#if !hasDirectMode(device)}<span class="tag">No Direct Mode</span>{/if}
             </span>
           {/if}
@@ -47,21 +73,21 @@
     border-right: 1px solid var(--line-subtle);
     background: var(--surface-1);
     overflow-y: auto;
-    padding: 16px 12px;
+    padding: var(--space-4) var(--space-3);
   }
 
   .title {
     font-size: var(--font-s);
     font-weight: var(--weight-strong);
     color: var(--text-dim);
-    padding: 0 8px 10px;
+    padding: 0 var(--space-2) var(--space-3);
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: baseline;
   }
 
   .count {
-    color: var(--text-faint);
+    color: var(--text-dim);
   }
 
   ul {
@@ -72,75 +98,15 @@
     gap: 2px;
   }
 
-  li button {
-    width: 100%;
-    display: grid;
-    gap: 2px;
-    text-align: left;
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 9px 10px 9px 14px;
-    position: relative;
-    font-weight: var(--weight-regular);
-  }
-
-  li button:hover:not(:disabled) {
-    background: var(--surface-2);
-    border-color: transparent;
-  }
-
-  li button[aria-current="true"] {
-    background: var(--surface-2);
-    border-color: var(--line-subtle);
-  }
-
-  li button[aria-current="true"]::before {
-    content: "";
-    position: absolute;
-    left: 4px;
-    top: 10px;
-    bottom: 10px;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--spectrum);
-    background-size: 100% 600%;
-  }
-
-  .name {
-    font-weight: var(--weight-strong);
-  }
-
-  .meta {
-    color: var(--text-dim);
-    font-size: var(--font-s);
-  }
-
   .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 4px;
-  }
-
-  .tag {
-    font-size: var(--font-xs);
-    padding: 0 6px;
-    border-radius: var(--radius-xs);
-    border: 1px solid var(--line-subtle);
-    color: var(--text-dim);
-  }
-
-  .unavailable {
-    border-style: dashed;
-  }
-
-  .identical {
-    border-color: var(--warning-line);
-    color: var(--warning);
+    gap: var(--space-1) var(--space-3);
+    margin-top: var(--space-1);
   }
 
   .issues {
-    margin: 16px 8px 0;
+    margin: var(--space-4) var(--space-2) 0;
     font-size: var(--font-s);
     color: var(--text-dim);
   }

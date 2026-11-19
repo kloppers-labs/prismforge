@@ -84,6 +84,9 @@ export class AppState {
       return;
     }
     this.view = view;
+    if (view.session !== null) {
+      void this.effects.load();
+    }
     if (view.connect_apply === null) {
       this.connectApplyDismissed = false;
     }
@@ -105,6 +108,12 @@ export class AppState {
     }
     this.uncover();
     this.screen = screen;
+  }
+
+  async setLighting(device: DeviceRef) {
+    await this.effects.load();
+    this.effects.select({ device, zone: null });
+    await this.go("effects");
   }
 
   dismissProblem() {
