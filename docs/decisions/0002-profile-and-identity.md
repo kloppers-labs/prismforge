@@ -26,6 +26,7 @@ The caller gives the store one folder. The desktop app uses two folders below it
 |---|---|
 | `devices.json` | The known-device registry: each `DeviceRef` with its identifying fields, and the user's names for the device and its zones |
 | `settings.json` | The profile to apply on connect, or none |
+| `groups.json` | The user's groups of targets (Task 9) |
 | `profiles/<id>.json` | One profile |
 
 Each file has a backup next to it with `.bak` added to the name. A write uses a temporary file with `.tmp` added to the name.
@@ -122,7 +123,7 @@ Every file starts with a format marker and a schema version:
 { "format": "prismforge.profile", "schema_version": { "major": 1, "minor": 0 }, "id": "p-…", "name": "Evening", … }
 ```
 
-The markers are `prismforge.profile`, `prismforge.profile-export`, `prismforge.devices` and `prismforge.settings`.
+The markers are `prismforge.profile`, `prismforge.profile-export`, `prismforge.devices`, `prismforge.settings` and `prismforge.groups`.
 
 1. **This build writes version 1.0.** It reads every file with major version 1.
 2. **A minor version only adds fields.** An older build keeps the fields it does not know and writes them back unchanged. It writes its own version number.
@@ -206,6 +207,8 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 An ended effect is recorded as stopped, an ended mode as ended, an ended declaration as handed back.
 
+A batch (Task 9) records like one command: every target it applied or stopped gets its own record, and every side effect its record, all under one sequence number. A target it covered or skipped gets none. Stop all PrismForge effects records a stop for each device. Because the side effects come from the comparison of the ownership state before and after, a target the command did not name as its own would still be recorded; the own records keep a re-apply with unchanged values in the log.
+
 3. **Nothing else creates a record.** Disconnect, reconnect, a device that becomes unavailable, a refused or paused write, identify and its restore, the release at disconnect or shutdown, and the scheduler change no record. A command that fails creates no record.
 4. **A profile apply is not a user edit.** Its commands carry the profile origin and create no record. When the apply ends, the session loop returns its current sequence number in command order. That number is the profile's baseline.
 5. **Replies come after the snapshot.** The session publishes the snapshot that shows a command's result before it sends the reply, for every command. A caller that sees a reply also sees its result.
@@ -221,13 +224,25 @@ An ended effect is recorded as stopped, an ended mode as ended, an ended declara
 5. **The baseline moves only after a successful update.** An update whose report is empty writes no file and keeps the backup as it was. A second update with no new user command changes nothing.
 6. **The report comes from the same computation.** `Saved { id, changes, frame_rate }` lists each setting the update adds, replaces (with what it was) or removes. Everything not listed is unchanged. `preview_update` runs the same computation without writing, so the interface can show it before the save.
 7. **Records are linked to stored devices with the matching rules.** A record for a device that resolves to a stored device changes that device's settings. A record for a device the profile does not have adds a device entry from the current inventory.
-8. **Invariant.** After an update, the stored profile equals the stored profile before it, with the session's own state for every device the user changed since the last save. A seeded random test checks this over many command sequences (apply to a zone or a whole device, stop, hardware mode, declaration, hand-back, frame rate) with updates at random points, together with the rule for `unsaved_changes`.
+8. **Invariant.** After an update, the stored profile equals the stored profile before it, with the session's own state for every device the user changed since the last save. A seeded random test checks this over many command sequences (apply to a zone or a whole device, stop, hardware mode, declaration, hand-back, frame rate, and since Task 9 batch apply, batch stop and stop all, with overlapping and repeated targets) with updates at random points, together with the rule for `unsaved_changes`.
 
 ### Create from the session
 
 - **With an active profile:** the new profile is the active profile plus the pending user records, under the new name and id. Skipped and unresolved settings move into it.
 - **Without an active profile:** the new profile is what runs now: the scene, the hardware modes, the external statements and the frame rate. A device label is the user's name from the registry, or the model.
 - The new profile becomes the active profile, with the sequence number read before the save as its baseline.
+
+## Groups
+
+A group (Task 9) is a named set of targets that the user selects again. It selects; it owns no lighting, and profiles keep storing their own per-target settings. Later tasks reuse groups (setup views, automation rules) through the same model in `crates/prismforge-core/src/store/groups.rs`.
+
+1. **One file per store.** `groups.json` sits in the real store folder and in the demo store folder, beside the device list whose references it uses, so demo groups never meet real devices. It is written durably like every store file (temporary file, sync, backup, replace; recovery from the backup with a notice; a damaged file is renamed, never deleted). A file with a newer major version is left untouched and every change is refused with `NewerFile`.
+2. **Schema.** `{ "format": "prismforge.groups", "schema_version": { "major": 1, "minor": 0 }, "groups": [ { "id": "g-…", "name": "Case fans", "members": [ { "device": "dev-…", "zone": 1, "label": "Demo Motherboard", "zone_name": "Addressable Header 1" } ] } ] }`. Unknown fields at every level are kept and written back.
+3. **Validation.** A name follows the profile name rules (trimmed, 1 to 60 characters, no control character) and is unique without regard to case. At most 100 groups and 256 members a group. A new member must be a device or zone the session reports now; its device and zone names are kept with it. A file that breaks a rule is not used.
+4. **Never guessed.** A member is matched by its stored reference only, through the device registry, and reported as resolved, unavailable, missing, ambiguous, or changed (the zone at that index no longer has the name it had). Selecting a group selects only resolved members that can take an effect and names the others. A member missing today is kept through every rename, addition and removal.
+5. **Everything** is not stored: it is every target that can take an effect today, computed when it is selected.
+6. **Stays on this computer.** Groups are not part of a profile, an export or a diagnostics copy.
+7. **Commands.** `groups`, `create_group`, `rename_group`, `add_group_members`, `remove_group_member` and `delete_group` take the session slot only to read the devices and the store kind, then work on the store alone, at the store's place in the lock order. They send nothing to a device, so the apply lock does not refuse them.
 
 ## Durable writes and recovery
 

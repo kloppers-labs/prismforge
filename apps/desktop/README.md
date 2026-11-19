@@ -50,6 +50,13 @@ PRISMFORGE_UPDATE_GENERATED=1 cargo test -p prismforge-desktop --features ts --t
 | `effect_catalog` | Returns the effect definitions, the frame rate range and the preview limits. |
 | `apply_effect(target, effect)` | Runs an effect instance on a device or zone. The same effect on the same target keeps its start time. |
 | `stop_effect(target)` | Stops the effect on a target. Returns the restore outcome once the device has no effect left. |
+| `apply_effect_batch(targets, effect)` | Runs one effect on several targets with one shared start time. Returns a result per target: applied, covered by another target of the batch, or skipped with the reason. At most 256 targets. |
+| `stop_effect_batch(targets)` | Stops the effect on each target, with the same result form. |
+| `stop_all_effects` | Stops every PrismForge effect, one result per device. The tray's Stop all uses the same session command. |
+| `watch_live_output(targets)` | Sends the colours PrismForge last wrote to these targets as `live-output` events, at most 25 per second, until the next call; an empty list stops it. Makes no backend call. |
+| `groups` | Returns the groups of the store in use, each member matched against the devices of now (resolved, unavailable, missing, ambiguous or changed), the notices and the limits. |
+| `create_group(name, targets)`, `rename_group(id, name)` | Make a group of targets that the session reports now, or rename one. |
+| `add_group_members(id, targets)`, `remove_group_member(id, target)`, `delete_group(id)` | Edit or delete a group. Members missing today are kept until removed. |
 | `select_mode(device, mode)` | Re-applies a reported hardware mode and stops any PrismForge effect on the device. |
 | `declare_external(device, label)` | Records the user's statement that another program controls a device. The label is trimmed and cut to 60 characters. |
 | `clear_external(device)` | Records that the user handed the device back. |
@@ -77,6 +84,8 @@ The event `session-view` carries the latest view. The view also names the profil
 
 Nothing connects and nothing is written to a device until the user selects an action, with two exceptions the user turns on: "Connect to OpenRGB when PrismForge starts" connects at start, and when a profile is set to "Apply this profile when PrismForge connects", any connect also applies that profile as soon as the connection is made. Closing the window hides it or quits, as the user chose; the first close asks. Quit stops the session before the process ends. The session restores the devices it runs effects on before it stops. `docs/decisions/0004-lifecycle.md` describes the tray, start-up and quit.
 
+The event `live-output` carries the colours PrismForge last wrote, per device and zone, while the Effects live view asks for them.
+
 The event `lifecycle-view` carries the lifecycle view after each change. Each has a rising `revision` of its own.
 
 Effect commands return `CommandError`. `InvalidEffect` carries the structured validation errors, `NoEffect` names the target, and `Session` carries `Busy`, the ownership conflict and backend errors. Profile commands add `ProfileApplying`, `NotConnected`, `Store` (with `NotActive` and `SessionUnavailable`), `StoreUnavailable` (`InUse` when another PrismForge holds the folder), `Unreadable` and `File` (a path rule). Settings add `Setting`: no tray, no remembered address, or a start entry the system refused or did not keep.
@@ -95,7 +104,7 @@ Without a connection, Devices shows the connection form, and Effects shows how t
 
 - **Devices.** The list is one Tab stop; the arrow keys move through it. Devices with the same name show their location, serial tail or count. The device header holds Set lighting (opens Effects with the device chosen), Identify device and Rename, and says what drives the device now. Zone rows have short Identify and Rename buttons.
 - **Connection.** The form starts from the address of the last Connect. When a profile is marked to apply on connect, a line by Connect says that connecting applies it. Both ways in, OpenRGB and demo mode, stay side by side down to 920 px. While PrismForge waits for OpenRGB, the page offers Stop and change the address and Start demo mode.
-- **Effects.** A command bar at the top holds the target, Apply effect, Stop effect, the edit mode (Live when edits go to the device, Draft when they wait for Apply, Off with the reason) and the output line. Results and How effects run sit in the page below it. The whole effect card selects the effect. A device left to another program shows a notice with Hand back to PrismForge. Hardware modes and the other-program form sit behind Details.
+- **Effects.** The target list is a multi-select list with check marks: a click lights one target alone, Space or a Ctrl-click adds or removes a target, Shift adds a range, Ctrl+A selects every target that can take an effect; the arrow keys only move focus. A device with some zones checked shows a mixed mark. A target that cannot take an effect says why and stays out of a selection of several. With one target, a command bar holds the target, Apply effect, Stop effect, the edit mode (Live when edits go to the device, Draft when they wait for Apply, Off with the reason) and the output line, as before. With several, the bar says "Apply to 3 targets" and "Stop on 3 targets", Live edits go to all of them, and the result lists every target with a summary and Retry failed. Groups below the targets select their members (Everything selects every target that can take an effect); New group…, Add selection to a group…, Rename…, Delete… and Remove edit them. Stop all PrismForge effects sits at the foot of the list. The stage shows the draft preview or the live output. The whole effect card selects the effect. A device left to another program shows a notice with Hand back to PrismForge. Hardware modes and the other-program form sit behind Details.
 - **Profiles.** The selected profile comes first. Save current lighting… in the list header opens a dialog. Results show under the profile's actions.
 - **Settings.** Grouped: closing the window, starting with the system, effect output (the frame rate), files and quit. Each switch says its consequence in one line; more sits behind Details.
 
@@ -110,6 +119,7 @@ Long explanations sit behind a Details disclosure under one short line. Selected
 | F6, Shift+F6 | Move between the rail, the status strip, the notices, the page and Diagnostics. |
 | Tab, as the first key | Reaches "Skip to content". |
 | Arrow keys, Home, End, Escape in a chip panel | Move between its actions; Escape closes it and returns to the chip. A click outside also closes it. |
+| Arrow keys, Space, Shift, Ctrl+A, Enter in the Effects target list | Arrows, Home and End move focus only. Space toggles the target, Shift with an arrow adds the next one, Shift+Space adds a range, Ctrl+A (Command-A) selects all that can take an effect, Enter lights only this target. |
 | Shift+F10, the Menu key, or a right-click | Opens the context menu of the focused row, card, chip or Diagnostics section, at that item. Arrow keys wrap, Home and End jump, a letter moves to the next item that starts with it, Enter or Space runs it, Escape or Tab closes the menu and returns focus. Every item is also a button on the same screen. In text fields the system's Cut, Copy and Paste menu stays. |
 | Ctrl+Q (Windows and Linux) | Quits PrismForge. |
 
@@ -119,7 +129,7 @@ The design tokens are in `src/lib/tokens.css`: colour roles, type, spacing, radi
 
 `pnpm preview:ui` serves the real `App` at `http://localhost:1430` with a fake Tauri transport and the fixtures in `src/test/fixtures`. It is for design work, screenshots and contributors without hardware. It never starts Rust and never reaches hardware. A badge in the corner says "Interface preview: simulated data" and opens a list of states.
 
-- `?state=<name>` picks a state. The names are in `src/dev-preview/scenarios.ts`, for example `first-run`, `first-run-remembered`, `retrying`, `lost`, `demo-unsaved`, `effects-running`, `profiles-unresolved`, `applying`, `notices`, `settings`, `diagnostics`, `effects-demo-diagnostics` and `long-names`. A state with an OpenRGB session uses a copy of a store fixture marked as the real store.
+- `?state=<name>` picks a state. The names are in `src/dev-preview/scenarios.ts`, for example `first-run`, `first-run-remembered`, `retrying`, `lost`, `demo-unsaved`, `effects-running`, `profiles-unresolved`, `applying`, `notices`, `settings`, `diagnostics`, `effects-demo-diagnostics`, `long-names`, and for Task 9 `effects-several-mixed`, `effects-group-missing` (a real-store group with a member not found today), `effects-batch-skips`, `effects-live` and `effects-draft`. A state with an OpenRGB session uses a copy of a store fixture marked as the real store.
 - `&area=Effects` opens an area. `&open=connection` or `&open=profile` opens a chip panel. `&diagnostics` opens Diagnostics.
 - Commands that the preview does not simulate fail with a plain message.
 
@@ -139,7 +149,7 @@ The store is in the per-user configuration folder that Tauri resolves for `io.gi
 
 ## Effects screen and preview
 
-The effects screen has no effect maths. Rust computes every frame. The preview asks `preview_effect` for at most 60 LEDs and 90 frames, 20 to 1,000 ms apart, and plays the batch in a small strip. It asks for the next batch when the batch runs out, and again 200 ms after a setting changes. It stops asking and animating when its panel is closed or the window is hidden. With reduced motion it shows one still frame. The preview never calls an output command.
+The effects screen has no effect maths. Rust computes every frame. The stage has two states. The draft preview asks `preview_effect` for at most 60 LEDs and 90 frames, 20 to 1,000 ms apart, once per distinct LED count of the selected targets, and plays the batches on one clock, a strip per target. It asks for the next batch when the batch runs out, and again 200 ms after a setting changes. The live output asks `watch_live_output` for the selected targets and draws what Rust sends: a row for a linear zone, a grid for a matrix zone. Both stop asking when the stage is closed, the other state is shown, or the window is hidden. With reduced motion the draft shows one still frame and the live view a new still frame every 2 seconds. Both views hold back frames that would flash more than three times a second and say so; the devices still get every frame. Neither view calls an output command.
 
 ## Security and capabilities
 

@@ -53,6 +53,25 @@ An `EffectInstance` is the effect id and a map from control id to value. In JSON
 10. **A lost connection pauses output.** After reconnect and refresh, each device gets direct mode again before its first frame. A device that is ambiguous, missing, without direct mode or with a changed zone gets no output. Its condition shows the reason.
 11. **The counters are real.** `frames_written` counts frames the backend accepted. `ticks_skipped` counts ticks dropped because the tick before them was not finished, including commands handled between its calls. `output_writes_refused` counts refusals while the connection stayed open. `output_writes_failed` counts writes that ended the connection. `output_wakeups` counts the times the loop woke up for output. The client does not read acknowledgements for colour frames, so "accepted" means sent without an error.
 
+## Several targets in one command
+
+Plan 2, Task 9. The owner chose "in sync": each selected device or zone runs the whole effect on its own LEDs, and all of them share one start time, so they breathe and cycle together. "Flow in selection order" was not chosen. "Flow by real position" waits for the setup views (Tasks 10 and 11).
+
+1. **One command, one shared start.** `SessionHandle::apply_batch(targets, effect)` validates the effect once; an invalid effect refuses the whole batch and sends nothing. Every target then goes through the same take-over and ownership checks as a single apply. The start time is the earliest start among the targets that already run this effect (the start-time rule of scheduler rule 7, applied to the batch); when none does, the clock starts when the first target starts. So applying the same batch again, or a Live edit, keeps the animation running, and a target added to a running selection joins in phase.
+2. **A result per target, in the order given.** `BatchReport` holds `Applied`, `Stopped { restore }`, `Covered { by }` or `Skipped { error }` for each target. `Skipped` carries the same `OutputError` a single command would return: unknown, missing or ambiguous device, no Direct Mode, a zone out of range, a declared external owner (the conflict), an identify in progress, no effect to stop, or a backend refusal. A partial result is normal and never rolled back.
+3. **Overlapping targets.** A whole device covers its zones wherever it is listed: the zones are reported `Covered { by: whole device }` and nothing is sent for them. A target listed twice is covered by its first copy. Two zones of one device are two targets on one take-over.
+4. **External devices.** A batch that names a device the user declared external skips it with `OutputConflict` and sends nothing to it, also no direct mode.
+5. **Stop.** `stop_batch(targets)` stops each target with the single-stop rules and the same report form. `stop_all_effects()` stops every device PrismForge runs effects on, one whole-device result per device; the tray's "Stop all PrismForge effects" now uses it, and the Effects screen has the same control.
+6. **Bounded.** A batch takes at most 256 targets (`MAX_BATCH_TARGETS`); more is refused with `TooManyTargets` before anything is sent. A batch is one command, so the output of other devices waits for its backend calls, as it waits for a restore; it never waits longer than the calls the batch makes.
+7. **User intent.** A batch records one record per target it changed, and every side effect, under one sequence number (`0002-profile-and-identity.md`).
+
+## Live output
+
+1. **What PrismForge last wrote, never a second render.** `SessionHandle::live_output(targets)` opens a `LiveFeed`. After each loop turn the session copies, for the requested targets only, the colours it holds as last written (`EffectOutput::shown`): per zone, with the zone's index, name, kind and matrix size, in LED order. LEDs no effect has written yet hold the colours reported at take-over. A device without a PrismForge effect (a hardware mode, another program, nothing) has no live data.
+2. **No backend call, no write.** The copy reads the output state only. Asking for live output, or stopping, wakes the loop once and changes neither the frames, their times nor the counters; a test compares two runs, with and without a feed, frame by frame.
+3. **Bounded rate.** A feed delivers at most 25 updates per second (`LIVE_OUTPUT_RATE`), the latest state each time; frames in between are dropped, never queued. One feed at a time: a newer feed replaces the request, and dropping a feed ends the copying.
+4. **In the desktop app.** `watch_live_output(targets)` forwards one feed to the window as the `live-output` event until the next call; an empty list stops it, and the end of the session ends it. The interface asks only while the live view is visible.
+
 ## Ownership rules
 
 1. **One owner per device.** The owner is a PrismForge effect, a hardware mode selected through PrismForge, or another program that the user declared. A device that is not listed has no owner.
@@ -85,6 +104,8 @@ An `EffectInstance` is the effect id and a map from control id to value. In JSON
 3. **The interface only plays frames.** It asks for 50 frames 40 ms apart and plays them in a strip. It asks for the next batch when the batch runs out, and again 200 ms after a setting changes.
 4. **The preview stops when nobody can see it.** It stops asking and animating when its panel is closed or the window is hidden. With reduced motion it asks for one frame and shows it still.
 5. **The preview cannot change lighting.** It calls only `preview_effect`. Physical output never depends on the window.
+6. **Draft and live are two states (Task 9).** The stage on Effects shows either the draft preview, the pattern for each selected target at its own LED count on one clock (one batch per distinct LED count, played together), or the live output above. Each state has a text badge, a mark and its own frame. The live view draws a linear zone as a row and a matrix zone as a grid of its width.
+7. **Flash cap on the screen only.** Both views hold back any frame that would make a fourth flash within one second (WCAG 2.3.1): a flash is a pair of opposing changes of 10 % or more in the mean relative luminance of any row, with the darker side below 0.8. The view then says "Fast flashing is shown slowed on the screen. The devices get every frame." The cap lives in the interface, which owns playback and drawing; it never touches the frames sent to the devices, and it does not make the physical lights safe.
 
 ## Not verified
 
@@ -96,4 +117,5 @@ An `EffectInstance` is the effect id and a map from control id to value. In JSON
 - What a fresh capture remembers on such a server. If the server never reports Direct Mode but reports the colours PrismForge wrote, a fresh capture of a device in a per-LED mode remembers PrismForge's own last frame as the colours to restore. A later stop then writes that frame back and reports "restored".
 - Performance measurements. A later task measures CPU use and frame timing, including the preview's cost in the WebView.
 - The effects screen on Windows. It was run by hand on macOS in demo mode only, through the accessibility tree, without screenshots.
-- Whether a real device shows what the preview shows. The preview shows the pattern for LEDs in a line; the device layout is unknown.
+- Whether a real device shows what the preview shows.
+- The live view against a real OpenRGB server and real devices, the batch timing on Windows, and the live event rate in WebView2. The preview shows the pattern for LEDs in a line; the device layout is unknown.
