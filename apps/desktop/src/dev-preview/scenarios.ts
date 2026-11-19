@@ -35,6 +35,20 @@ function view(session: SessionSnapshot | null, extra: Partial<ShellView> = {}): 
 
 const base = { store: storeEmpty, lifecycle: lifecycleFresh };
 
+function longNames(): { session: SessionSnapshot; store: StoreView } {
+  const session = structuredClone(sessions.openRgbConnected);
+  session.backend.address = "lighting-controller.living-room.home.arpa:16742";
+  const store = structuredClone(storeUnsaved);
+  store.kind = "Real";
+  const active = store.summary.profiles.find((profile) => profile.id === store.summary.active);
+  if (active) {
+    active.name = "Evening with the desk lamps and the long hallway strip";
+  }
+  return { session, store };
+}
+
+const long = longNames();
+
 export const SCENARIOS: Record<string, Scenario> = {
   "first-run": { ...base, label: "First run, not connected", view: view(null), store: storeOffline },
   connecting: { ...base, label: "Connecting to OpenRGB", view: view(sessions.openRgbConnecting) },
@@ -62,6 +76,7 @@ export const SCENARIOS: Record<string, Scenario> = {
   settings: { ...base, label: "Settings", view: view(sessions.openRgbConnected), lifecycle: lifecycleStartPath, area: "Settings" },
   "settings-background": { ...base, label: "Settings, keep running chosen", view: view(sessions.demoConnected), lifecycle: lifecycleChosen, area: "Settings" },
   diagnostics: { ...base, label: "Diagnostics drawer", view: view(sessions.openRgbDegraded), diagnostics: true },
+  "long-names": { ...base, label: "Long server address and profile name", view: view(long.session), store: long.store },
 };
 
 export const DEFAULT_SCENARIO = "demo";
