@@ -75,11 +75,11 @@ After a connection, **Devices** shows the device list and identify. **Effects** 
 **Settings** holds what PrismForge does when it starts and when you close the window:
 
 - **When you close the window.** The first time you close it, PrismForge asks. "Keep running in the tray" hides the window; PrismForge and its effects keep running, and its tray icon (the menu bar on macOS) shows the window again. "Quit PrismForge" ends it. Without a tray, closing the window always quits.
-- **Quit PrismForge** is in the tray menu, on Settings, and on the keyboard (Command-Q on macOS, Ctrl+Q on Windows). It stops PrismForge effects, puts back the earlier lighting where it can, disconnects and ends the process.
+- **Quit PrismForge** is in the tray menu, on Settings, in the macOS app menu, and on the keyboard (Command-Q on macOS, Ctrl+Q on Windows). It stops PrismForge effects, puts back the earlier lighting where it can, disconnects and ends the process. When the system ends PrismForge instead (Dock Quit on macOS, logging out, shutting down), PrismForge tries the same for up to 6 seconds; the system may end it sooner. Ending it in Task Manager or Activity Monitor puts nothing back.
 - **When PrismForge starts**, in four steps, each off until you turn it on: 1. start PrismForge when you sign in; 2. start hidden in the tray; 3. connect to OpenRGB when PrismForge starts, at the address of your last Connect; 4. the profile marked "Apply this profile when PrismForge connects". With steps 1, 3 and 4 on, your lights change at system start without a click. Settings shows which profile that is.
 - Starting PrismForge a second time shows the window of the one that runs.
 
-Turn off "Start PrismForge when you sign in" before you uninstall. `docs/decisions/0004-lifecycle.md` says how to remove the entry by hand.
+Start with the system is always for your user only. Turn it off before you uninstall: the NSIS uninstaller removes the entry, the MSI does not. To remove it by hand on Windows, run `reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v PrismForge /f`; on macOS, `rm ~/Library/LaunchAgents/PrismForge.plist`. An earlier build run as administrator may have added an entry for every user; Settings says so, and removing it needs `reg delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v PrismForge /f` in a Command Prompt opened as administrator. `docs/decisions/0004-lifecycle.md` has the details.
 
 On **Devices**, **Rename device** and **Rename zone** give your own names. They appear on every screen. Diagnostics keeps the reported names.
 
