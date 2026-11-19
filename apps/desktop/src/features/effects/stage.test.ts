@@ -178,3 +178,18 @@ test("the_live_output_asks_again_after_a_refused_request", async () => {
 
   await waitFor(() => expect(watched(shell.calls).filter((targets) => (targets as unknown[]).length === 2)).toHaveLength(2), { timeout: 3_000 });
 });
+
+test("a_live_request_refused_for_good_is_not_asked_again_and_says_why", async () => {
+  const shell = fakeShell(openRgbKeyboardRunning, effectHandlers({
+    preview_effect: () => rainbowPreview,
+    watch_live_output: (call) => ((call.targets as unknown[]).length > 0 ? Promise.reject({ TooManyTargets: { limit: 256 } }) : null),
+  }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+  await fireEvent.click(button("Live output"));
+
+  expect(await screen.findByText(/^The live output cannot be shown\. PrismForge takes at most 256 targets at once\./)).toBeTruthy();
+  await new Promise((resolve) => setTimeout(resolve, 2_500));
+  expect(watched(shell.calls).filter((targets) => (targets as unknown[]).length > 0)).toHaveLength(1);
+});

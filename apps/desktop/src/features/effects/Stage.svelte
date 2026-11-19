@@ -106,7 +106,11 @@
       {#if !sending}
         <p class="caption">No PrismForge effect runs on {rows.length === 1 ? "this target" : "these targets"}, so nothing is sent.</p>
       {/if}
-      <LiveRows {rows} output={watcher.output} />
+      {#if watcher.refusal}
+        <p class="caption warn" role="alert">The live output cannot be shown. {watcher.refusal}</p>
+      {:else}
+        <LiveRows {rows} output={watcher.output} />
+      {/if}
       {#if watcher.reduced}<p class="caption">Motion is reduced, so the live view shows a new still frame every 2 seconds.</p>{/if}
       {#if watcher.slowed}<p class="caption warn">Fast flashing is shown slowed on the screen. The devices get every frame.</p>{/if}
     {/if}

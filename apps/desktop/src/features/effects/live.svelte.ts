@@ -1,5 +1,6 @@
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { api } from "../../lib/api/client";
+import { api, type Failure } from "../../lib/api/client";
+import { failureText } from "../../lib/errors";
 import type { LiveOutput } from "../../lib/api/bindings/LiveOutput";
 import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
 import { FlashLimiter } from "./flash";
@@ -12,6 +13,7 @@ export class LiveWatcher {
   output = $state<LiveOutput | null>(null);
   slowed = $state(false);
   reduced = $state(false);
+  refusal = $state<string | null>(null);
 
   private limiter = new FlashLimiter();
   private asked = "[]";
@@ -44,6 +46,7 @@ export class LiveWatcher {
     }
     clearTimeout(this.again);
     this.asked = asked;
+    this.refusal = null;
     this.limiter.reset();
     this.lastDrawn = Number.NEGATIVE_INFINITY;
     if (targets.length === 0) {
@@ -52,10 +55,14 @@ export class LiveWatcher {
     void this.ask(targets, asked);
   }
 
-  /** A refused request is asked again, so the view never shows a stopped feed as live. */
+  /** A request refused for now is asked again, so the view never shows a stopped feed as live; a lasting refusal is shown. */
   private async ask(targets: OutputTarget[], asked: string) {
     const answer = await api.watchLiveOutput(targets);
     if (answer.ok || asked !== this.asked || this.closed) {
+      return;
+    }
+    if (lasting(answer.error)) {
+      this.refusal = failureText(answer.error);
       return;
     }
     this.asked = "";
@@ -77,4 +84,8 @@ export class LiveWatcher {
     }
     this.slowed = this.limiter.slowed;
   }
+}
+
+function lasting(error: Failure): boolean {
+  return typeof error === "object" && "TooManyTargets" in error;
 }
