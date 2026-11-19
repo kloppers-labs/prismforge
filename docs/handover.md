@@ -80,7 +80,7 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `0e077f4`, the last code commit of Task 8b.
+Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `c1e567f`, the last code commit of Task 8b fix round 1.
 
 | Command | Result |
 |---|---|
@@ -89,11 +89,11 @@ Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `0e077f4`, the last code 
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
 | `cargo test --workspace` | Pass: 331 tests (no Rust change in Task 8b) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 315 interface tests in 24 files (61 new in Task 8b) |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 326 interface tests in 24 files (72 new in Task 8b, 11 of them in fix round 1) |
 | `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (265 modules, 3 files checked) |
-| `pnpm tauri:build` in `apps/desktop` | Pass at `0e077f4`: `PrismForge.app` (15.57 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.53 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (265 modules). |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `c1e567f`: `PrismForge.app` (15.57 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.53 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (265 modules). |
 
-Every menu was opened in the interface preview in Orca's browser (Chromium on macOS) at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300, at the right and bottom edges, from the keyboard on a profile row and a zone button, and on Diagnostics docked (1440 × 900) and covering (1100 × 700). Every menu stayed inside the window with its 8 px margin. The screenshots are design evidence only.
+Every menu was opened in the interface preview in Orca's browser (Chromium on macOS) at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300, at the right and bottom edges, from the keyboard on a profile row and a zone button, and on Diagnostics docked (1440 × 900) and covering (1100 × 700). Every menu stayed inside the window with its 8 px margin. Fix round 1 retook the zone row at 640 × 400, a Diagnostics section at 460 × 300, the keyboard menus, the profile menus with the new labels, and a keyboard menu that moves with its row when the target list scrolls. The screenshots are design evidence only.
 
 Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `10a6bd0`, the last code commit of Task 8 fix round 3.
 
@@ -260,8 +260,7 @@ Not done:
 - **The shell is not seen in the native window.** Task 7 was checked in the browser preview only: no native window chrome, no WebView2, no forced colours, no screen reader. Focus rings were not visible in the preview screenshots, because the preview tab does not hold system focus.
 - **The strip divider can stand alone.** When the strip wraps at 200 % text, the divider between the chips ends the first row.
 - **Screen copy is still long.** The audit's per-screen findings (E1 to E16, P1 to P10, C1 to C9, D2 to D10) are for Task 8. The Effects paragraph now states the stored close choice, but its full rewrite (E2) is Task 8.
-- **Context menus are checked in the browser preview only.** WebView2's own secondary-click and Menu-key events, the suppression of its menu in a release build, and a screen reader on the menu are not checked. Selected text outside a field cannot be copied from a right-click menu in a release build; Ctrl+C still copies it.
-- **Menu items that name more input end with an ellipsis.** "Export…" and "Delete…" open the same dialogs as the Export and Delete buttons; the buttons have no ellipsis.
+- **Context menus are checked in the browser preview only.** WebView2's own secondary-click and Menu-key events, the suppression of its menu in a release build, and a screen reader on the menu are not checked. Selected text outside a field cannot be copied from a right-click menu in a release build; Ctrl+C still copies it, and Diagnostics says so when the clipboard fails. Whether WebView2 sends `contextmenu` for a disabled button is not known; the guard listens in the capture phase, but if no event is sent, WebView2's own menu may appear on a disabled button.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## What only the owner can check (Task 8)
@@ -271,7 +270,7 @@ Not done:
 - A screen reader pass (Narrator or NVDA) over each screen, the notices and the Details disclosures.
 - Copy as text in Diagnostics: that the clipboard works in the native window.
 - Real hardware: Set lighting, the Live and Draft marks, and Hand back with a real other program.
-- Context menus in the native window on Windows: a right-click, Shift+F10 and the Menu key on a device row, a profile row and the connection chip; no WebView menu (Reload, Inspect) outside text fields in the installed build; Cut, Copy and Paste in the Host field; a menu at the right and bottom edges at 200 % scaling; Narrator or NVDA reading a disabled item with its reason.
+- Context menus in the native window on Windows: a right-click, Shift+F10 and the Menu key on a device row, a profile row and the connection chip; no WebView menu (Reload, Inspect) outside text fields in the installed build; Cut, Copy and Paste in the Host field; a menu at the right and bottom edges at 200 % scaling; Narrator or NVDA reading a disabled item with its reason and announcing Shift+F10 on rows and chips; a right-click on a disabled button (for example Identify device on the light bar) shows no WebView menu.
 
 ## Missing information from the owner
 
