@@ -18,7 +18,8 @@
   import { effectMenu, groupMenu, targetMenu, type EffectsMenuContext, type Reveal } from "./menu";
   import BatchBar from "./BatchBar.svelte";
   import BatchResults from "./BatchResults.svelte";
-  import { applyBlocked, applyingText, declaredBy, deviceOf, targetLeds } from "./present";
+  import { labelOf } from "./batch";
+  import { applyBlocked, applyingText, declaredBy, deviceOf, targetLeds, type StageRow } from "./present";
   import TargetList from "./TargetList.svelte";
   import TargetStatus from "./TargetStatus.svelte";
 
@@ -40,11 +41,12 @@
   let blocked = $derived(device && target ? (held ?? applyBlocked(session, device, target.zone)) : null);
   let left = $derived(ref === null ? null : declaredBy(session, ref));
   let running = $derived(session.output.scene.assignments.length > 0);
-  let firstLeds = $derived.by(() => {
-    const first = effects.targets[0];
-    const owner = first ? deviceOf(session, first) : null;
-    return owner && first ? targetLeds(owner, first.zone) : 0;
-  });
+  let rows: StageRow[] = $derived(
+    effects.targets.flatMap((each) => {
+      const owner = deviceOf(session, each);
+      return owner ? [{ key: `${each.device}|${each.zone ?? "all"}`, label: labelOf(session, app.names, each), leds: targetLeds(owner, each.zone), target: each }] : [];
+    }),
+  );
   let modesOpen = $state(false);
   let externalOpen = $state(false);
   let menus: EffectsMenuContext = $derived({ effects, groups: app.groups, session, names: app.names, held, reveal });
@@ -117,7 +119,7 @@
       <div class="scroll">
         <div class="inner">
           <BatchResults {effects} {session} names={app.names} />
-          <EffectEditor {effects} {catalog} leds={firstLeds} locked={false} menu={(definition) => effectMenu(menus, definition, null, effects.blocked)} />
+          <EffectEditor {effects} {catalog} {rows} {session} locked={false} menu={(definition) => effectMenu(menus, definition, null, effects.blocked)} />
           <div class="how">
             <p>Runs while PrismForge runs and is connected. Every target runs the whole effect on its own LEDs, and all of them start together.</p>
             <Details summary="How effects run">
@@ -143,7 +145,8 @@
             <EffectEditor
               {effects}
               {catalog}
-              leds={targetLeds(device, target.zone)}
+              {rows}
+              {session}
               locked={left !== null}
               menu={(definition) => effectMenu(menus, definition, device, blocked)}
             />

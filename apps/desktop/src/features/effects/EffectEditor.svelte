@@ -4,19 +4,23 @@
   import type { Menu } from "../../lib/shell/menu.svelte";
   import ControlField from "./controls/ControlField.svelte";
   import EffectPicker from "./EffectPicker.svelte";
-  import PreviewPanel from "./PreviewPanel.svelte";
+  import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+  import type { StageRow } from "./present";
+  import Stage from "./Stage.svelte";
   import type { EffectsState } from "./state.svelte";
 
   let {
     effects,
     catalog,
-    leds,
+    rows,
+    session,
     locked,
     menu,
   }: {
     effects: EffectsState;
     catalog: EffectCatalog;
-    leds: number;
+    rows: StageRow[];
+    session: SessionSnapshot;
     locked: boolean;
     menu: (effect: EffectDefinition) => Menu | null;
   } = $props();
@@ -50,7 +54,7 @@
         {/if}
       {/each}
     </div>
-    <PreviewPanel instance={checked.instance} {leds} limits={catalog.preview} />
+    <Stage instance={checked.instance} {rows} {session} limits={catalog.preview} />
   {/if}
 </section>
 
