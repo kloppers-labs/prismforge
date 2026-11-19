@@ -230,3 +230,23 @@ test("a_menu_request_is_dropped_when_the_details_fail_to_load", async () => {
   await wait(50);
   expect(screen.queryByRole("dialog")).toBeNull();
 });
+
+test("duplicate_and_the_mark_in_the_menu_show_their_profile_first_like_every_row_item", async () => {
+  const shell = fakeShell(demoConnected, handlers(storeTwo, { duplicate_profile: () => OLDER, set_apply_on_connect: () => null }));
+  render(App);
+
+  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Apply this profile when PrismForge connects", "menuitemcheckbox");
+  await screen.findByRole("article", { name: "Evening (2)" });
+  await waitFor(() => expect(args(shell, "set_apply_on_connect")).toEqual([{ id: OLDER }]));
+  const order = shell.commands().filter((command) => command === "profile_details" || command === "set_apply_on_connect");
+  expect(order.indexOf("profile_details")).toBeLessThan(order.indexOf("set_apply_on_connect"));
+
+  await fireEvent.click(await row("Evening"));
+  await screen.findByRole("article", { name: "Evening" });
+  const before = shell.calls.length;
+  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Duplicate");
+  await waitFor(() => expect(args(shell, "duplicate_profile")).toEqual([{ id: OLDER }]));
+  const later = shell.calls.slice(before).map((call) => `${call.command}:${String(call.args.id)}`);
+  expect(later.indexOf(`profile_details:${OLDER}`)).toBeGreaterThan(-1);
+  expect(later.indexOf(`profile_details:${OLDER}`)).toBeLessThan(later.indexOf(`duplicate_profile:${OLDER}`));
+});

@@ -36,13 +36,24 @@ export function profileMenu(context: ProfilesMenuContext, profile: ProfileSummar
   }
   items.push(
     { id: "profile.rename", label: "Rename", run: (origin) => profiles.ask(id, "rename", origin) },
-    { id: "profile.duplicate", label: "Duplicate", reason: busy, run: () => profiles.duplicate(id) },
+    {
+      id: "profile.duplicate",
+      label: "Duplicate",
+      reason: busy,
+      run: async () => {
+        await profiles.show(id);
+        await profiles.duplicate(id);
+      },
+    },
     { id: "profile.export", label: "Export…", run: (origin) => profiles.ask(id, "export", origin) },
     {
       id: "profile.apply-on-connect",
       label: "Apply this profile when PrismForge connects",
       checked: marked,
-      run: () => profiles.setApplyOnConnect(marked ? null : id),
+      run: async () => {
+        await profiles.show(id);
+        await profiles.setApplyOnConnect(marked ? null : id);
+      },
     },
     { id: "profile.delete", label: "Delete", danger: true, reason: applying, run: (origin) => profiles.ask(id, "delete", origin) },
   );
