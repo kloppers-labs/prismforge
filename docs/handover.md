@@ -78,7 +78,7 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `c7867a1`, the last code commit of Task 8 fix round 2.
+Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `10a6bd0`, the last code commit of Task 8 fix round 3.
 
 | Command | Result |
 |---|---|
@@ -87,9 +87,9 @@ Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `c7867a1`, the last code c
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
 | `cargo test --workspace` | Pass: 331 tests (Task 8 fix round 2 added one: every change to the marked profile publishes the start profile) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 252 interface tests in 16 files (51 new in Task 8) |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 254 interface tests in 16 files (53 new in Task 8) |
 | `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (256 modules, 3 files checked). Tauri now runs it as `beforeBuildCommand`. |
-| `pnpm tauri:build` in `apps/desktop` | Pass at `c7867a1`: `PrismForge.app` (15.46 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.49 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (256 modules). |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `10a6bd0`: `PrismForge.app` (15.57 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.52 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (256 modules). |
 
 Screenshots of the interface preview at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300, and of Diagnostics at 1200 × 780, 1100 × 700 and 1400 × 900, were looked at. They are design evidence from Chromium on macOS, not a native or Windows test.
 
