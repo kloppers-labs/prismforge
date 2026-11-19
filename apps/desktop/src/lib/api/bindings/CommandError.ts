@@ -8,4 +8,4 @@ import type { SettingProblem } from "./SettingProblem";
 import type { StoreError } from "./StoreError";
 import type { StoreUnavailable } from "./StoreUnavailable";
 
-export type CommandError = "NoSession" | "EmptyHost" | { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } } | "ProfileApplying" | "NotConnected" | { "Store": StoreError } | { "StoreUnavailable": StoreUnavailable } | { "Unreadable": { problem: FileProblem, } } | { "File": FileRule } | { "Setting": SettingProblem };
+export type CommandError = "NoSession" | "EmptyHost" | { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } } | { "TooManyTargets": { limit: number, } } | "ProfileApplying" | "NotConnected" | { "Store": StoreError } | { "StoreUnavailable": StoreUnavailable } | { "Unreadable": { problem: FileProblem, } } | { "File": FileRule } | { "Setting": SettingProblem };

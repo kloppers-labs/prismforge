@@ -39,7 +39,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 }
 
 const PLAIN_ERRORS = ["NoSession", "EmptyHost", "ProfileApplying", "NotConnected"];
-const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "Store", "StoreUnavailable", "Unreadable", "File", "Setting"];
+const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "TooManyTargets", "Store", "StoreUnavailable", "Unreadable", "File", "Setting"];
 
 function asFailure(error: unknown): Failure {
   if (typeof error === "string" && PLAIN_ERRORS.includes(error)) {

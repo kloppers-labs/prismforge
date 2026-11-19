@@ -223,14 +223,8 @@ impl EffectOutput {
         }
     }
 
-    /// Replaces what `running` overlaps; the same effect on the same target keeps its start time.
-    pub fn assign(&mut self, mut running: Running) {
-        if let Some(current) = self.effects.iter().find(|current| {
-            current.target == running.target
-                && current.effect.instance().effect == running.effect.instance().effect
-        }) {
-            running.started = current.started;
-        }
+    /// Replaces what `running` overlaps; the caller chose its start time.
+    pub fn assign(&mut self, running: Running) {
         self.effects
             .retain(|current| !current.target.overlaps(&running.target));
         self.effects.push(running);

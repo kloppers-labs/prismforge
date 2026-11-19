@@ -30,6 +30,9 @@ export function failureText(failure: Failure): string {
   if ("NoEffect" in failure) {
     return "No PrismForge effect runs on this target.";
   }
+  if ("TooManyTargets" in failure) {
+    return `PrismForge takes at most ${failure.TooManyTargets.limit} targets at once. Select fewer targets, then try again.`;
+  }
   if ("Store" in failure) {
     return storeErrorText(failure.Store);
   }

@@ -2,6 +2,7 @@
 
 mod generated;
 
+use prismforge_core::session::BatchReport;
 use prismforge_core::store::{ApplyOutcome, ExportReport, ImportReport, ProfileDetails, Saved};
 use prismforge_desktop::{
     AppSettingChange, CommandError, EffectCatalog, LifecycleView, ShellView, StoreView,
@@ -30,6 +31,7 @@ fn committed_bindings_match_the_rust_types() {
     ExportReport::export_all(&config).expect("export ExportReport");
     LifecycleView::export_all(&config).expect("export LifecycleView");
     AppSettingChange::export_all(&config).expect("export AppSettingChange");
+    BatchReport::export_all(&config).expect("export BatchReport");
 
     generated.compare_or_update();
 }

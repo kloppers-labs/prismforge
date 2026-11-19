@@ -2,7 +2,9 @@ mod support;
 
 use std::time::Duration;
 
-use prismforge_core::session::{OutputCondition, RestoreOutcome, SessionConfig, SessionError};
+use prismforge_core::session::{
+    MAX_BATCH_TARGETS, OutputCondition, RestoreOutcome, SessionConfig, SessionError, TargetOutcome,
+};
 use prismforge_core::{DeviceRef, OutputOwner, OutputTarget};
 use prismforge_desktop::{CommandError, Shell, ShellConfig, preview_effect};
 use prismforge_effects::{
@@ -276,4 +278,51 @@ async fn preview_needs_no_session_and_sends_nothing_to_a_backend() {
     let after = shell.view().session.expect("session");
     assert_eq!(after.output, before.output);
     assert_eq!(after.diagnostics.counters, before.diagnostics.counters);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_batch_reaches_the_session_and_reports_each_target() {
+    let (shell, _recorder, _controls, _dir) = demo().await;
+    let memory = whole("demo-memory-1");
+    let bar = whole("demo-light-bar");
+
+    let applied = shell
+        .apply_batch(
+            vec![whole(GPU), memory.clone(), bar.clone()],
+            instance("rainbow-wave", &[]),
+        )
+        .await
+        .expect("batch");
+    let stopped = shell.stop_batch(vec![memory.clone()]).await.expect("stop");
+    let all = shell.stop_all_effects().await.expect("stop all");
+    let too_many = shell
+        .stop_batch(vec![whole(GPU); MAX_BATCH_TARGETS + 1])
+        .await;
+
+    let outcomes: Vec<_> = applied
+        .results
+        .iter()
+        .map(|result| &result.outcome)
+        .collect();
+    assert!(matches!(
+        outcomes[..],
+        [
+            TargetOutcome::Applied,
+            TargetOutcome::Applied,
+            TargetOutcome::Skipped { .. }
+        ]
+    ));
+    assert_eq!(stopped.results[0].target, memory);
+    assert!(matches!(
+        stopped.results[0].outcome,
+        TargetOutcome::Stopped { .. }
+    ));
+    assert_eq!(all.results.len(), 1);
+    assert_eq!(all.results[0].target, whole(GPU));
+    assert_eq!(
+        too_many,
+        Err(CommandError::TooManyTargets {
+            limit: MAX_BATCH_TARGETS
+        })
+    );
 }

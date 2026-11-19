@@ -1,3 +1,4 @@
+mod batch;
 mod connection;
 mod diagnostics;
 mod identify;

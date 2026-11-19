@@ -1,4 +1,4 @@
-use prismforge_core::session::{IdentifyOutcome, RestoreOutcome};
+use prismforge_core::session::{BatchReport, IdentifyOutcome, RestoreOutcome};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_effects::{EffectInstance, PreviewBatch, PreviewRequest};
 use prismforge_openrgb::{ClientConfig, OpenRgbBackend, TcpConnector};
@@ -92,6 +92,28 @@ pub async fn stop_effect(
     target: OutputTarget,
 ) -> Result<Option<RestoreOutcome>, CommandError> {
     shell.stop_effect(target).await
+}
+
+#[tauri::command]
+pub async fn apply_effect_batch(
+    shell: State<'_, DesktopShell>,
+    targets: Vec<OutputTarget>,
+    effect: EffectInstance,
+) -> Result<BatchReport, CommandError> {
+    shell.apply_batch(targets, effect).await
+}
+
+#[tauri::command]
+pub async fn stop_effect_batch(
+    shell: State<'_, DesktopShell>,
+    targets: Vec<OutputTarget>,
+) -> Result<BatchReport, CommandError> {
+    shell.stop_batch(targets).await
+}
+
+#[tauri::command]
+pub async fn stop_all_effects(shell: State<'_, DesktopShell>) -> Result<BatchReport, CommandError> {
+    shell.stop_all_effects().await
 }
 
 #[tauri::command]

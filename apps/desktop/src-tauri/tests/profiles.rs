@@ -229,6 +229,9 @@ async fn output_commands_are_refused_while_a_profile_applies() {
         let refusals = vec![
             shell.apply_effect(whole(GPU), rainbow()).await.err(),
             shell.stop_effect(whole(GPU)).await.err(),
+            shell.apply_batch(vec![whole(GPU)], rainbow()).await.err(),
+            shell.stop_batch(vec![whole(GPU)]).await.err(),
+            shell.stop_all_effects().await.err(),
             shell.select_mode(DeviceRef::new(LIGHT_BAR), 1).await.err(),
             shell
                 .declare_external(DeviceRef::new(GPU), "Plugin".into())

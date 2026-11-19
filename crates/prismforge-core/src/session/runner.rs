@@ -21,6 +21,7 @@ use crate::session::output::Output;
 use crate::session::snapshot::{OutputStatus, SessionSnapshot};
 use crate::session::{Command, Reply, SessionConfig, SessionError};
 
+mod batches;
 mod claims;
 mod frames;
 mod identifying;

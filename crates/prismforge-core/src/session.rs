@@ -1,3 +1,4 @@
+mod batch;
 mod diagnostics;
 mod identify;
 mod intent;
@@ -24,6 +25,7 @@ use crate::identity::KnownDevice;
 use crate::ownership::OutputOwner;
 use crate::scene::{Assignment, OutputTarget};
 
+pub use batch::{BatchReport, MAX_BATCH_TARGETS, TargetOutcome, TargetResult};
 pub use diagnostics::{
     Counters, Diagnostics, ErrorRecord, Operation, SessionEvent, SessionEventKind,
 };
@@ -89,6 +91,8 @@ pub enum OutputError {
     InvalidEffect(#[from] InstanceError),
     #[error("no effect runs on {target:?}")]
     NoEffect { target: OutputTarget },
+    #[error("a batch holds at most {limit} targets")]
+    TooManyTargets { limit: usize },
 }
 
 impl From<BackendError> for OutputError {
@@ -129,6 +133,16 @@ pub(crate) enum OutputCommand {
     Stop {
         target: OutputTarget,
         reply: Reply<Option<RestoreOutcome>, OutputError>,
+    },
+    ApplyBatch {
+        targets: Vec<OutputTarget>,
+        effect: EffectInstance,
+        reply: Reply<BatchReport, OutputError>,
+    },
+    /// `None` stops every effect PrismForge runs.
+    StopBatch {
+        targets: Option<Vec<OutputTarget>>,
+        reply: Reply<BatchReport, OutputError>,
     },
     SelectMode {
         device: DeviceRef,
@@ -244,6 +258,46 @@ impl SessionHandle {
         target: OutputTarget,
     ) -> impl Future<Output = Result<Option<RestoreOutcome>, OutputError>> + Send + use<> {
         self.send(move |reply| Command::Output(OutputCommand::Stop { target, reply }))
+    }
+
+    /// Runs `effect` on every target with one shared start time; each target gets its own result.
+    pub fn apply_batch(
+        &self,
+        targets: Vec<OutputTarget>,
+        effect: EffectInstance,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::ApplyBatch {
+                targets,
+                effect,
+                reply,
+            })
+        })
+    }
+
+    /// Stops the effect on every target, with the same rules as [`Self::stop_effect`] for each.
+    pub fn stop_batch(
+        &self,
+        targets: Vec<OutputTarget>,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::StopBatch {
+                targets: Some(targets),
+                reply,
+            })
+        })
+    }
+
+    /// Stops every PrismForge effect, one whole-device result per device it ran on.
+    pub fn stop_all_effects(
+        &self,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::StopBatch {
+                targets: None,
+                reply,
+            })
+        })
     }
 
     /// Re-applies an existing hardware mode with its reported settings and stops any effect on the device.

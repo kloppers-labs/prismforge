@@ -74,6 +74,13 @@ fn gpu() -> OutputTarget {
     }
 }
 
+fn memory() -> OutputTarget {
+    OutputTarget {
+        device: DeviceRef::new("demo-memory-1"),
+        zone: None,
+    }
+}
+
 fn effect(name: &str) -> EffectInstance {
     EffectInstance {
         effect: name.into(),
@@ -152,6 +159,22 @@ fn cases() -> Vec<Case> {
         case!("stop_effect", "device", |f| f
             .shell
             .stop_effect(gpu())
+            .await),
+        case!("apply_effect_batch", "two targets", |f| f
+            .shell
+            .apply_batch(vec![gpu(), memory()], effect("rainbow-wave"))
+            .await),
+        case!("apply_effect_batch", "unknown effect", |f| f
+            .shell
+            .apply_batch(vec![gpu()], effect("no-such-effect"))
+            .await),
+        case!("stop_effect_batch", "two targets", |f| f
+            .shell
+            .stop_batch(vec![gpu(), memory()])
+            .await),
+        case!("stop_all_effects", "session", |f| f
+            .shell
+            .stop_all_effects()
             .await),
         case!("select_mode", "light bar", |f| f
             .shell

@@ -1,7 +1,7 @@
 use std::future::{Future, ready};
 
 use prismforge_core::session::{
-    MAX_FRAME_RATE, MIN_FRAME_RATE, OutputError, RestoreOutcome, SessionHandle,
+    BatchReport, MAX_FRAME_RATE, MIN_FRAME_RATE, OutputError, RestoreOutcome, SessionHandle,
 };
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_effects::{
@@ -61,6 +61,26 @@ impl<S: ViewSink> Shell<S> {
         target: OutputTarget,
     ) -> Result<Option<RestoreOutcome>, CommandError> {
         self.output(|handle| handle.stop_effect(target)).await
+    }
+
+    pub async fn apply_batch(
+        &self,
+        targets: Vec<OutputTarget>,
+        effect: EffectInstance,
+    ) -> Result<BatchReport, CommandError> {
+        self.output(|handle| handle.apply_batch(targets, effect))
+            .await
+    }
+
+    pub async fn stop_batch(
+        &self,
+        targets: Vec<OutputTarget>,
+    ) -> Result<BatchReport, CommandError> {
+        self.output(|handle| handle.stop_batch(targets)).await
+    }
+
+    pub async fn stop_all_effects(&self) -> Result<BatchReport, CommandError> {
+        self.output(SessionHandle::stop_all_effects).await
     }
 
     pub async fn select_mode(&self, device: DeviceRef, mode: usize) -> Result<(), CommandError> {
