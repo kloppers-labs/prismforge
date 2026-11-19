@@ -187,11 +187,11 @@ input {
   border-color: transparent;
 }
 
-.pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked)) {
+.pick:is([aria-current="true"], [aria-checked="true"], [aria-selected="true"], :has(> * > input:checked)) {
   background: var(--surface-3);
 }
 
-.pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked))::before {
+.pick:is([aria-current="true"], [aria-checked="true"], [aria-selected="true"], :has(> * > input:checked))::before {
   content: "";
   position: absolute;
   left: 0;
@@ -202,7 +202,7 @@ input {
   background: var(--accent);
 }
 
-.pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked)) .pick-name {
+.pick:is([aria-current="true"], [aria-checked="true"], [aria-selected="true"], :has(> * > input:checked)) .pick-name {
   font-weight: var(--weight-heading);
 }
 
@@ -250,11 +250,11 @@ input {
 }
 
 @media (forced-colors: active) {
-  .pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked)) {
+  .pick:is([aria-current="true"], [aria-checked="true"], [aria-selected="true"], :has(> * > input:checked)) {
     border-color: Highlight;
   }
 
-  .pick:is([aria-current="true"], [aria-checked="true"], :has(> * > input:checked))::before {
+  .pick:is([aria-current="true"], [aria-checked="true"], [aria-selected="true"], :has(> * > input:checked))::before {
     forced-color-adjust: none;
     background: Highlight;
   }

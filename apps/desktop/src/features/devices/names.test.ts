@@ -39,7 +39,7 @@ test("friendly_names_appear_on_devices_effects_and_profiles", async () => {
   const targets = await openEffects();
   expect(within(targets).getByRole("group", { name: "Desk card" })).toBeTruthy();
   const motherboard = within(targets).getByRole("group", { name: "Demo Motherboard" });
-  expect(within(motherboard).getByRole("button", { name: /^Front fans/ })).toBeTruthy();
+  expect(within(motherboard).getByRole("option", { name: /^Front fans/ })).toBeTruthy();
 
   const screens = screen.getByRole("navigation", { name: "Main" });
   await fireEvent.click(within(screens).getByRole("button", { name: "Profiles" }));

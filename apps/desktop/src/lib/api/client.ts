@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { ApplyOutcome } from "./bindings/ApplyOutcome";
+import type { BatchReport } from "./bindings/BatchReport";
+import type { GroupId } from "./bindings/GroupId";
+import type { GroupsView } from "./bindings/GroupsView";
+import type { LiveOutput } from "./bindings/LiveOutput";
 import type { CloseAction } from "./bindings/CloseAction";
 import type { CommandError } from "./bindings/CommandError";
 import type { DeviceRef } from "./bindings/DeviceRef";
@@ -24,6 +28,7 @@ import type { StoreView } from "./bindings/StoreView";
 
 export const VIEW_EVENT = "session-view";
 export const LIFECYCLE_EVENT = "lifecycle-view";
+export const LIVE_EVENT = "live-output";
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 6742;
 
@@ -39,7 +44,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 }
 
 const PLAIN_ERRORS = ["NoSession", "EmptyHost", "ProfileApplying", "NotConnected"];
-const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "Store", "StoreUnavailable", "Unreadable", "File", "Setting"];
+const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "TooManyTargets", "Store", "StoreUnavailable", "Unreadable", "File", "Setting"];
 
 function asFailure(error: unknown): Failure {
   if (typeof error === "string" && PLAIN_ERRORS.includes(error)) {
@@ -62,6 +67,18 @@ export const api = {
   effectCatalog: () => call<EffectCatalog>("effect_catalog"),
   applyEffect: (target: OutputTarget, effect: EffectInstance) => call<null>("apply_effect", { target, effect }),
   stopEffect: (target: OutputTarget) => call<RestoreOutcome | null>("stop_effect", { target }),
+  applyEffectBatch: (targets: OutputTarget[], effect: EffectInstance) => call<BatchReport>("apply_effect_batch", { targets, effect }),
+  stopEffectBatch: (targets: OutputTarget[]) => call<BatchReport>("stop_effect_batch", { targets }),
+  stopAllEffects: () => call<BatchReport>("stop_all_effects"),
+  watchLiveOutput: (targets: OutputTarget[]) => call<null>("watch_live_output", { targets }),
+  groups: () => call<GroupsView>("groups"),
+  createGroup: (name: string, targets: OutputTarget[]) => call<GroupsView>("create_group", { name, targets }),
+  renameGroup: (id: GroupId, name: string) => call<GroupsView>("rename_group", { id, name }),
+  addGroupMembers: (id: GroupId, targets: OutputTarget[]) => call<GroupsView>("add_group_members", { id, targets }),
+  removeGroupMember: (id: GroupId, target: OutputTarget) => call<GroupsView>("remove_group_member", { id, target }),
+  deleteGroup: (id: GroupId) => call<GroupsView>("delete_group", { id }),
+  onLive: (handler: (live: LiveOutput) => void): Promise<UnlistenFn> =>
+    listen<LiveOutput>(LIVE_EVENT, (event) => handler(event.payload)),
   selectMode: (device: DeviceRef, mode: number) => call<null>("select_mode", { device, mode }),
   declareExternal: (device: DeviceRef, label: string) => call<null>("declare_external", { device, label }),
   clearExternal: (device: DeviceRef) => call<null>("clear_external", { device }),

@@ -3,8 +3,8 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import { serverName } from "../connection/wording";
   import FailureNotice from "./FailureNotice.svelte";
-  import { sameTarget, stopBlocked, stopText } from "./present";
-  import type { EffectsState } from "./state.svelte";
+  import { stopBlocked, stopText } from "./present";
+  import { targetsKey, type EffectsState } from "./state.svelte";
 
   let { effects, session, blocked, held }: { effects: EffectsState; session: SessionSnapshot; blocked: string | null; held: string | null } = $props();
 
@@ -21,8 +21,7 @@
       return;
     }
     seen = press.count;
-    const target = untrack(() => effects.target);
-    if (target && sameTarget(press.target, target)) {
+    if (press.key === untrack(() => targetsKey(effects.targets))) {
       untrack(() => box)?.scrollIntoView?.({ block: "nearest" });
     }
   });

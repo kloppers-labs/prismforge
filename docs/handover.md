@@ -1,6 +1,6 @@
 # Handover
 
-Last update: 2026-11-19.
+Last update: 2026-11-20.
 
 ## Current state
 
@@ -24,7 +24,9 @@ The screens were swept against the audit (plan 2, Task 8). Effects has a command
 
 Rows, effect cards, the status strip chips and the Diagnostics sections have context menus (plan 2, Task 8b, on branch `task-8b-context-menus`, waiting for review). A right-click, Shift+F10 or the Menu key opens an in-app menu with the actions of the buttons on the same screen; each item calls the same method as its button, keeps its reason when it is off and keeps its confirmation dialog. Destructive items sit last in the problem colour. Each Diagnostics section got a Copy section button. A release build no longer shows the WebView's own menu (Reload, Inspect) outside text fields. See decisions 19 and 20 in `docs/decisions/0005-shell-and-design-tokens.md`.
 
-All tests pass on macOS. The Task 8b commits have no Windows CI result yet. The Task 8 commits have no Windows CI result yet. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+Effects work on several targets at once (plan 2, Task 9, on branch `task-9-multi-target`, waiting for review). The target list is a multi-select list with check marks, a mixed mark for a device with some zones checked, and a keyboard model where focus and selection are apart. One Apply sends one batch: every target runs the whole effect on its own LEDs with one shared start time, so they move in step; each target gets its own result (applied, covered by the whole device, skipped with the reason) and a Retry button for the targets a second try can reach. Stop works on the selection the same way, and Stop all PrismForge effects is one session command, from the tray and from Effects. Saved groups select their members again; each store keeps them in `groups.json`, a member missing today is shown and never guessed, and Everything selects every target that can take an effect. The stage shows the draft preview or the live output, the colours PrismForge last wrote per zone (a row for a linear zone, a grid for a matrix), and both views cap flashing at three a second on the screen only. See "Several targets in one command" and "Live output" in `docs/decisions/0003-effects-engine.md`, "Groups" in `docs/decisions/0002-profile-and-identity.md`, and decisions 21 to 24 in `docs/decisions/0005-shell-and-design-tokens.md`.
+
+All tests pass on macOS. The Task 9 commits have no Windows CI result yet. The Task 8b commits have no Windows CI result yet. The Task 8 commits have no Windows CI result yet. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -79,6 +81,23 @@ The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
+
+Task 9 run on macOS (Apple Silicon) on 2026-11-20, at `1ad8a85`, the last code commit of Task 9.
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all --check` | Pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
+| `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
+| `cargo test --workspace` | Pass: 363 tests (32 new in Task 9: batch 10, live output 6, batch intent records 2, groups store 10, desktop shell 4), with the extended profile property test, the lock table with 15 new cases and the fixture drift check |
+| `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 366 interface tests in 30 files (36 new in Task 9) |
+| `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (276 modules, 3 files checked) |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `1ad8a85`: `PrismForge.app` (16.36 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.71 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (276 modules). |
+
+Fix round 2 adds 3 interface tests (378 in 30 files). Fix round 1, at `2a4bbe3`: fmt and both clippy runs clean; `cargo test --workspace` 364 tests (1 new); bindings pass; 0 type errors; 375 interface tests in 30 files (9 new); `pnpm check:build` pass (277 modules). `pnpm tauri:build` was not run again.
+
+The five new preview states (`effects-several-mixed`, `effects-group-missing`, `effects-batch-skips`, `effects-live`, `effects-draft`) were looked at in Orca's browser (Chromium on macOS) at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300. Looking at them found two faults that the tests had not: the draft rows did not redraw, and the groups pushed the targets below the fold at 920 × 600; both are fixed. The screenshots are design evidence only.
 
 Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `474115e`, the last code commit of Task 8b fix round 2.
 
@@ -213,8 +232,8 @@ Not done:
 
 ## Known issues
 
-- **Task 8 leaves these audit items open.** The preview has no flash cap (A9; the frontend owns preview playback in `features/effects/preview.svelte.ts`, and the cap is bound to the live stage of Task 9); there are no zoom keys or interface scale setting (A7: the layout reflows at 200 % but text size follows the system only); there is no per-device Control block on Devices (E10: hardware modes and another program stay on Effects behind Details); no reset per control, no palette redesign, no shaped preview and no preview pause (E12, E14, E16, A10); recovery notices have no short headline (G4); profile actions have no More menu (P5); skip reasons are not reworded (P6).
-- **The Effects command bar is at the top of the page, not the bottom.** The audit drew it at the bottom. At the top it never covers the content, it never grows with results, disclosures or notices, and Apply comes right after the target list in the Tab order. Task 9 can move it when the stage arrives.
+- **Task 8 leaves these audit items open.** There are no zoom keys or interface scale setting (A7: the layout reflows at 200 % but text size follows the system only); there is no per-device Control block on Devices (E10: hardware modes and another program stay on Effects behind Details); no reset per control, no palette redesign and no preview pause (E12, E14, A10); Task 9 closed the flash cap (A9) and draws matrix zones as a grid in the live view, but the draft preview is still a line per target (E16 in part); recovery notices have no short headline (G4); profile actions have no More menu (P5); skip reasons are not reworded (P6).
+- **The Effects command bar is at the top of the page, not the bottom.** The audit drew it at the bottom. At the top it never covers the content, it never grows with results, disclosures or notices, and Apply comes right after the target list in the Tab order. Task 9 kept it there; the stage sits right under the effect cards.
 - **No real-server evidence.** The fake server and the client come from the same reading of the OpenRGB document and source. A review checked the wire format against the OpenRGB 1.1 source, but a real server can still differ.
 - **A request completes on its acknowledge packet.** If a real server does not send it, each request stops after the timeout (2 seconds by default) and the client closes the connection.
 - **One slow controller fails the whole refresh.** A data request that gets no answer in time closes the connection. The session then reconnects.
@@ -247,8 +266,15 @@ Not done:
 - **The tray and window glue has no automated test.** Tauri's mock runtime cannot exit and cannot show a tray. The decisions behind it are tested through fake window, exit and start-entry seams.
 - **Settings refresh when the screen opens.** A mark changed on Profiles shows on Settings when Settings opens again; the lifecycle view is not republished after a mark.
 - **The connection screen still starts with the default address.** Connect at start uses the remembered address, but the Host and Port fields show `127.0.0.1` and `6742` after a restart.
-- **One target at a time.** The effects screen applies an effect to one device or zone. Several targets need several applies. A device with one zone lists only "Whole device".
-- **The preview is a line of LEDs.** It shows the pattern on up to 60 LEDs in a line, not the real device or its layout.
+- **Several targets run in step, not across a layout.** Each target runs the whole effect from its own first LED, on one shared clock. "Flow by real position" needs the setup views (Tasks 10 and 11). A device with one zone lists only "Whole device". Zones checked one by one stay zone targets; only the device row selects the whole device.
+- **The draft preview is a line of LEDs per target.** It shows the pattern on up to 60 LEDs in a line for each selected target. The live view draws a matrix zone as a grid of its width and height but does not use OpenRGB's matrix map, so a keyboard with gaps is drawn as a full grid.
+- **A batch holds the output of other devices for its own backend calls.** A batch is one session command: while it takes over several devices (one direct-mode call each), the frames of other devices wait, as they wait for a restore. At most 256 targets.
+- **Several targets with different values.** When the selected targets run the chosen effect with different settings, those settings say "Mixed" and show the first target's value; Live stays off until an Apply makes the running values equal, also when the user has changed every Mixed setting, and also when values start to differ under the same selection. There is no per-target editing in one selection.
+- **The flash cap counts LEDs, not screen area.** It holds a frame when a tenth or more of the LEDs on the stage would flash a fourth time within a second. It does not measure the drawn size of the stage in pixels.
+- **The live view is one feed.** The shell forwards one live feed at a time, at most 25 updates a second, and keeps the request for the next session; a frame between two updates is dropped, never queued. Under reduced motion the live view shows a new still frame every 2 seconds.
+- **Groups are kept per store and on this computer only.** Real and demo groups are apart. Groups are not exported and not part of a profile. A group recovery notice stays in the groups panel until the app restarts; it has no Dismiss button.
+- **Identical devices in a group.** A member whose device cannot be told apart from an identical one today shows "cannot be told apart from an identical device" and is not selected, as on Profiles.
+- **The flash cap protects the screen, not the room.** It holds back frames in the two views only. The devices get every frame of an effect that flashes; a strobing effect at a high speed still flashes the physical lights.
 - **Effects still end with the session.** Saving a profile keeps them as a file on this computer. A PrismForge effect runs only while PrismForge runs; keep PrismForge running in the tray, apply the profile again, or mark it to apply on connect.
 - **A program name is free text.** The label for "another program" is the user's own words, trimmed and cut to 60 characters. Without a name it is "another program".
 - **No real-machine evidence for effects.** All scheduler numbers come from simulated time. Real frame timing and CPU use are not measured.
@@ -271,6 +297,15 @@ Not done:
 - Copy as text in Diagnostics: that the clipboard works in the native window.
 - Real hardware: Set lighting, the Live and Draft marks, and Hand back with a real other program.
 - Context menus in the native window on Windows: a right-click, Shift+F10 and the Menu key on a device row, a profile row and the connection chip; no WebView menu (Reload, Inspect) outside text fields in the installed build; Cut, Copy and Paste in the Host field; a menu at the right and bottom edges at 200 % scaling; Narrator or NVDA reading a disabled item with its reason, announcing Shift+F10 on rows, chips and the buttons inside zone rows, and reading "is now off" once when an item turns off while focused; a right-click on a disabled button (for example Identify device on the light bar) shows no WebView menu.
+
+## What only the owner can check (Task 9)
+
+- Several targets on real hardware: that they start together and stay in step, the time a batch of several take-overs needs, and Retry after a real refusal.
+- The live view against a real OpenRGB server: that it matches what the lights show (PrismForge cannot read the lights back), its rate in WebView2, and that it stops when the window is hidden in the tray.
+- The keyboard model with Narrator or NVDA: the list box, "Some zones selected", the count line, and a blocked target's reason.
+- A Windows contrast theme: the check marks, the mixed mark, the dashed mark of a blocked target, and the Draft and Live frames.
+- A real keyboard with a matrix zone in the live view.
+- Groups in the real store: `groups.json` beside `devices.json`, and a group whose device was unplugged.
 
 ## Missing information from the owner
 

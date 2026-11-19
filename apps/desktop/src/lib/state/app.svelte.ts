@@ -3,6 +3,7 @@ import type { DeviceRef } from "../api/bindings/DeviceRef";
 import type { IdentifyOutcome } from "../api/bindings/IdentifyOutcome";
 import type { ProfileId } from "../api/bindings/ProfileId";
 import type { ShellView } from "../api/bindings/ShellView";
+import { GroupsState } from "../../features/effects/groups.svelte";
 import { EffectsState } from "../../features/effects/state.svelte";
 import { ProfilesState } from "../../features/profiles/state.svelte";
 import { LifecycleState } from "../../features/settings/state.svelte";
@@ -37,6 +38,7 @@ export class AppState {
   connectApplyDismissed = $state(false);
   readonly profiles = new ProfilesState();
   readonly lifecycle = new LifecycleState();
+  readonly groups = new GroupsState();
   readonly effects = new EffectsState(
     () => this.view,
     () => this.profiles.names,

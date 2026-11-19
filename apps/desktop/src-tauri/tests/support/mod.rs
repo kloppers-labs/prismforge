@@ -7,7 +7,7 @@ pub mod temp;
 use std::time::Duration;
 
 use prismforge_core::ConnectionState;
-use prismforge_core::session::SessionSnapshot;
+use prismforge_core::session::{LiveOutput, SessionSnapshot};
 use prismforge_desktop::{ShellView, Stores, ViewSink};
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -19,12 +19,14 @@ const PATIENCE: Duration = Duration::from_secs(3600);
 #[derive(Clone)]
 pub struct Recorder {
     views: watch::Sender<Vec<(Instant, ShellView)>>,
+    live: watch::Sender<Vec<LiveOutput>>,
 }
 
 impl Default for Recorder {
     fn default() -> Self {
         Self {
             views: watch::channel(Vec::new()).0,
+            live: watch::channel(Vec::new()).0,
         }
     }
 }
@@ -34,9 +36,17 @@ impl ViewSink for Recorder {
         self.views
             .send_modify(|views| views.push((Instant::now(), view.clone())));
     }
+
+    fn deliver_live(&self, live: &LiveOutput) {
+        self.live.send_modify(|lives| lives.push(live.clone()));
+    }
 }
 
 impl Recorder {
+    pub fn live(&self) -> Vec<LiveOutput> {
+        self.live.borrow().clone()
+    }
+
     pub fn views(&self) -> Vec<ShellView> {
         self.timed().into_iter().map(|(_, view)| view).collect()
     }

@@ -7,6 +7,7 @@
     description,
     value,
     problem = null,
+    also = null,
     onchange,
   }: {
     id: string;
@@ -14,6 +15,7 @@
     description: string;
     value: Direction;
     problem?: string | null;
+    also?: string | null;
     onchange: (value: Direction) => void;
   } = $props();
 
@@ -23,7 +25,7 @@
   ];
 </script>
 
-<fieldset aria-describedby="{problem ? `${id}-problem ` : ''}{id}-hint">
+<fieldset aria-describedby="{also ? `${also} ` : ''}{problem ? `${id}-problem ` : ''}{id}-hint">
   <legend>{label}</legend>
   <div class="options">
     {#each options as option (option.value)}

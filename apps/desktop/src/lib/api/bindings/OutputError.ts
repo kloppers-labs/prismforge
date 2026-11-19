@@ -3,4 +3,4 @@ import type { InstanceError } from "./InstanceError";
 import type { OutputTarget } from "./OutputTarget";
 import type { SessionError } from "./SessionError";
 
-export type OutputError = { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } };
+export type OutputError = { "Session": SessionError } | { "InvalidEffect": InstanceError } | { "NoEffect": { target: OutputTarget, } } | { "TooManyTargets": { limit: number, } };

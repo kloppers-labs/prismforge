@@ -2,9 +2,10 @@
 
 mod generated;
 
+use prismforge_core::session::{BatchReport, LiveOutput};
 use prismforge_core::store::{ApplyOutcome, ExportReport, ImportReport, ProfileDetails, Saved};
 use prismforge_desktop::{
-    AppSettingChange, CommandError, EffectCatalog, LifecycleView, ShellView, StoreView,
+    AppSettingChange, CommandError, EffectCatalog, GroupsView, LifecycleView, ShellView, StoreView,
 };
 use prismforge_effects::{PreviewBatch, PreviewRequest};
 use ts_rs::{Config, TS};
@@ -30,6 +31,9 @@ fn committed_bindings_match_the_rust_types() {
     ExportReport::export_all(&config).expect("export ExportReport");
     LifecycleView::export_all(&config).expect("export LifecycleView");
     AppSettingChange::export_all(&config).expect("export AppSettingChange");
+    BatchReport::export_all(&config).expect("export BatchReport");
+    LiveOutput::export_all(&config).expect("export LiveOutput");
+    GroupsView::export_all(&config).expect("export GroupsView");
 
     generated.compare_or_update();
 }

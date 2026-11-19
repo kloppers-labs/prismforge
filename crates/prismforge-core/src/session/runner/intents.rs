@@ -21,15 +21,20 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         (origin == Origin::User).then(|| self.held())
     }
 
-    /// Records the command's own slot and, under the same sequence number and first, every other slot it changed.
-    pub(super) fn record_user(&mut self, before: Option<Vec<(Slot, Held)>>, own: (Slot, Intent)) {
-        let Some(before) = before else {
+    /// Records the command's own slots and, under the same sequence number and first, every other slot it changed.
+    pub(super) fn record_user(
+        &mut self,
+        before: Option<Vec<(Slot, Held)>>,
+        own: Vec<(Slot, Intent)>,
+    ) {
+        let Some(before) = before.filter(|_| !own.is_empty()) else {
             return;
         };
+        let is_own = |slot: &Slot| own.iter().any(|(mine, _)| mine == slot);
         let after = self.held();
         let mut entries: Vec<(Slot, Intent)> = Vec::new();
         for (slot, was) in &before {
-            if slot == &own.0 {
+            if is_own(slot) {
                 continue;
             }
             match after.iter().find(|(other, _)| other == slot) {
@@ -41,11 +46,11 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             }
         }
         for (slot, now) in &after {
-            if slot != &own.0 && !before.iter().any(|(other, _)| other == slot) {
+            if !is_own(slot) && !before.iter().any(|(other, _)| other == slot) {
                 entries.push((slot.clone(), self.intent_for(slot, now)));
             }
         }
-        entries.push(own);
+        entries.extend(own);
         self.intents.record(entries);
     }
 

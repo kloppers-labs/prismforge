@@ -331,7 +331,7 @@ test("rows_and_chips_with_a_menu_announce_shift_f10", async () => {
 
   await go("Effects");
   const targets = await screen.findByRole("navigation", { name: "Targets" });
-  expect(within(targets).getAllByRole("button").every((row) => shortcut(row).includes("Shift+F10"))).toBe(true);
+  expect(within(targets).getAllByRole("option").every((row) => shortcut(row).includes("Shift+F10"))).toBe(true);
   expect(shortcut(screen.getByRole("button", { name: "Effects" }))).toEqual(["Control+2"]);
 });
 

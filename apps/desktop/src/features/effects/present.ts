@@ -13,6 +13,8 @@ import { capitalise, serverName } from "../connection/wording";
 import { restoreFailureText } from "../devices/outcome";
 import { hasDirectMode, isLive, reference } from "../devices/present";
 
+export type StageRow = { key: string; label: string; leds: number; target: OutputTarget };
+
 export function sameTarget(left: OutputTarget, right: OutputTarget): boolean {
   return left.device === right.device && left.zone === right.zone;
 }

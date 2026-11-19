@@ -896,3 +896,117 @@ fn import_refuses_a_file_that_would_grow_past_the_store_limit() {
     assert!(store.summary(None).profiles.is_empty());
     assert_eq!(dir.files(), Vec::<String>::new());
 }
+
+fn zone(device: &str, zone: usize) -> OutputTarget {
+    OutputTarget {
+        device: DeviceRef::new(device),
+        zone: Some(zone),
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_batch_records_every_target_it_changed_and_nothing_it_skipped() {
+    let dir = TempDir::new("update-batch");
+    let (profiles, handle, _controls, id) = active_profile(&dir).await;
+    handle
+        .declare_external(DeviceRef::new(LIGHT_BAR), PLUGIN.into())
+        .await
+        .expect("declare");
+    let before = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("save the declaration");
+    assert_eq!(before.changes.len(), 1);
+
+    let report = handle
+        .apply_batch(
+            vec![
+                whole(&gpu()),
+                whole(&DeviceRef::new(MEMORY)),
+                whole(&DeviceRef::new(LIGHT_BAR)),
+                zone("demo-motherboard", 1),
+                whole(&DeviceRef::new("demo-motherboard")),
+            ],
+            rainbow(&[]),
+        )
+        .await
+        .expect("batch");
+    let saved = profiles
+        .preview_update(&handle, &id)
+        .await
+        .expect("preview");
+
+    assert_eq!(report.results.len(), 5);
+    let mut changed: Vec<(String, Change)> = saved
+        .changes
+        .into_iter()
+        .map(|change| (change.device.to_string(), change.change))
+        .collect();
+    changed.sort_by(|left, right| left.0.cmp(&right.0));
+    assert_eq!(
+        changed,
+        vec![
+            (
+                GPU.to_owned(),
+                Change::Replaced {
+                    was: effect_item(None, "solid"),
+                    now: effect_item(None, "rainbow-wave"),
+                },
+            ),
+            (
+                MEMORY.to_owned(),
+                Change::Added {
+                    now: effect_item(None, "rainbow-wave"),
+                },
+            ),
+            (
+                "demo-motherboard".to_owned(),
+                Change::Added {
+                    now: effect_item(None, "rainbow-wave"),
+                },
+            ),
+        ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_batch_stop_records_each_stopped_target_and_its_side_effects() {
+    let dir = TempDir::new("update-batch-stop");
+    let (profiles, handle, _controls, id) = active_profile(&dir).await;
+    handle
+        .apply_batch(
+            vec![
+                zone("demo-motherboard", 0),
+                zone("demo-motherboard", 2),
+                whole(&DeviceRef::new(MEMORY)),
+            ],
+            solid(Rgb::new(1, 2, 3)),
+        )
+        .await
+        .expect("batch");
+    profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("save");
+
+    handle
+        .stop_batch(vec![
+            whole(&DeviceRef::new("demo-motherboard")),
+            whole(&gpu()),
+        ])
+        .await
+        .expect("stop");
+    let saved = profiles
+        .update_from_session(&handle, &id)
+        .await
+        .expect("update");
+
+    let after = profiles.profile(&id).await.expect("stored");
+    assert_eq!(saved.changes.len(), 3, "{saved:?}");
+    let devices: Vec<&str> = after
+        .assignments
+        .iter()
+        .map(|assignment| assignment.device.as_str())
+        .collect();
+    assert_eq!(devices, vec![MEMORY]);
+}

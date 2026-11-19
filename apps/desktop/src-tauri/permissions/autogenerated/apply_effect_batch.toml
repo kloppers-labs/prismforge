@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-apply-effect-batch"
+description = "Enables the apply_effect_batch command without any pre-configured scope."
+commands.allow = ["apply_effect_batch"]
+
+[[permission]]
+identifier = "deny-apply-effect-batch"
+description = "Denies the apply_effect_batch command without any pre-configured scope."
+commands.deny = ["apply_effect_batch"]

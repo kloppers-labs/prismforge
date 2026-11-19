@@ -3,6 +3,7 @@ mod apply;
 mod displaced;
 mod durability;
 mod format;
+mod groups;
 mod overview;
 mod portable;
 mod property;

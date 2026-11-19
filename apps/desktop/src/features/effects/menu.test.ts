@@ -14,7 +14,7 @@ function args(shell: ReturnType<typeof fakeShell>, command: string) {
 async function targetRow(device: string, part = "Whole device", index = 0) {
   const targets = await openEffects();
   const group = within(targets).getAllByRole("group", { name: device })[index]!;
-  return within(group).getByRole("button", { name: new RegExp(`^${part}`) }) as HTMLButtonElement;
+  return within(group).getByRole("option", { name: new RegExp(`^${part}`) }) as HTMLElement;
 }
 
 function card(effect: string) {
@@ -26,21 +26,24 @@ test("the_target_menu_offers_the_screen_actions_for_that_target", async () => {
   render(App);
 
   expect(itemLabels(await openMenu(await targetRow("Demo Graphics Card"), "Actions for Demo Graphics Card"))).toEqual([
-    "Choose this target",
+    "Select only this target",
     "Stop effect",
+    "Add to group…",
     "Hardware modes…",
     "Leave this device to another program…",
   ]);
   await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
   expect(itemLabels(await openMenu(await targetRow("Demo Light Bar"), "Actions for Demo Light Bar"))).toEqual([
-    "Choose this target",
+    "Select only this target",
+    "Add to group…",
     "Hardware modes…",
     "Leave this device to another program…",
   ]);
   await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
   expect(itemLabels(await openMenu(await targetRow("Demo Memory Module", "Whole device", 1), "Actions for Demo Memory Module"))).toEqual([
-    "Choose this target",
+    "Select only this target",
     "Hand back to PrismForge",
+    "Add to group…",
     "Hardware modes…",
   ]);
   const leave = within(screen.getByRole("menu")).queryByRole("menuitem", { name: /Leave/ });
@@ -63,7 +66,7 @@ test("choose_this_target_selects_it_like_its_row", async () => {
   render(App);
   const row = await targetRow("Demo Light Bar");
 
-  await pick(row, "Actions for Demo Light Bar", "Choose this target");
+  await pick(row, "Actions for Demo Light Bar", "Select only this target");
 
   expect(await screen.findByRole("heading", { level: 2, name: "Demo Light Bar" })).toBeTruthy();
   expect(row.getAttribute("aria-current")).toBe("true");

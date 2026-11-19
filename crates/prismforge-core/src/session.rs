@@ -1,6 +1,8 @@
+mod batch;
 mod diagnostics;
 mod identify;
 mod intent;
+mod live;
 mod output;
 mod previous;
 mod reconnect;
@@ -24,11 +26,14 @@ use crate::identity::KnownDevice;
 use crate::ownership::OutputOwner;
 use crate::scene::{Assignment, OutputTarget};
 
+pub use batch::{BatchReport, MAX_BATCH_TARGETS, TargetOutcome, TargetResult};
 pub use diagnostics::{
     Counters, Diagnostics, ErrorRecord, Operation, SessionEvent, SessionEventKind,
 };
 pub use identify::{IDENTIFY_COLOR, IdentifyOutcome, RestoreFailure, RestoreOutcome};
 pub(crate) use intent::{Intent, IntentLog, IntentRecord, Origin, Slot};
+use live::LiveChannels;
+pub use live::{LIVE_OUTPUT_RATE, LiveDevice, LiveFeed, LiveOutput, LiveZone};
 pub use output::{MAX_FRAME_RATE, MIN_FRAME_RATE};
 pub use reconnect::ReconnectPolicy;
 pub use runner::Session;
@@ -89,6 +94,8 @@ pub enum OutputError {
     InvalidEffect(#[from] InstanceError),
     #[error("no effect runs on {target:?}")]
     NoEffect { target: OutputTarget },
+    #[error("a batch holds at most {limit} targets")]
+    TooManyTargets { limit: usize },
 }
 
 impl From<BackendError> for OutputError {
@@ -130,6 +137,16 @@ pub(crate) enum OutputCommand {
         target: OutputTarget,
         reply: Reply<Option<RestoreOutcome>, OutputError>,
     },
+    ApplyBatch {
+        targets: Vec<OutputTarget>,
+        effect: EffectInstance,
+        reply: Reply<BatchReport, OutputError>,
+    },
+    /// `None` stops every effect PrismForge runs.
+    StopBatch {
+        targets: Option<Vec<OutputTarget>>,
+        reply: Reply<BatchReport, OutputError>,
+    },
     SelectMode {
         device: DeviceRef,
         mode: usize,
@@ -160,6 +177,7 @@ pub struct SessionHandle {
     snapshot: Arc<watch::Sender<SessionSnapshot>>,
     known: Arc<watch::Sender<Vec<KnownDevice>>>,
     refused_busy: Arc<AtomicU64>,
+    live: LiveChannels,
     id: u64,
 }
 
@@ -209,6 +227,13 @@ impl SessionHandle {
         self.send(|reply| Command::Identify { request, reply })
     }
 
+    /// The colours PrismForge last wrote to `targets`; reading them sends nothing and never changes the output cadence.
+    pub fn live_output(&self, targets: Vec<OutputTarget>) -> LiveFeed {
+        static FEEDS: AtomicU64 = AtomicU64::new(1);
+        self.live
+            .feed(FEEDS.fetch_add(1, Ordering::Relaxed), targets)
+    }
+
     pub fn effect_definitions(&self) -> Vec<EffectDefinition> {
         prismforge_effects::definitions()
     }
@@ -244,6 +269,46 @@ impl SessionHandle {
         target: OutputTarget,
     ) -> impl Future<Output = Result<Option<RestoreOutcome>, OutputError>> + Send + use<> {
         self.send(move |reply| Command::Output(OutputCommand::Stop { target, reply }))
+    }
+
+    /// Runs `effect` on every target with one shared start time; each target gets its own result.
+    pub fn apply_batch(
+        &self,
+        targets: Vec<OutputTarget>,
+        effect: EffectInstance,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::ApplyBatch {
+                targets,
+                effect,
+                reply,
+            })
+        })
+    }
+
+    /// Stops the effect on every target, with the same rules as [`Self::stop_effect`] for each.
+    pub fn stop_batch(
+        &self,
+        targets: Vec<OutputTarget>,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::StopBatch {
+                targets: Some(targets),
+                reply,
+            })
+        })
+    }
+
+    /// Stops every PrismForge effect, one whole-device result per device it ran on.
+    pub fn stop_all_effects(
+        &self,
+    ) -> impl Future<Output = Result<BatchReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::StopBatch {
+                targets: None,
+                reply,
+            })
+        })
     }
 
     /// Re-applies an existing hardware mode with its reported settings and stops any effect on the device.
@@ -367,12 +432,20 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         let (commands, receiver) = mpsc::channel(config.command_capacity.max(1));
         let refused_busy = Arc::new(AtomicU64::new(0));
         static SESSIONS: AtomicU64 = AtomicU64::new(0);
-        let session = Self::start(backend, config, receiver, refused_busy.clone());
+        let live = LiveChannels::new();
+        let session = Self::start(
+            backend,
+            config,
+            receiver,
+            refused_busy.clone(),
+            live.clone(),
+        );
         let handle = SessionHandle {
             commands,
             snapshot: session.publisher(),
             known: session.registry(),
             refused_busy,
+            live,
             id: SESSIONS.fetch_add(1, Ordering::Relaxed),
         };
         (handle, session)

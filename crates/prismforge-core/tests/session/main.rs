@@ -1,6 +1,8 @@
+mod batch;
 mod connection;
 mod diagnostics;
 mod identify;
+mod live;
 mod output;
 mod ownership;
 mod queue;

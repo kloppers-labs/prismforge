@@ -2,7 +2,7 @@ use prismforge_core::session::{OutputCondition, OutputError, SessionHandle, Sess
 use prismforge_core::{ConnectionState, DeviceRef, LossCause, OutputTarget, Rgb};
 use prismforge_desktop::{CommandError, Shell, ShellConfig, ShellView, ViewSink, preview_effect};
 use prismforge_effects::{ControlValue, Direction, EffectInstance, PreviewRequest};
-use prismforge_testkit::{DemoBackend, FakeServer, wire};
+use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice, wire};
 
 use crate::{BLINK, Module, breathing_strip, demo_connected, openrgb, reference, wait_until};
 
@@ -234,4 +234,93 @@ fn restore<T>(result: Result<T, OutputError>) -> T {
 
 fn command_error<T: std::fmt::Debug>(result: Result<T, OutputError>) -> CommandError {
     CommandError::from(result.expect_err("an error"))
+}
+
+/// A demo batch with every kind of result, and the stop and stop-all reports that follow it.
+pub async fn batches(batches: &mut Module, sessions: &mut Module) {
+    let (handle, _) = demo_connected().await;
+    handle
+        .declare_external(DeviceRef::new(MEMORY_1), PLUGIN.into())
+        .await
+        .expect("declare");
+    let report = handle
+        .apply_batch(
+            vec![
+                whole(GPU),
+                whole(MEMORY_1),
+                whole(MEMORY_2),
+                zone(MOTHERBOARD, 1),
+                whole(MOTHERBOARD),
+                whole(LIGHT_BAR),
+            ],
+            rainbow(),
+        )
+        .await
+        .expect("batch");
+    batches.add("batchAppliedWithSkips", &report);
+    wait_until(&handle, |snapshot| {
+        condition_of(snapshot, GPU) == Some(OutputCondition::Running)
+    })
+    .await;
+    sessions.add("demoBatchRunning", &handle.snapshot());
+    let stopped = handle
+        .stop_batch(vec![whole(GPU), whole(MEMORY_1)])
+        .await
+        .expect("stop");
+    batches.add("batchStopped", &stopped);
+    let all = handle.stop_all_effects().await.expect("stop all");
+    batches.add("stopAllReport", &all);
+
+    let (handle, _) = demo_connected().await;
+    let identify = tokio::spawn(handle.identify(DeviceRef::new(GPU), None, BLINK));
+    let before = wait_until(&handle, |snapshot| snapshot.identify.is_some()).await;
+    sessions.add("demoIdentifyingGpu", &before);
+    let report = handle
+        .apply_batch(
+            vec![
+                whole(MEMORY_1),
+                whole(MEMORY_2),
+                whole(MOTHERBOARD),
+                whole(GPU),
+            ],
+            rainbow(),
+        )
+        .await
+        .expect("batch during identify");
+    batches.add("batchDuringIdentify", &report);
+    sessions.add("demoBatchDuringIdentify", &handle.snapshot());
+    identify.await.expect("identify task").expect("identify");
+}
+
+/// Live output of a real OpenRGB session with a keyboard matrix and a strip, and the session beside it.
+pub async fn live(live: &mut Module, sessions: &mut Module) {
+    let server = FakeServer::new();
+    server.add_device(
+        0,
+        FixtureDevice::new("keys", "Fixture Keyboard")
+            .serial("SN-keys")
+            .location("usb:keys")
+            .matrix_zone("Keys", 4, 12),
+    );
+    server.add_device(1, breathing_strip("desk", "Fixture Desk Strip"));
+    let handle = openrgb(&server);
+    handle.connect().await.expect("connect");
+    let snapshot = handle.snapshot();
+    let keys = reference(&snapshot, "SN-keys");
+    let desk = reference(&snapshot, "SN-desk");
+    let targets: Vec<OutputTarget> = [keys, desk]
+        .into_iter()
+        .map(|device| OutputTarget { device, zone: None })
+        .collect();
+    handle
+        .apply_batch(targets.clone(), rainbow())
+        .await
+        .expect("batch");
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let mut feed = handle.live_output(targets);
+    live.add(
+        "liveKeyboardAndStrip",
+        &feed.next().await.expect("live output"),
+    );
+    sessions.add("openRgbKeyboardRunning", &handle.snapshot());
 }

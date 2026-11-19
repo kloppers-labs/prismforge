@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use prismforge_effects::EffectInstance;
+use prismforge_effects::{Effect, EffectInstance};
 use tokio::time::Instant;
 
 use crate::backend::RgbBackend;
@@ -8,6 +8,7 @@ use crate::device::DeviceRef;
 use crate::error::BackendError;
 use crate::ownership::OutputOwner;
 use crate::scene::{Assignment, OutputTarget};
+use crate::session::batch::TargetOutcome;
 use crate::session::diagnostics::Operation;
 use crate::session::identify::RestoreOutcome;
 use crate::session::output::{Claim, EffectOutput, Running};
@@ -30,15 +31,50 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 let result = self.apply(assignment).await;
                 if let Ok(instance) = &result {
                     let own = (Slot::Effect(target), Intent::Applied(instance.clone()));
-                    self.record_user(before, own);
+                    self.record_user(before, vec![own]);
                 }
                 self.answer(reply, result.map(|_| ()));
+            }
+            OutputCommand::ApplyBatch {
+                targets,
+                effect,
+                reply,
+            } => {
+                let before = self.held_for(Origin::User);
+                let result = self.apply_batch(targets, &effect).await;
+                if let Ok((report, instance)) = &result {
+                    let own = report
+                        .results
+                        .iter()
+                        .filter(|result| result.outcome == TargetOutcome::Applied)
+                        .map(|result| {
+                            let target = result.target.clone();
+                            (Slot::Effect(target), Intent::Applied(instance.clone()))
+                        })
+                        .collect();
+                    self.record_user(before, own);
+                }
+                self.answer(reply, result.map(|(report, _)| report));
+            }
+            OutputCommand::StopBatch { targets, reply } => {
+                let before = self.held_for(Origin::User);
+                let result = self.stop_batch(targets).await;
+                if let Ok(report) = &result {
+                    let own = report
+                        .results
+                        .iter()
+                        .filter(|result| matches!(result.outcome, TargetOutcome::Stopped { .. }))
+                        .map(|result| (Slot::Effect(result.target.clone()), Intent::Stopped))
+                        .collect();
+                    self.record_user(before, own);
+                }
+                self.answer(reply, result);
             }
             OutputCommand::Stop { target, reply } => {
                 let before = self.held_for(Origin::User);
                 let result = self.stop_effect(target.clone()).await;
                 if result.is_ok() {
-                    self.record_user(before, (Slot::Effect(target), Intent::Stopped));
+                    self.record_user(before, vec![(Slot::Effect(target), Intent::Stopped)]);
                 }
                 self.answer(reply, result);
             }
@@ -56,7 +92,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                         Slot::Mode(device),
                         Intent::ModeSelected { index: mode, name },
                     );
-                    self.record_user(before, own);
+                    self.record_user(before, vec![own]);
                 }
                 self.answer(reply, result);
             }
@@ -69,7 +105,10 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 let before = self.held_for(origin);
                 let result = self.declare_external(device.clone(), label.clone());
                 if result.is_ok() {
-                    self.record_user(before, (Slot::External(device), Intent::Declared { label }));
+                    self.record_user(
+                        before,
+                        vec![(Slot::External(device), Intent::Declared { label })],
+                    );
                 }
                 self.answer(reply, result);
             }
@@ -80,7 +119,7 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 ) {
                     let before = self.held_for(Origin::User);
                     self.output.claims.remove(&device);
-                    self.record_user(before, (Slot::External(device), Intent::HandedBack));
+                    self.record_user(before, vec![(Slot::External(device), Intent::HandedBack)]);
                 }
                 self.answer(reply, Ok(()));
             }
@@ -91,17 +130,38 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
             } => {
                 let before = self.held_for(origin);
                 let in_use = self.output.set_frame_rate(frame_rate);
-                self.record_user(before, (Slot::FrameRate, Intent::FrameRate(in_use)));
+                self.record_user(before, vec![(Slot::FrameRate, Intent::FrameRate(in_use))]);
                 self.answer(reply, Ok(in_use));
             }
         }
     }
 
-    /// Takes the device over on first use: remembers its reported state, then enables direct mode.
+    /// The same effect on the same target keeps its start time; anything else starts now.
     async fn apply(&mut self, assignment: Assignment) -> Result<EffectInstance, OutputError> {
         let effect = prismforge_effects::prepare(&assignment.effect)?;
         let complete = effect.instance().clone();
-        let target = assignment.target;
+        let started = self.kept_start(&assignment.target, &complete.effect);
+        self.run_effect(assignment.target, effect, started).await?;
+        Ok(complete)
+    }
+
+    /// When `target` started running `effect` if it runs that effect now.
+    pub(super) fn kept_start(&self, target: &OutputTarget, effect: &str) -> Option<Instant> {
+        self.output
+            .effect(&target.device)?
+            .effects
+            .iter()
+            .find(|running| running.target == *target && running.effect.instance().effect == effect)
+            .map(|running| running.started)
+    }
+
+    /// Takes the device over on first use, then starts the effect at `started` or, without one, now; returns the start used.
+    pub(super) async fn run_effect(
+        &mut self,
+        target: OutputTarget,
+        effect: Effect,
+        started: Option<Instant>,
+    ) -> Result<Instant, OutputError> {
         let device = target.device.clone();
         self.ensure_free(&device)?;
         let take_over = {
@@ -127,17 +187,20 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 self.lose_if_disconnected();
                 return Err(error.into());
             }
-            let running = running(target, effect);
-            let output = EffectOutput::new(previous, shown, running);
+            let started = started.unwrap_or_else(Instant::now);
+            let output = EffectOutput::new(previous, shown, running(target, effect, started));
             self.output.remembered.remove(&device);
             self.output.claims.insert(device, Claim::Effect(output));
-        } else if let Some(output) = self.output.effect_mut(&device) {
-            output.assign(running(target, effect));
+            return Ok(started);
         }
-        Ok(complete)
+        let started = started.unwrap_or_else(Instant::now);
+        if let Some(output) = self.output.effect_mut(&device) {
+            output.assign(running(target, effect, started));
+        }
+        Ok(started)
     }
 
-    async fn stop_effect(
+    pub(super) async fn stop_effect(
         &mut self,
         target: OutputTarget,
     ) -> Result<Option<RestoreOutcome>, OutputError> {
@@ -297,11 +360,11 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
     }
 }
 
-fn running(target: OutputTarget, effect: prismforge_effects::Effect) -> Running {
+fn running(target: OutputTarget, effect: Effect, started: Instant) -> Running {
     Running {
         target,
         effect,
-        started: Instant::now(),
+        started,
         written: false,
     }
 }

@@ -7,6 +7,7 @@ import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import { lifecycleFresh } from "./fixtures/lifecycles";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
+import { groupsEmpty } from "./fixtures/groups";
 import { storeEmpty } from "./fixtures/stores";
 
 export type Call = { command: string; args: Record<string, unknown> };
@@ -54,6 +55,8 @@ export function fakeShell(initial: SessionSnapshot | null, handlers: Record<stri
 }
 
 const defaults: Record<string, Handler> = {
+  groups: () => groupsEmpty,
+  watch_live_output: () => null,
   profile_store: () => storeEmpty,
   lifecycle: () => lifecycleFresh,
 };

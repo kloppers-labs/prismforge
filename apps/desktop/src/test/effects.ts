@@ -29,7 +29,7 @@ export async function chooseTarget(device: string, part = "Whole device", index 
   if (!group) {
     throw new Error(`no target group ${device}`);
   }
-  await fireEvent.click(within(group).getByRole("button", { name: new RegExp(`^${part}`) }));
+  await fireEvent.click(within(group).getByRole("option", { name: new RegExp(`^${part}`) }));
   await screen.findByRole("heading", { level: 2, name: new RegExp(`^${device}`) });
 }
 

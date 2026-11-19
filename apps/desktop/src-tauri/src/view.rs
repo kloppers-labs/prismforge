@@ -105,6 +105,7 @@ pub enum CommandError {
     Session(SessionError),
     InvalidEffect(InstanceError),
     NoEffect { target: OutputTarget },
+    TooManyTargets { limit: usize },
     ProfileApplying,
     NotConnected,
     Store(StoreError),
@@ -141,6 +142,7 @@ impl From<OutputError> for CommandError {
             OutputError::Session(error) => Self::Session(error),
             OutputError::InvalidEffect(error) => Self::InvalidEffect(error),
             OutputError::NoEffect { target } => Self::NoEffect { target },
+            OutputError::TooManyTargets { limit } => Self::TooManyTargets { limit },
         }
     }
 }

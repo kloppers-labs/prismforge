@@ -2,6 +2,7 @@ mod app_settings;
 mod durable;
 pub(crate) mod envelope;
 mod files;
+mod groups;
 mod notice;
 mod portable;
 mod registry;
@@ -35,6 +36,10 @@ pub use envelope::{
     SchemaVersion,
 };
 pub use files::{FileOps, StdFileOps};
+pub use groups::{
+    GROUP_LIMIT, GROUPS_FORMAT, Group, GroupId, GroupMember, GroupsFile, MEMBER_LIMIT, MemberState,
+    MemberStatus, resolve_members,
+};
 pub use notice::{NoticeEvent, StoreNotice};
 pub use registry::{DeviceNames, Registry, RegistryDevice, ZoneLabel, ZoneName};
 pub use service::{ApplyOutcome, ConnectTrigger, Profiles, Saved};
@@ -74,6 +79,16 @@ pub enum StoreError {
     InvalidRegistry { problem: FileProblem },
     #[error("the app settings are not valid: {problem}")]
     InvalidSettings { problem: FileProblem },
+    #[error("there is no group {id}")]
+    UnknownGroup { id: GroupId },
+    #[error("another group is already called {name}")]
+    GroupNameTaken { name: String },
+    #[error("a store keeps at most {limit} groups")]
+    TooManyGroups { limit: usize },
+    #[error("a group holds at most {limit} members")]
+    TooManyMembers { limit: usize },
+    #[error("the groups are not valid: {problem}")]
+    InvalidGroups { problem: FileProblem },
     /// An update needs the profile applied or saved in this session; `active` is the one that is.
     #[error("profile {id} was not applied in this session")]
     NotActive {
@@ -608,7 +623,7 @@ fn decode_settings(bytes: &[u8]) -> Result<Settings, FileProblem> {
     envelope::decode(envelope::open(bytes, SETTINGS_FORMAT)?)
 }
 
-fn mix(value: u64) -> u64 {
+pub(crate) fn mix(value: u64) -> u64 {
     let mut value = value.wrapping_add(0x9e37_79b9_7f4a_7c15);
     value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);

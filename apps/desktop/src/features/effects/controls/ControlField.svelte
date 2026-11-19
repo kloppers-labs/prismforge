@@ -10,16 +10,18 @@
     control,
     field,
     problem,
+    mixed = false,
     onchange,
-  }: { control: ControlDefinition; field: Field; problem: string | null; onchange: (field: Field) => void } = $props();
+  }: { control: ControlDefinition; field: Field; problem: string | null; mixed?: boolean; onchange: (field: Field) => void } = $props();
 
   let id = $derived(`control-${control.id}`);
+  let also = $derived(mixed ? `mixed-${control.id}` : null);
   let kind = $derived(control.kind);
 </script>
 
 {#if field.kind === "color"}
   <div class="described">
-    <ColorField {id} label={control.label} text={field.text} {problem} describedBy="{id}-hint" onchange={(text) => onchange({ kind: "color", text })} />
+    <ColorField {id} label={control.label} text={field.text} {problem} describedBy={also ? `${also} ${id}-hint` : `${id}-hint`} onchange={(text) => onchange({ kind: "color", text })} />
     <p id="{id}-hint" class="hint">{control.description}</p>
   </div>
 {:else if field.kind === "palette" && "Palette" in kind}
@@ -31,10 +33,11 @@
     min={kind.Palette.min_colors}
     max={kind.Palette.max_colors}
     {problem}
+    {also}
     onchange={(texts) => onchange({ kind: "palette", texts })}
   />
 {:else if field.kind === "direction"}
-  <DirectionField {id} label={control.label} description={control.description} value={field.value} {problem} onchange={(value) => onchange({ kind: "direction", value })} />
+  <DirectionField {id} label={control.label} description={control.description} value={field.value} {problem} {also} onchange={(value) => onchange({ kind: "direction", value })} />
 {:else if field.kind === "number"}
   <RangeField
     {id}
@@ -43,14 +46,24 @@
     text={field.text}
     range={numberKind(control)}
     {problem}
+    {also}
     onchange={(text) => onchange({ kind: "number", text })}
   />
+{/if}
+
+{#if mixed}
+  <p id="mixed-{control.id}" class="mixed">Mixed. The targets have different values for {control.label.toLowerCase()}; the value shown is the first target's. Apply sends it to all of them.</p>
 {/if}
 
 <style>
   .described {
     display: grid;
     gap: var(--space-2);
+  }
+
+  .mixed {
+    color: var(--warning);
+    font-size: var(--font-s);
   }
 
   .hint {

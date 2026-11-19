@@ -159,7 +159,7 @@ test("disables_incompatible_targets_with_their_reasons", async () => {
   const targets = await openEffects();
 
   for (const fan of within(targets).getAllByRole("group", { name: "Fixture Fan" })) {
-    expect(within(fan).getAllByRole("button").every((item) => (item as HTMLButtonElement).disabled)).toBe(true);
+    expect(within(fan).queryAllByRole("option")).toHaveLength(0);
     expect(within(fan).getByText(/cannot tell this device apart from an identical one/)).toBeTruthy();
   }
 

@@ -1,4 +1,9 @@
+import type { GroupsView } from "../lib/api/bindings/GroupsView";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
+import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
+import { batchDuringIdentify } from "../test/fixtures/batches";
+import { groupsDemo, groupsRealMissing } from "../test/fixtures/groups";
+import { liveKeyboardAndStrip } from "../test/fixtures/live";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import type { StoreView } from "../lib/api/bindings/StoreView";
@@ -19,6 +24,16 @@ export type Scenario = {
   area?: Area;
   diagnostics?: boolean;
   handlers?: Record<string, Handler>;
+  groups?: GroupsView;
+  /** Targets checked on Effects, by their row key `device|zone` or `device|all`. */
+  select?: string[];
+  group?: string;
+  /** A group whose Members and actions are opened. */
+  groupOpen?: string;
+  effect?: string;
+  apply?: boolean;
+  stage?: "live";
+  live?: LiveOutput;
   rescan?: boolean;
 };
 
@@ -56,6 +71,16 @@ function longNames(): { session: SessionSnapshot; store: StoreView } {
 
 const long = longNames();
 
+/** The demo batch session with the second memory module at a faster speed, so its settings differ. */
+function mixedValues(): SessionSnapshot {
+  const session = structuredClone(sessions.demoBatchRunning);
+  const memory = session.output.scene.assignments.find((assignment) => assignment.target.device === "demo-memory-2");
+  if (memory) {
+    memory.effect.values = { ...memory.effect.values, speed: { Number: 60 } };
+  }
+  return session;
+}
+
 export const SCENARIOS: Record<string, Scenario> = {
   "first-run": { ...base, label: "First run, not connected", view: view(null), store: storeOffline },
   "first-run-remembered": { ...base, label: "Not connected, last address remembered", view: view(null), store: storeOffline, lifecycle: lifecycleStartPath },
@@ -86,6 +111,68 @@ export const SCENARIOS: Record<string, Scenario> = {
   "settings-background": { ...base, label: "Settings, keep running chosen", view: view(sessions.demoConnected), lifecycle: lifecycleChosen, area: "Settings" },
   diagnostics: { ...openRgb, label: "Diagnostics drawer", view: view(sessions.openRgbDegraded), diagnostics: true },
   "long-names": { ...base, label: "Long server address and profile name", view: view(long.session), store: long.store },
+  "effects-several-mixed": {
+    ...base,
+    label: "Effects, several targets with a mixed device",
+    view: view(sessions.demoConnected),
+    area: "Effects",
+    groups: groupsDemo,
+    select: ["demo-graphics-card|all", "demo-motherboard|0", "demo-motherboard|2", "demo-memory-2|all"],
+    effect: "Rainbow wave",
+  },
+  "effects-group-missing": {
+    ...openRgb,
+    label: "Effects, a group with a member not found today",
+    view: view(sessions.openRgbShelfGone),
+    area: "Effects",
+    groups: groupsRealMissing,
+    group: "Shelf and desk",
+  },
+  "effects-batch-skips": {
+    ...base,
+    label: "Effects, a batch result with a skipped target",
+    view: view(sessions.demoIdentifyingGpu),
+    area: "Effects",
+    groups: groupsDemo,
+    select: ["demo-memory-1|all", "demo-memory-2|all", "demo-motherboard|all", "demo-graphics-card|all"],
+    effect: "Rainbow wave",
+    apply: true,
+    handlers: { apply_effect_batch: () => batchDuringIdentify },
+  },
+  "effects-live": {
+    ...openRgb,
+    label: "Effects, the live output running",
+    view: view(sessions.openRgbKeyboardRunning),
+    area: "Effects",
+    select: [`${liveKeyboardAndStrip.devices[0]?.device}|all`, `${liveKeyboardAndStrip.devices[1]?.device}|all`],
+    stage: "live",
+    live: liveKeyboardAndStrip,
+  },
+  "effects-mixed-values": {
+    ...base,
+    label: "Effects, several targets running one effect with different values",
+    view: view(mixedValues()),
+    area: "Effects",
+    select: ["demo-graphics-card|all", "demo-memory-2|all"],
+  },
+  "effects-group-apply": {
+    ...base,
+    label: "Effects, apply the chosen effect to a group",
+    view: view(sessions.demoConnected),
+    area: "Effects",
+    groups: groupsDemo,
+    select: ["demo-memory-1|all"],
+    effect: "Rainbow wave",
+    groupOpen: "Desk",
+  },
+  "effects-draft": {
+    ...base,
+    label: "Effects, the draft preview",
+    view: view(sessions.demoConnected),
+    area: "Effects",
+    select: ["demo-graphics-card|all", "demo-motherboard|1"],
+    effect: "Gradient",
+  },
 };
 
 export const DEFAULT_SCENARIO = "demo";

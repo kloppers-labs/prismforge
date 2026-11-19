@@ -8,6 +8,7 @@
     text,
     range,
     problem = null,
+    also = null,
     onchange,
   }: {
     id: string;
@@ -16,11 +17,12 @@
     text: string;
     range: NumberKind;
     problem?: string | null;
+    also?: string | null;
     onchange: (text: string) => void;
   } = $props();
 
   let slider = $derived(/^\d+$/.test(text.trim()) ? Number(text) : range.default);
-  let described = $derived(`${problem ? `${id}-problem ` : ""}${id}-hint`);
+  let described = $derived(`${also ? `${also} ` : ""}${problem ? `${id}-problem ` : ""}${id}-hint`);
   let span = $derived(`${range.min} to ${range.max}${range.unit === "%" ? "%" : range.unit ? ` ${range.unit}` : ""}`);
 </script>
 

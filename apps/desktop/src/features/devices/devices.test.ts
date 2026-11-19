@@ -170,7 +170,7 @@ test("set_lighting_opens_effects_with_this_device_chosen", async () => {
 
   const targets = await screen.findByRole("navigation", { name: "Targets" });
   const card = within(targets).getByRole("group", { name: "Demo Graphics Card" });
-  expect(within(card).getByRole("button", { name: /^Whole device/ }).getAttribute("aria-current")).toBe("true");
+  expect(within(card).getByRole("option", { name: /^Whole device/ }).getAttribute("aria-current")).toBe("true");
 });
 
 test("identical_names_are_told_apart_in_the_device_list", async () => {
