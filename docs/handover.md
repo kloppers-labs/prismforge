@@ -73,7 +73,7 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `f401812`, the last product code commit of Task 6a fix round 1, including `pnpm tauri:build`.
+Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `518f2db`, the last product code commit of Task 6a fix round 1, including `pnpm tauri:build`.
 
 | Command | Result |
 |---|---|
@@ -85,7 +85,7 @@ Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19,
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. Its Windows start-entry module was type-checked and linted for `x86_64-pc-windows-msvc` in a scratch crate that includes the same source file. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 141 interface tests (25 for Settings, the first-close question, Quit and the tray stop report; 1 for the preview with a hidden native window) |
-| `pnpm tauri:build` in `apps/desktop` | Pass at `f401812`: `PrismForge.app` (15.40 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.45 MiB), not signed. Built with `CARGO_TARGET_DIR` set to a scratch folder, so a running copy in `target/release/bundle` was not replaced. |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `518f2db`: `PrismForge.app` (15.40 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.45 MiB), not signed. Built with `CARGO_TARGET_DIR` set to a scratch folder, so a running copy in `target/release/bundle` was not replaced. |
 
 Task 6a was not checked by hand. The owner may have PrismForge running, so the app was not started, and no start entry was registered or read on the build machine. No PrismForge process was started or stopped for this task.
 
