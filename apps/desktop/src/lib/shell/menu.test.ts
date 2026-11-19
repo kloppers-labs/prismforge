@@ -280,3 +280,32 @@ test("a_menu_closes_when_the_item_it_came_from_goes_away", async () => {
 
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 });
+
+function stubBox(element: HTMLElement, top: number) {
+  element.getBoundingClientRect = () => ({ left: 90, top, right: 190, bottom: top + 30, width: 100, height: 30, x: 90, y: top, toJSON: () => ({}) });
+}
+
+test("a_scroll_moves_the_menu_with_its_item", async () => {
+  const { origin } = harness();
+  stubBox(origin, 90);
+  await fireEvent.pointerDown(origin, { button: 2, clientX: 100, clientY: 100 });
+  await fireEvent.contextMenu(origin, { clientX: 100, clientY: 100 });
+  expect(menu().style.top).toBe("100px");
+
+  stubBox(origin, 40);
+  await fireEvent.scroll(document);
+
+  expect(menu().style.top).toBe("50px");
+  expect(menu().style.left).toBe("100px");
+});
+
+test("a_menu_closes_when_its_item_scrolls_out_of_view", async () => {
+  const { origin } = harness();
+  stubBox(origin, 90);
+  await openByKeyboard(origin);
+
+  stubBox(origin, -200);
+  await fireEvent.scroll(document);
+
+  expect(screen.queryByRole("menu")).toBeNull();
+});

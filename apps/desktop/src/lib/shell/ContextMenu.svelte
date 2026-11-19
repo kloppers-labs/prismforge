@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { overlays } from "../overlays.svelte";
-  import { groups, isMenuKey, MENU_OVERLAY, menus, type MenuItem } from "./menu.svelte";
+  import { boxOf, groups, inView, isMenuKey, MENU_OVERLAY, menus, type MenuItem } from "./menu.svelte";
   import { menuPlacement } from "./placement";
 
   const id = `menu-${Math.random().toString(36).slice(2)}`;
@@ -18,7 +18,10 @@
     if (!current || !box) {
       return;
     }
-    const anchor = current.byKeyboard && current.origin.isConnected ? current.origin.getBoundingClientRect() : current.anchor;
+    const now = current.origin.isConnected ? boxOf(current.origin) : current.originBox;
+    const dx = now.left - current.originBox.left;
+    const dy = now.top - current.originBox.top;
+    const anchor = { left: current.anchor.left + dx, right: current.anchor.right + dx, top: current.anchor.top + dy, bottom: current.anchor.bottom + dy };
     const spot = menuPlacement(anchor, { width: box.offsetWidth, height: box.offsetHeight }, { width: window.innerWidth, height: window.innerHeight });
     box.style.left = `${spot.left}px`;
     box.style.top = `${spot.top}px`;
@@ -159,6 +162,22 @@
     queueMicrotask(() => box?.contains(document.activeElement) || menus.close(false));
   }
 
+  function onscroll(event: Event) {
+    const current = opened;
+    const scroller = event.target;
+    if (!current || (scroller instanceof Node && box?.contains(scroller))) {
+      return;
+    }
+    if (scroller instanceof Node && !(scroller instanceof Document) && !scroller.contains(current.origin)) {
+      return;
+    }
+    if (inView(current.origin)) {
+      place();
+    } else {
+      menus.close(false);
+    }
+  }
+
   function onpointerdown(event: PointerEvent) {
     if (opened && !(event.target instanceof Node && box?.contains(event.target))) {
       menus.close(false);
@@ -170,7 +189,7 @@
   }
 </script>
 
-<svelte:window onpointerdowncapture={onpointerdown} onresize={() => requestAnimationFrame(place)} />
+<svelte:window onpointerdowncapture={onpointerdown} onresize={() => requestAnimationFrame(place)} onscrollcapture={onscroll} />
 
 {#if opened}
   <div

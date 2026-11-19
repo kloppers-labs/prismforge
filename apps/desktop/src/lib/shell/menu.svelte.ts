@@ -13,7 +13,15 @@ export type MenuItem = {
 
 export type Menu = { label: string; items: MenuItem[]; focus?: "first" | "menu" };
 
-type Opened = { build: () => Menu | null; node: HTMLElement; origin: HTMLElement; anchor: Box; byKeyboard: boolean; at: number };
+type Opened = {
+  build: () => Menu | null;
+  node: HTMLElement;
+  origin: HTMLElement;
+  anchor: Box;
+  originBox: Box;
+  byKeyboard: boolean;
+  at: number;
+};
 
 export const MENU_OVERLAY = "context-menu";
 const POINTER_WINDOW_MS = 1000;
@@ -25,7 +33,7 @@ class Menus {
   /** `build` runs again whenever the state it reads changes, so an open menu never shows stale items. */
   open(build: () => Menu | null, node: HTMLElement, origin: HTMLElement, anchor: Box, byKeyboard: boolean) {
     overlays.popover = MENU_OVERLAY;
-    this.current = { build, node, origin, anchor, byKeyboard, at: performance.now() };
+    this.current = { build, node, origin, anchor, originBox: boxOf(origin), byKeyboard, at: performance.now() };
   }
 
   close(returnFocus: boolean) {
@@ -90,9 +98,32 @@ function canOpen(origin: HTMLElement): boolean {
   return modal === null || modal.contains(origin);
 }
 
-function boxOf(element: HTMLElement): Box {
+export function boxOf(element: HTMLElement): Box {
   const { left, top, right, bottom } = element.getBoundingClientRect();
   return { left, top, right, bottom };
+}
+
+function overlap(a: Box, b: Box): boolean {
+  return a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right;
+}
+
+/** False once the item has scrolled out of the window or out of a pane that clips it; unmeasured boxes count as shown. */
+export function inView(element: HTMLElement): boolean {
+  const own = element.getBoundingClientRect();
+  if (own.width === 0 && own.height === 0) {
+    return true;
+  }
+  if (!overlap(own, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight })) {
+    return false;
+  }
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    const clip = node.getBoundingClientRect();
+    if (/auto|scroll|hidden/.test(style.overflowX + style.overflowY) && clip.width > 0 && clip.height > 0 && !overlap(own, clip)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 const FOCUSABLE = "button:not(:disabled), input:not(:disabled), summary, [href], [tabindex]";
