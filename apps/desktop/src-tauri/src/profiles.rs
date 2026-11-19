@@ -9,6 +9,7 @@ use prismforge_core::store::{
     StoreNotice,
 };
 
+use crate::apply_lock::Permit;
 use crate::publisher::ViewSink;
 use crate::shell::Shell;
 use crate::stores::StoreView;
@@ -40,8 +41,7 @@ impl<S: ViewSink> Shell<S> {
     }
 
     pub async fn create_profile(&self, name: &str) -> Result<Saved, CommandError> {
-        let _permit = self.permit()?;
-        let (handle, profiles) = self.session_store().await?;
+        let (_permit, handle, profiles) = self.permitted_session_store().await?;
         Ok(profiles.create_from_session(&handle, name).await?)
     }
 
@@ -51,8 +51,7 @@ impl<S: ViewSink> Shell<S> {
     }
 
     pub async fn update_profile(&self, id: &ProfileId) -> Result<Saved, CommandError> {
-        let _permit = self.permit()?;
-        let (handle, profiles) = self.session_store().await?;
+        let (_permit, handle, profiles) = self.permitted_session_store().await?;
         Ok(profiles.update_from_session(&handle, id).await?)
     }
 
@@ -67,8 +66,8 @@ impl<S: ViewSink> Shell<S> {
     }
 
     pub async fn delete_profile(&self, id: &ProfileId) -> Result<(), CommandError> {
-        let _permit = self.permit()?;
-        let (_, profiles) = self.store().await?;
+        let (_permit, _, kind) = self.permitted().await?;
+        let profiles = self.stores.profiles(kind).await?;
         Ok(profiles.delete(id).await?)
     }
 
@@ -142,6 +141,14 @@ impl<S: ViewSink> Shell<S> {
     async fn store(&self) -> Result<(Option<SessionHandle>, Profiles), CommandError> {
         let (handle, kind) = self.current().await;
         Ok((handle, self.stores.profiles(kind).await?))
+    }
+
+    async fn permitted_session_store(
+        &self,
+    ) -> Result<(Permit, SessionHandle, Profiles), CommandError> {
+        let (permit, handle, kind) = self.permitted().await?;
+        let handle = handle.ok_or(CommandError::NoSession)?;
+        Ok((permit, handle, self.stores.profiles(kind).await?))
     }
 
     async fn session_store(&self) -> Result<(SessionHandle, Profiles), CommandError> {

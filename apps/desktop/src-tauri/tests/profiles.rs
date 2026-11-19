@@ -190,6 +190,8 @@ async fn apply_on_connect_is_off_by_default_and_applies_the_marked_profile_once_
     recorder.wait_for(is_connected).await;
     settle().await;
     let after_reconnect = mode_calls(&controls, LIGHT_BAR);
+    shell.stop().await;
+    let after_stop = shell.view().connect_apply;
     let next = demo(&shell, &recorder).await;
     settle().await;
 
@@ -199,6 +201,7 @@ async fn apply_on_connect_is_off_by_default_and_applies_the_marked_profile_once_
     assert_eq!(report_before_connect, None);
     assert_eq!(after_first, 1);
     assert_eq!(after_reconnect, 1);
+    assert_eq!(after_stop, None);
     assert_eq!(mode_calls(&next, LIGHT_BAR), 1);
     let applied = view.connect_apply.expect("report");
     assert_eq!(applied.name, "Bar");

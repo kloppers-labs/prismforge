@@ -37,6 +37,7 @@ impl Default for ShellConfig {
 pub struct Shell<S: ViewSink> {
     config: ShellConfig,
     publisher: Arc<Publisher<S>>,
+    // Lock order: active, apply slot, output gate, store; a holder of a session handle never waits for active.
     active: Mutex<Option<Active>>,
     pub(crate) stores: Stores,
     pub(crate) lock: Arc<ApplyLock<S>>,
@@ -128,6 +129,7 @@ impl<S: ViewSink> Shell<S> {
     pub async fn stop(&self) -> ShellView {
         let mut active = self.active.lock().await;
         end(active.take()).await;
+        self.publisher.set_connect_apply(None);
         self.publisher.publish(None)
     }
 
@@ -141,24 +143,37 @@ impl<S: ViewSink> Shell<S> {
         device: DeviceRef,
         zone: Option<usize>,
     ) -> Result<IdentifyOutcome, CommandError> {
-        let _permit = self.permit()?;
         let duration = self.config.identify_duration;
-        let reply = self
-            .queue(|handle| handle.identify(device, zone, duration))
+        let (_permit, reply) = self
+            .queue_output(|handle| handle.identify(device, zone, duration))
             .await?;
         Ok(reply.await?)
     }
 
-    pub(crate) fn permit(&self) -> Result<Permit, CommandError> {
-        self.lock.permit()
-    }
-
     /// The session's handle, if any, and the store that belongs to it; no session means the real store.
     pub(crate) async fn current(&self) -> (Option<SessionHandle>, StoreKind) {
+        parts(self.active.lock().await.as_ref())
+    }
+
+    /// Like [`Self::current`], with an output permit taken while `active` is held.
+    pub(crate) async fn permitted(
+        &self,
+    ) -> Result<(Permit, Option<SessionHandle>, StoreKind), CommandError> {
         let active = self.active.lock().await;
-        active.as_ref().map_or((None, StoreKind::Real), |active| {
-            (Some(active.handle.clone()), active.kind)
-        })
+        let permit = self.lock.permit()?;
+        let (handle, kind) = parts(active.as_ref());
+        Ok((permit, handle, kind))
+    }
+
+    /// Queues an output command and takes its permit while `active` is held.
+    pub(crate) async fn queue_output<F: Future>(
+        &self,
+        command: impl FnOnce(&SessionHandle) -> F,
+    ) -> Result<(Permit, F), CommandError> {
+        let active = self.active.lock().await;
+        let active = active.as_ref().ok_or(CommandError::NoSession)?;
+        let permit = self.lock.permit()?;
+        Ok((permit, command(&active.handle)))
     }
 
     /// Queues while holding the lock, so a command never reaches a session that is being replaced.
@@ -170,6 +185,12 @@ impl<S: ViewSink> Shell<S> {
         let active = active.as_ref().ok_or(CommandError::NoSession)?;
         Ok(command(&active.handle))
     }
+}
+
+fn parts(active: Option<&Active>) -> (Option<SessionHandle>, StoreKind) {
+    active.map_or((None, StoreKind::Real), |active| {
+        (Some(active.handle.clone()), active.kind)
+    })
 }
 
 /// The watcher holds a handle, so it stops first; the keeper writes the last registry after the session.
