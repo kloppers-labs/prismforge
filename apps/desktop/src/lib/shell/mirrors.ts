@@ -20,6 +20,13 @@ export const MIRRORS = {
   "target.leave": "Leave this device to another program, in the Used by another program disclosure",
   "effect.choose": "the effect's card",
   "effect.apply": "Apply effect in the effect bar",
+  "profile.apply": "Apply profile on the profile page",
+  "profile.update": "Save changes to the profile, on the page of the active profile",
+  "profile.rename": "Rename on the profile page",
+  "profile.duplicate": "Duplicate on the profile page",
+  "profile.export": "Export on the profile page",
+  "profile.apply-on-connect": "the Apply this profile when PrismForge connects switch",
+  "profile.delete": "Delete on the profile page",
 } as const;
 
 export type MirrorId = keyof typeof MIRRORS;

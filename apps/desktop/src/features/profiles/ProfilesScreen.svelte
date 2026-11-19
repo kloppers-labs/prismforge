@@ -1,12 +1,14 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import type { ProfileSummary } from "../../lib/api/bindings/ProfileSummary";
   import { failureText } from "../../lib/errors";
   import type { AppState } from "../../lib/state/app.svelte";
   import { isLive } from "../devices/present";
   import { applyingText } from "../effects/present";
   import Notice from "../../lib/Notice.svelte";
   import ImportResult from "./ImportResult.svelte";
-  import type { Labels } from "./present";
+  import { profileMenu } from "./menu";
+  import { notConnectedText, type Labels } from "./present";
   import ProfileArticle from "./ProfileArticle.svelte";
   import ProfileList from "./ProfileList.svelte";
   import RecoveryNotices from "./RecoveryNotices.svelte";
@@ -31,6 +33,11 @@
 
   let connected = $derived(session !== null);
 
+  function menu(profile: ProfileSummary) {
+    const summary = store?.summary;
+    return summary ? profileMenu({ profiles, live, applying, notConnected: notConnectedText(app.view.on_connect, session) }, profile, summary) : null;
+  }
+
   $effect(() => {
     if (connected) {
       untrack(() => app.effects.load());
@@ -39,7 +46,7 @@
 </script>
 
 <div class="two-pane">
-  <ProfileList {profiles} {store} {live} onsave={() => (saving = true)} bind:saveButton />
+  <ProfileList {profiles} {store} {live} onsave={() => (saving = true)} bind:saveButton {menu} />
   <div class="workspace">
     <div class="inner">
       {#if profiles.storeProblem}

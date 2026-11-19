@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { flushSync } from "svelte";
+  import { flushSync, tick, untrack } from "svelte";
   import type { OnConnect } from "../../lib/api/bindings/OnConnect";
   import type { ProfileDetails } from "../../lib/api/bindings/ProfileDetails";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
@@ -52,6 +52,7 @@
   let applyReason = $derived(applying ?? (live ? null : notConnectedText(onConnect, session)));
   let unsaved = $derived(summary.unsaved_changes);
   let dialog = $state<"delete" | "export" | null>(null);
+  let opener: HTMLElement | undefined = $state();
   let renaming = $state(false);
   let newName = $state("");
   let renameProblem = $state<string | null>(null);
@@ -60,6 +61,25 @@
   let updateButton: HTMLButtonElement | undefined = $state();
   let renameButton: HTMLButtonElement | undefined = $state();
   let renameField: HTMLInputElement | undefined = $state();
+
+  $effect(() => {
+    const asked = profiles.asked;
+    if (asked && asked.id === details.id) {
+      untrack(() => {
+        profiles.asked = null;
+        if (asked.action === "rename") {
+          void tick().then(startRename);
+        } else {
+          openDialog(asked.action, asked.from ?? undefined);
+        }
+      });
+    }
+  });
+
+  function openDialog(kind: "delete" | "export", from: HTMLElement | undefined) {
+    opener = from;
+    dialog = kind;
+  }
 
   function activeText(): string {
     if (unsaved === 0) {
@@ -120,6 +140,7 @@
     <button
       type="button"
       class="primary"
+      data-mirror="profile.apply"
       disabled={applyReason !== null || profiles.working !== null}
       aria-describedby={applyReason ? "apply-off" : undefined}
       onclick={() => profiles.apply(details.id)}
@@ -130,6 +151,7 @@
       <button
         type="button"
         bind:this={updateButton}
+        data-mirror="profile.update"
         disabled={applying !== null || profiles.working !== null}
         onclick={() => profiles.previewUpdate(details.id)}
       >
@@ -137,17 +159,20 @@
       </button>
     {/if}
     <span class="more">
-      <button type="button" class="small" bind:this={renameButton} onclick={startRename}>Rename</button>
-      <button type="button" class="small" disabled={profiles.working !== null} onclick={() => profiles.duplicate(details.id)}>Duplicate</button>
-      <button type="button" class="small" bind:this={exportButton} onclick={() => (dialog = "export")}>Export</button>
+      <button type="button" class="small" data-mirror="profile.rename" bind:this={renameButton} onclick={startRename}>Rename</button>
+      <button type="button" class="small" data-mirror="profile.duplicate" disabled={profiles.working !== null} onclick={() => profiles.duplicate(details.id)}>
+        Duplicate
+      </button>
+      <button type="button" class="small" data-mirror="profile.export" bind:this={exportButton} onclick={() => openDialog("export", exportButton)}>Export</button>
     </span>
     <button
       type="button"
       class="small danger delete"
+      data-mirror="profile.delete"
       bind:this={deleteButton}
       disabled={applying !== null}
       aria-describedby={applying ? "apply-off" : undefined}
-      onclick={() => (dialog = "delete")}
+      onclick={() => openDialog("delete", deleteButton)}
     >
       Delete
     </button>
@@ -196,7 +221,7 @@
 </article>
 
 {#if dialog === "delete"}
-  <Dialog title="Delete {name}?" opener={deleteButton} onclose={() => (dialog = null)}>
+  <Dialog title="Delete {name}?" {opener} onclose={() => (dialog = null)}>
     <p>The profile file is removed from this computer. This cannot be undone. Exported copies stay as they are.</p>
     {#snippet actions()}
       <button type="button" onclick={() => (dialog = null)}>Keep profile</button>
@@ -206,7 +231,7 @@
 {/if}
 
 {#if dialog === "export"}
-  <Dialog title="Export {name}" opener={exportButton} onclose={() => (dialog = null)}>
+  <Dialog title="Export {name}" {opener} onclose={() => (dialog = null)}>
     <p>{EXPORT_PRIVACY}</p>
     <p>Next, choose where to save the file.</p>
     {#snippet actions()}

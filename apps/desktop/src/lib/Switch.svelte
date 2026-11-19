@@ -1,14 +1,25 @@
 <script lang="ts">
+  import type { MirrorId } from "./shell/mirrors";
+
   let {
     label,
     on,
     disabled = false,
     describedby,
+    mirror,
     onchange,
-  }: { label: string; on: boolean; disabled?: boolean; describedby: string; onchange: (on: boolean) => void } = $props();
+  }: { label: string; on: boolean; disabled?: boolean; describedby: string; mirror?: MirrorId; onchange: (on: boolean) => void } = $props();
 </script>
 
-<button type="button" role="switch" aria-checked={on ? "true" : "false"} aria-describedby={describedby} {disabled} onclick={() => onchange(!on)}>
+<button
+  type="button"
+  role="switch"
+  aria-checked={on ? "true" : "false"}
+  aria-describedby={describedby}
+  data-mirror={mirror}
+  {disabled}
+  onclick={() => onchange(!on)}
+>
   <span class="track" aria-hidden="true"><span class="thumb"></span></span>
   <span class="label">{label}</span>
   <span class="state" aria-hidden="true">{on ? "On" : "Off"}</span>

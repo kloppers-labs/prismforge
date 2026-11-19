@@ -6,7 +6,8 @@ import { effectHandlers, openEffects } from "../../test/effects";
 import { demoConnected, demoEffectsRunning, openRgbConnected } from "../../test/fixtures/sessions";
 import { storeTwo, storeUnsaved } from "../../test/fixtures/stores";
 import { itemIds, mirrored } from "../../test/menus";
-import { connectionChip, findStrip, waitForConnection } from "../../test/shell";
+import { detailsEvening } from "../../test/fixtures/profileDetails";
+import { connectionChip, findStrip, go, waitForConnection } from "../../test/shell";
 import { MIRRORS } from "./mirrors";
 
 const covered = new Set<string>();
@@ -29,6 +30,15 @@ const DEVICE_IDS = [
   "zone.identify",
   "zone.rename",
   "zone.reported-name",
+];
+const PROFILE_IDS = [
+  "profile.apply",
+  "profile.update",
+  "profile.rename",
+  "profile.duplicate",
+  "profile.export",
+  "profile.apply-on-connect",
+  "profile.delete",
 ];
 const EFFECT_IDS = ["target.choose", "target.stop", "target.hand-back", "target.modes", "target.leave", "effect.choose", "effect.apply"];
 
@@ -88,6 +98,21 @@ test("every_effects_menu_item_has_a_visible_counterpart_on_the_effects_screen", 
   expect([...covered].sort()).toEqual([...EFFECT_IDS].sort());
 });
 
+test("every_profiles_menu_item_has_a_visible_counterpart_on_the_profiles_screen", async () => {
+  covered.clear();
+  fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo, profile_details: () => detailsEvening });
+  render(App);
+  await go("Profiles");
+  const list = await screen.findByRole("navigation", { name: "Profiles" });
+  const evening = within(list).getByRole("button", { name: /^Evening \d/ });
+
+  await fireEvent.click(evening);
+  await screen.findByRole("article", { name: "Evening" });
+  await expectMirrored(await itemIds(evening));
+
+  expect([...covered].sort()).toEqual([...PROFILE_IDS].sort());
+});
+
 test("the_registry_holds_only_items_that_a_menu_offers", () => {
-  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS, ...EFFECT_IDS].sort());
+  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS, ...EFFECT_IDS, ...PROFILE_IDS].sort());
 });

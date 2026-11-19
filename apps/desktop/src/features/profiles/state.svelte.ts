@@ -26,6 +26,9 @@ export type Outcome =
 
 export type PendingUpdate = { id: ProfileId; name: string; preview: Saved };
 
+/** A rename, export or delete that a context menu asked the profile page to start, with the row to return focus to. */
+export type ProfileAsk = { id: ProfileId; action: "rename" | "export" | "delete"; from: HTMLElement | null };
+
 export type Work = "apply" | "save" | "update" | "export" | "import" | "delete" | "duplicate";
 
 export class ProfilesState {
@@ -39,6 +42,7 @@ export class ProfilesState {
   imported = $state<ImportReport | null>(null);
   importProblem = $state<Failure | null>(null);
   pendingUpdate = $state<PendingUpdate | null>(null);
+  asked = $state.raw<ProfileAsk | null>(null);
   /** Rises when the session ends or the store kind changes; results and drafts of the old scope go. */
   scope = $state(0);
   names = $derived(new Names(this.store?.names ?? []));
@@ -95,6 +99,17 @@ export class ProfilesState {
     this.selected = id;
     this.details = null;
     await this.loadDetails(id);
+  }
+
+  async show(id: ProfileId) {
+    if (this.selected !== id || this.details?.id !== id) {
+      await this.select(id);
+    }
+  }
+
+  async ask(id: ProfileId, action: ProfileAsk["action"], from: HTMLElement | null) {
+    await this.show(id);
+    this.asked = { id, action, from };
   }
 
   nameOf(id: ProfileId): string {
