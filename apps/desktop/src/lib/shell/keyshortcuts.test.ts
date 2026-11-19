@@ -30,6 +30,6 @@ test("the_controls_that_open_a_row's_menu_announce_shift_f10_and_text_fields_do_
 
   await go("Effects");
   const targets = await screen.findByRole("navigation", { name: "Targets" });
-  await fireEvent.click(within(targets).getAllByRole("button")[0]!);
+  await fireEvent.click(within(targets).getAllByRole("option")[0]!);
   expect(shortcut(await screen.findByRole("radio", { name: "Gradient" }))).toContain("Shift+F10");
 });

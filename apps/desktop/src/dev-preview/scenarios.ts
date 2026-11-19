@@ -1,3 +1,4 @@
+import type { GroupsView } from "../lib/api/bindings/GroupsView";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
@@ -19,6 +20,7 @@ export type Scenario = {
   area?: Area;
   diagnostics?: boolean;
   handlers?: Record<string, Handler>;
+  groups?: GroupsView;
   rescan?: boolean;
 };
 

@@ -5,6 +5,7 @@ import { fakeShell } from "../../test/backend";
 import { effectHandlers, openEffects } from "../../test/effects";
 import { demoConnected, demoEffectsRunning, openRgbConnected } from "../../test/fixtures/sessions";
 import { storeTwo, storeUnsaved } from "../../test/fixtures/stores";
+import { groupsDemo } from "../../test/fixtures/groups";
 import { detailsEvening } from "../../test/fixtures/profileDetails";
 import { itemIds, mirrored } from "../../test/menus";
 import { connectionChip, findStrip, go, waitForConnection } from "../../test/shell";
@@ -43,7 +44,20 @@ const PROFILE_IDS = [
   "profile.delete",
 ];
 const DIAGNOSTICS_IDS = ["diagnostics.copy-section", "diagnostics.copy-all"];
-const EFFECT_IDS = ["target.choose", "target.stop", "target.hand-back", "target.modes", "target.leave", "effect.choose", "effect.apply"];
+const EFFECT_IDS = [
+  "target.choose",
+  "target.stop",
+  "target.hand-back",
+  "target.add-to-group",
+  "target.modes",
+  "target.leave",
+  "effect.choose",
+  "effect.apply",
+  "group.select",
+  "group.apply",
+  "group.rename",
+  "group.delete",
+];
 
 test("every_status_strip_menu_item_has_a_visible_counterpart_in_its_panel", async () => {
   const { check: expectMirrored, seen } = checker();
@@ -85,7 +99,7 @@ test("every_devices_menu_item_has_a_visible_counterpart_on_the_devices_screen", 
 
 test("every_effects_menu_item_has_a_visible_counterpart_on_the_effects_screen", async () => {
   const { check: expectMirrored, seen } = checker();
-  fakeShell(demoEffectsRunning, effectHandlers());
+  fakeShell(demoEffectsRunning, effectHandlers({ groups: () => groupsDemo }));
   render(App);
   const targets = await openEffects();
   const row = (device: string, index = 0) => within(within(targets).getAllByRole("group", { name: device })[index]!).getByRole("option", { name: /^Whole device/ });
@@ -97,6 +111,8 @@ test("every_effects_menu_item_has_a_visible_counterpart_on_the_effects_screen", 
   await expectMirrored(await itemIds(row("Demo Graphics Card")));
   const card = screen.getByRole("radio", { name: "Gradient" }).closest("label") as HTMLElement;
   await expectMirrored(await itemIds(card));
+  const desk = (await within(targets).findByText("Desk")).closest("li") as HTMLElement;
+  await expectMirrored(await itemIds(desk));
 
   expect(seen()).toEqual([...EFFECT_IDS].sort());
 });

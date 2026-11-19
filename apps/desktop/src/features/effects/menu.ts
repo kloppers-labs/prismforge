@@ -5,12 +5,16 @@ import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { Names } from "../../lib/names";
 import type { Menu, MenuItem } from "../../lib/shell/menu.svelte";
 import { canStop, declaredBy, stopBlocked, targetName } from "./present";
+import type { GroupView } from "../../lib/api/bindings/GroupView";
+import { EVERYTHING, type GroupsState } from "./groups.svelte";
+import { isSelected } from "./selection";
 import type { EffectsState } from "./state.svelte";
 
 export type Reveal = "modes" | "external";
 
 export type EffectsMenuContext = {
   effects: EffectsState;
+  groups: GroupsState;
   session: SessionSnapshot;
   names: Names;
   held: string | null;
@@ -39,6 +43,17 @@ export function targetMenu(context: EffectsMenuContext, device: SessionDevice, t
   if (left !== null) {
     items.push({ id: "target.hand-back", label: "Hand back to PrismForge", reason: held, run: () => (show(), effects.clearExternal(target.device)) });
   }
+  items.push({
+    id: "target.add-to-group",
+    label: "Add to group…",
+    reason: (context.groups.view?.groups.length ?? 0) === 0 ? "There is no group yet. Use New group… to make one." : null,
+    run: (origin) => {
+      if (!isSelected(effects.targets, target)) {
+        effects.select(target);
+      }
+      context.groups.asked = { kind: "add", from: origin };
+    },
+  });
   items.push({ id: "target.modes", label: "Hardware modes…", run: () => (show(), context.reveal("modes")) });
   if (left === null) {
     items.push({
@@ -73,4 +88,27 @@ export function effectMenu(context: EffectsMenuContext, definition: EffectDefini
       },
     ],
   };
+}
+
+export function groupMenu(context: EffectsMenuContext, group: GroupView | typeof EVERYTHING): Menu {
+  const { effects, groups, session } = context;
+  const title = group === EVERYTHING ? "Everything" : group.name;
+  const select = () => groups.select(group, session, effects);
+  const items: MenuItem[] = [{ id: "group.select", label: "Select", run: select }];
+  const definition = effects.definition;
+  if (definition) {
+    const empty = groups.pick(group, session).targets.length === 0 ? "No member of this group can take an effect now." : null;
+    const unfinished = effects.checked?.instance ? null : "Some settings need a fix first.";
+    items.push({
+      id: "group.apply",
+      label: `Apply ${definition.label} to group`,
+      reason: context.held ?? (effects.working === null ? null : WORKING) ?? unfinished ?? empty,
+      run: () => (select(), effects.apply()),
+    });
+  }
+  if (group !== EVERYTHING) {
+    items.push({ id: "group.rename", label: "Rename…", run: (origin) => (groups.asked = { kind: "rename", group, from: origin }) });
+    items.push({ id: "group.delete", label: "Delete…", danger: true, run: (origin) => (groups.asked = { kind: "delete", group, from: origin }) });
+  }
+  return { label: `Actions for ${title}`, items };
 }

@@ -1,5 +1,6 @@
 mod effect_fixtures;
 mod generated;
+mod group_fixtures;
 mod lifecycle_fixtures;
 mod profile_fixtures;
 mod support;
@@ -345,6 +346,8 @@ async fn committed_fixtures_match_real_sessions() {
     effect_fixtures::previews(&mut previews);
     let mut batches = Module::new("BatchReport");
     effect_fixtures::batches(&mut batches, &mut sessions).await;
+    let mut groups = Module::new("GroupsView");
+    group_fixtures::generate(&mut groups, &mut sessions).await;
     let mut live = Module::new("LiveOutput");
     effect_fixtures::live(&mut live, &mut sessions).await;
     let mut profiles = profile_fixtures::ProfileModules::new();
@@ -360,6 +363,7 @@ async fn committed_fixtures_match_real_sessions() {
     generated.write("previews.ts", &previews.render());
     generated.write("batches.ts", &batches.render());
     generated.write("live.ts", &live.render());
+    generated.write("groups.ts", &groups.render());
     generated.write("stores.ts", &profiles.stores.render());
     generated.write("profileDetails.ts", &profiles.details.render());
     generated.write("saves.ts", &profiles.saves.render());

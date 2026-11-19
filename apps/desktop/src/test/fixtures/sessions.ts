@@ -8569,6 +8569,176 @@ export const demoBatchRunning: SessionSnapshot = {
   }
 };
 
+export const openRgbShelfGone: SessionSnapshot = {
+  "connection": "Connected",
+  "backend": {
+    "origin": "OpenRgb",
+    "address": null,
+    "protocol_version": 6,
+    "server_name": "PrismForge fake OpenRGB"
+  },
+  "devices": [
+    {
+      "identity": {
+        "Matched": "dev-4947ff71bba71ad6"
+      },
+      "descriptor": {
+        "origin": "OpenRgb",
+        "name": "Fixture Desk Strip",
+        "vendor": "Fixture Vendor",
+        "description": "Fixture device",
+        "version": "1.0",
+        "serial": "SN-desk",
+        "location": "usb:desk",
+        "kind": "LedStrip",
+        "zones": [
+          {
+            "name": "Strip",
+            "kind": "Linear",
+            "led_count": 10,
+            "leds_min": 10,
+            "leds_max": 10,
+            "matrix": null
+          }
+        ],
+        "led_count": 10,
+        "colors": [
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          },
+          {
+            "r": 0,
+            "g": 0,
+            "b": 0
+          }
+        ],
+        "capabilities": {
+          "direct_mode": 0,
+          "active_mode": 0,
+          "modes": [
+            {
+              "name": "Direct",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": true,
+              "mode_colors": null,
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "None"
+            },
+            {
+              "name": "Static",
+              "speed": null,
+              "brightness": null,
+              "directions": [],
+              "per_led_color": false,
+              "mode_colors": {
+                "min": 1,
+                "max": 1
+              },
+              "random_color": false,
+              "applies_to_entire_device": false,
+              "persistence": "ManualSave"
+            }
+          ],
+          "resizable_zones": [],
+          "saves_to_device_memory": true
+        }
+      },
+      "available": true
+    }
+  ],
+  "issues": [],
+  "identify": null,
+  "output": {
+    "frame_rate": 30,
+    "scene": {
+      "assignments": []
+    },
+    "devices": []
+  },
+  "diagnostics": {
+    "last_error": null,
+    "counters": {
+      "connect_attempts": 1,
+      "connect_failures": 0,
+      "inventory_refreshes": 1,
+      "refresh_failures": 0,
+      "commands_refused_busy": 0,
+      "frames_written": 0,
+      "ticks_skipped": 0,
+      "output_writes_refused": 0,
+      "output_writes_failed": 0,
+      "output_wakeups": 0
+    },
+    "events": [
+      {
+        "sequence": 0,
+        "at_ms": 0,
+        "kind": "ConnectAttempt"
+      },
+      {
+        "sequence": 1,
+        "at_ms": 0,
+        "kind": "Connected"
+      },
+      {
+        "sequence": 2,
+        "at_ms": 0,
+        "kind": {
+          "InventoryRefreshed": {
+            "generation": 1,
+            "devices": 1
+          }
+        }
+      }
+    ]
+  }
+};
+
 export const openRgbKeyboardRunning: SessionSnapshot = {
   "connection": "Connected",
   "backend": {

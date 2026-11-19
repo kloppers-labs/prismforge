@@ -28,12 +28,14 @@ test("the_target_menu_offers_the_screen_actions_for_that_target", async () => {
   expect(itemLabels(await openMenu(await targetRow("Demo Graphics Card"), "Actions for Demo Graphics Card"))).toEqual([
     "Select only this target",
     "Stop effect",
+    "Add to group…",
     "Hardware modes…",
     "Leave this device to another program…",
   ]);
   await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
   expect(itemLabels(await openMenu(await targetRow("Demo Light Bar"), "Actions for Demo Light Bar"))).toEqual([
     "Select only this target",
+    "Add to group…",
     "Hardware modes…",
     "Leave this device to another program…",
   ]);
@@ -41,6 +43,7 @@ test("the_target_menu_offers_the_screen_actions_for_that_target", async () => {
   expect(itemLabels(await openMenu(await targetRow("Demo Memory Module", "Whole device", 1), "Actions for Demo Memory Module"))).toEqual([
     "Select only this target",
     "Hand back to PrismForge",
+    "Add to group…",
     "Hardware modes…",
   ]);
   const leave = within(screen.getByRole("menu")).queryByRole("menuitem", { name: /Leave/ });

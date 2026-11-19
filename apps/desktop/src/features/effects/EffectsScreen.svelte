@@ -14,7 +14,8 @@
   import ExternalControl from "./ExternalControl.svelte";
   import HandBack from "./HandBack.svelte";
   import HardwareModes from "./HardwareModes.svelte";
-  import { effectMenu, targetMenu, type EffectsMenuContext, type Reveal } from "./menu";
+  import GroupsPanel from "./GroupsPanel.svelte";
+  import { effectMenu, groupMenu, targetMenu, type EffectsMenuContext, type Reveal } from "./menu";
   import BatchBar from "./BatchBar.svelte";
   import BatchResults from "./BatchResults.svelte";
   import { applyBlocked, applyingText, declaredBy, deviceOf, targetLeds } from "./present";
@@ -46,7 +47,11 @@
   });
   let modesOpen = $state(false);
   let externalOpen = $state(false);
-  let menus: EffectsMenuContext = $derived({ effects, session, names: app.names, held, reveal });
+  let menus: EffectsMenuContext = $derived({ effects, groups: app.groups, session, names: app.names, held, reveal });
+
+  $effect(() => {
+    app.groups.follow(session);
+  });
 
   async function reveal(part: Reveal) {
     await tick();
@@ -80,6 +85,9 @@
     onclear={() => effects.clear()}
     menu={(each, next) => targetMenu(menus, each, next)}
   >
+    {#snippet groups()}
+      <GroupsPanel groups={app.groups} {effects} {session} names={app.names} menu={(group) => groupMenu(menus, group)} />
+    {/snippet}
     {#snippet foot()}
       <div class="stop-all">
         <button type="button" class="small" disabled={!running || held !== null || effects.working !== null} onclick={() => effects.stopAll()}>

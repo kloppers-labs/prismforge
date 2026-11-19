@@ -18,7 +18,7 @@ function args(calls: Call[], command: string) {
 }
 
 function sent(calls: Call[]): string[] {
-  return calls.map((call) => call.command).filter((command) => !["view", "effect_catalog", "preview_effect", "profile_store", "lifecycle"].includes(command));
+  return calls.map((call) => call.command).filter((command) => !["view", "groups", "effect_catalog", "preview_effect", "profile_store", "lifecycle"].includes(command));
 }
 
 test("arrow_keys_move_focus_without_selecting_and_space_toggles_the_focused_target", async () => {
