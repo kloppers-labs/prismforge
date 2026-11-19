@@ -9,7 +9,9 @@ import * as errors from "../../test/fixtures/errors";
 import { importedRenamed } from "../../test/fixtures/imports";
 import { detailsEvening, detailsImported, detailsOffline } from "../../test/fixtures/profileDetails";
 import { previewChanges, previewNone, savedChanges, savedNew } from "../../test/fixtures/saves";
-import { demoConnected, demoEffectsNotConnected, openRgbConnected, openRgbRefused } from "../../test/fixtures/sessions";
+import { demoConnected, openRgbConnected } from "../../test/fixtures/sessions";
+import { viewArmedRetrying, viewFiredRetrying, viewStoppedArmed } from "../../test/fixtures/views";
+import type { ShellView } from "../../lib/api/bindings/ShellView";
 import {
   storeEmpty,
   storeOffline,
@@ -162,16 +164,18 @@ test("apply_lists_each_target_and_a_partial_apply_is_not_called_complete", async
   expect(called(shell, "apply_profile").map((call) => call.args)).toEqual([{ id: OLDER }, { id: EVENING }]);
 });
 
-test("a_marked_profile_that_waits_for_a_connection_says_so", async () => {
-  fakeShell(demoConnected, handlers(storeTwo, { apply_profile: () => waitingForConnection }));
+test("a_marked_profile_that_waits_for_a_connection_says_what_the_trigger_will_do", async () => {
+  const shell = fakeShell(demoConnected, handlers(storeTwo, { apply_profile: () => waitingForConnection }));
   render(App);
   const article = await chooseProfile("Evening");
+  await shell.pushView({ ...shell.view(demoConnected), revision: 50, on_connect: { Fired: { applied: "Evening", next: "Evening" } } });
 
   await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
 
   await waitFor(() => expect(result().textContent).toMatch(/Evening was not applied: PrismForge is not connected\./));
-  expect(result().textContent).toMatch(/When the connection comes back by itself, the profile is not applied again\./);
-  expect(result().textContent).not.toMatch(/applies once when PrismForge connects/);
+  expect(result().textContent).toMatch(/It is not applied again in this session, also not when the connection comes back\./);
+  await shell.pushView({ ...shell.view(demoConnected), revision: 60, on_connect: { Armed: { id: EVENING, name: "Evening" } } });
+  await waitFor(() => expect(result().textContent).toMatch(/^\s*Evening will be applied as soon as PrismForge has read the devices\./));
 });
 
 test("delete_asks_first_and_says_the_file_leaves_this_computer", async () => {
@@ -394,33 +398,6 @@ test("another_instance_holding_the_store_is_explained", async () => {
   expect(await screen.findByText(/Another PrismForge window is using the profile folder\./)).toBeTruthy();
 });
 
-test("apply_on_connect_is_not_promised_again_while_the_session_retries_after_a_loss", async () => {
-  fakeShell(demoEffectsNotConnected, handlers(storeTwo));
-  render(App);
-  const article = await chooseProfile("Evening");
-
-  expect(
-    within(article).getByText(
-      "Apply is off. PrismForge lost the connection and is trying again. A profile marked to apply when PrismForge connects is not applied again when the connection comes back. It is applied after you disconnect and connect.",
-    ),
-  ).toBeTruthy();
-  expect(within(article).queryByText(/applies then/)).toBeNull();
-});
-
-test("apply_on_connect_is_promised_while_the_first_connection_is_being_made", async () => {
-  fakeShell(openRgbRefused, { profile_store: () => storeOffline, profile_details: () => detailsOffline });
-  render(App);
-  const list = await openProfiles();
-  await fireEvent.click(within(list).getByRole("button", { name: /^Desk/ }));
-  const article = await screen.findByRole("article", { name: "Desk" });
-
-  expect(
-    within(article).getByText(
-      "Apply is off. PrismForge is not connected yet. A profile marked to apply when PrismForge connects is applied once the connection is made.",
-    ),
-  ).toBeTruthy();
-});
-
 function withRate(refused: boolean, items: boolean): typeof appliedFully {
   const outcome = structuredClone(appliedFully);
   if (typeof outcome === "object") {
@@ -489,7 +466,7 @@ test("results_go_after_disconnect_and_reconnect", async () => {
     demoConnected,
     handlers(storeTwo, {
       apply_profile: () => appliedFully,
-      disconnect: () => ({ revision: 100, session: null, applying: null, connect_apply: null }),
+      disconnect: () => ({ revision: 100, session: null, applying: null, connect_apply: null, on_connect: "NotApplicable" }),
     }),
   );
   render(App);
@@ -500,9 +477,80 @@ test("results_go_after_disconnect_and_reconnect", async () => {
   expect(screen.getByRole("textbox", { name: "New name" })).toBeTruthy();
 
   await fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-  await shell.pushView({ revision: 200, session: demoConnected, applying: null, connect_apply: null });
+  await shell.pushView({ revision: 200, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable" });
 
   await waitFor(() => expect(screen.getByRole("navigation", { name: "Screens" }).textContent).toMatch(/Devices/));
   expect(result().textContent?.trim()).toBe("");
   expect(screen.queryByRole("textbox", { name: "New name" })).toBeNull();
+});
+
+async function deskWith(view: ShellView) {
+  const session = view.session;
+  const shell = fakeShell(session, { profile_store: () => storeOffline, profile_details: () => detailsOffline });
+  render(App);
+  await shell.pushView({ ...view, revision: 50 });
+  const list = await openProfiles();
+  await fireEvent.click(within(list).getByRole("button", { name: /^Desk/ }));
+  return screen.findByRole("article", { name: "Desk" });
+}
+
+function onConnect() {
+  return screen.getByRole("status", { name: "Apply on connect" });
+}
+
+test("an_armed_profile_is_said_to_be_applied_when_the_devices_are_read_even_while_retrying", async () => {
+  const article = await deskWith(viewArmedRetrying);
+
+  await waitFor(() => expect(onConnect().textContent?.trim()).toBe("PrismForge will apply Desk as soon as it has read the devices."));
+  expect(within(article).getByText(/Apply is off\. PrismForge is not connected right now\. PrismForge will apply Desk as soon as it has read the devices\./)).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/not applied again/);
+});
+
+test("a_fired_profile_is_said_not_to_apply_again_while_the_session_retries", async () => {
+  await deskWith(viewFiredRetrying);
+
+  await waitFor(() =>
+    expect(onConnect().textContent?.trim()).toBe(
+      "PrismForge applied Desk once when it connected. It is not applied again in this session, also not when the connection comes back. After you disconnect and connect, PrismForge applies Desk.",
+    ),
+  );
+});
+
+test("a_session_that_stopped_by_itself_says_to_connect_again", async () => {
+  const article = await deskWith(viewStoppedArmed);
+
+  await waitFor(() =>
+    expect(onConnect().textContent?.trim()).toBe(
+      "The connection stopped and PrismForge does not try again. Connect again from the Connection screen. When you connect, PrismForge applies Desk as soon as it has read the devices.",
+    ),
+  );
+  expect(within(article).queryByText(/trying again|not connected yet|once the connection is made/)).toBeNull();
+});
+
+test("without_a_marked_profile_nothing_is_promised", async () => {
+  await deskWith({ ...viewArmedRetrying, on_connect: "NotArmed" });
+
+  await waitFor(() =>
+    expect(onConnect().textContent?.trim()).toBe(
+      "No profile is marked to apply on connect. A profile you mark before PrismForge has read the devices is applied then.",
+    ),
+  );
+});
+
+test("a_result_that_arrives_after_the_session_ended_is_dropped", async () => {
+  let finish: (value: unknown) => void = () => undefined;
+  const shell = fakeShell(
+    demoConnected,
+    handlers(storeTwo, { apply_profile: () => new Promise((resolve) => (finish = resolve)) }),
+  );
+  render(App);
+  const article = await chooseProfile("Evening");
+  await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
+
+  await shell.push(openRgbConnected);
+  await wait(50);
+  finish(appliedFully);
+  await wait(250);
+
+  expect(result().textContent?.trim()).toBe("");
 });

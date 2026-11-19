@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { OnConnect } from "../../lib/api/bindings/OnConnect";
   import { failureText } from "../../lib/errors";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import ApplyReportList from "./ApplyReportList.svelte";
@@ -6,7 +7,12 @@
   import { applyHeadline, count, fullyApplied, waitingText, type Labels } from "./present";
   import type { Outcome } from "./state.svelte";
 
-  let { outcome, labels, onsavenew }: { outcome: Outcome | null; labels: Labels; onsavenew: () => void } = $props();
+  let {
+    outcome,
+    labels,
+    onConnect,
+    onsavenew,
+  }: { outcome: Outcome | null; labels: Labels; onConnect: OnConnect; onsavenew: () => void } = $props();
 
   let problem = $derived(outcome?.kind === "failed");
 </script>
@@ -14,7 +20,7 @@
 <div class="result" class:problem role="status" aria-label="Profile result">
   {#if outcome?.kind === "applied"}
     {#if outcome.outcome === "WaitingForConnection"}
-      <p class="headline">{waitingText(outcome.name, labels.session)}</p>
+      <p class="headline">{waitingText(outcome.name, onConnect, labels.session)}</p>
     {:else}
       {@const report = outcome.outcome.Applied}
       <p class="headline">

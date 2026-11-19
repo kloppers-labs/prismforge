@@ -18,7 +18,7 @@ export type IdentifyState =
   | { kind: "failed"; target: IdentifyTarget; error: Failure };
 
 export class AppState {
-  view = $state<ShellView>({ revision: 0, session: null, applying: null, connect_apply: null });
+  view = $state<ShellView>({ revision: 0, session: null, applying: null, connect_apply: null, on_connect: "NotApplicable" });
   working = $state<Work | null>(null);
   problem = $state<Failure | null>(null);
   identify = $state<IdentifyState | null>(null);

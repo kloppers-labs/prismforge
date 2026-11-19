@@ -5,7 +5,7 @@
   import { isLive } from "../devices/present";
   import { applyingText } from "../effects/present";
   import ImportResult from "./ImportResult.svelte";
-  import type { Labels } from "./present";
+  import { onConnectText, type Labels } from "./present";
   import ProfileArticle from "./ProfileArticle.svelte";
   import ProfileList from "./ProfileList.svelte";
   import RecoveryNotices from "./RecoveryNotices.svelte";
@@ -61,11 +61,14 @@
           {/if}
         </div>
       {/if}
+      {#if session}
+        <p class="mode" role="status" aria-label="Apply on connect">{onConnectText(app.view.on_connect, session)}</p>
+      {/if}
       {#if store.summary.notices.length > 0}
         <RecoveryNotices notices={store.summary.notices} ondismiss={(notice) => profiles.dismiss(notice)} />
       {/if}
 
-      <ResultPanel outcome={profiles.outcome} {labels} onsavenew={() => nameField?.focus()} />
+      <ResultPanel outcome={profiles.outcome} {labels} onConnect={app.view.on_connect} onsavenew={() => nameField?.focus()} />
       <ImportResult report={profiles.imported} problem={profiles.importProblem} />
 
       {#key profiles.scope}
@@ -78,7 +81,7 @@
 
       {#if details}
         {#key profiles.scope}
-          <ProfileArticle {profiles} {details} summary={store.summary} {labels} {live} {applying} {session} />
+          <ProfileArticle {profiles} {details} summary={store.summary} {labels} {live} {applying} {session} onConnect={app.view.on_connect} />
         {/key}
       {:else if profiles.detailsProblem}
         <p class="quiet" role="alert">{failureText(profiles.detailsProblem)}</p>

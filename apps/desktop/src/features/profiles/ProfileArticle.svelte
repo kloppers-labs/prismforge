@@ -1,5 +1,6 @@
 <script lang="ts">
   import { flushSync } from "svelte";
+  import type { OnConnect } from "../../lib/api/bindings/OnConnect";
   import type { ProfileDetails } from "../../lib/api/bindings/ProfileDetails";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { StoreSummary } from "../../lib/api/bindings/StoreSummary";
@@ -22,6 +23,7 @@
     live,
     applying,
     session,
+    onConnect,
   }: {
     profiles: ProfilesState;
     details: ProfileDetails;
@@ -30,12 +32,13 @@
     live: boolean;
     applying: string | null;
     session: SessionSnapshot | null;
+    onConnect: OnConnect;
   } = $props();
 
   let name = $derived(details.name);
   let active = $derived(summary.active === details.id);
   let marked = $derived(summary.apply_on_connect === details.id);
-  let applyReason = $derived(applying ?? (live ? null : notConnectedText(session)));
+  let applyReason = $derived(applying ?? (live ? null : notConnectedText(onConnect, session)));
   let unsaved = $derived(summary.unsaved_changes);
   let dialog = $state<"delete" | "export" | null>(null);
   let renaming = $state(false);

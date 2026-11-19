@@ -104,12 +104,18 @@ export class ProfilesState {
   async apply(id: ProfileId) {
     const name = this.nameOf(id);
     const answer = await this.run("apply", () => api.applyProfile(id));
+    if (answer === null) {
+      return;
+    }
     this.outcome = answer.ok ? { kind: "applied", name, outcome: answer.value } : { kind: "failed", error: answer.error };
     await this.refresh();
   }
 
   async saveNew(name: string): Promise<boolean> {
     const answer = await this.run("save", () => api.createProfile(name));
+    if (answer === null) {
+      return false;
+    }
     if (!answer.ok) {
       this.outcome = { kind: "failed", error: answer.error };
       return false;
@@ -124,6 +130,9 @@ export class ProfilesState {
   async previewUpdate(id: ProfileId) {
     const name = this.nameOf(id);
     const answer = await this.run("update", () => api.previewProfileUpdate(id));
+    if (answer === null) {
+      return;
+    }
     if (!answer.ok) {
       this.outcome = this.updateFailure(name, answer.error);
       return;
@@ -148,6 +157,9 @@ export class ProfilesState {
     }
     this.pendingUpdate = null;
     const answer = await this.run("update", () => api.updateProfile(pending.id));
+    if (answer === null) {
+      return;
+    }
     this.outcome = answer.ok
       ? { kind: "updated", name: pending.name, saved: answer.value }
       : this.updateFailure(pending.name, answer.error);
@@ -166,6 +178,9 @@ export class ProfilesState {
   async duplicate(id: ProfileId) {
     const name = this.nameOf(id);
     const answer = await this.run("duplicate", () => api.duplicateProfile(id));
+    if (answer === null) {
+      return;
+    }
     this.outcome = answer.ok ? { kind: "duplicated", name } : { kind: "failed", error: answer.error };
     if (answer.ok) {
       this.selected = answer.value;
@@ -176,6 +191,9 @@ export class ProfilesState {
   async remove(id: ProfileId) {
     const name = this.nameOf(id);
     const answer = await this.run("delete", () => api.deleteProfile(id));
+    if (answer === null) {
+      return;
+    }
     if (answer.ok) {
       this.outcome = { kind: "deleted", name };
       this.selected = null;
@@ -187,8 +205,9 @@ export class ProfilesState {
   }
 
   async setApplyOnConnect(id: ProfileId | null) {
+    const scope = this.scope;
     const answer = await api.setApplyOnConnect(id);
-    if (!answer.ok) {
+    if (!answer.ok && scope === this.scope) {
       this.outcome = { kind: "failed", error: answer.error };
     }
     await this.refresh();
@@ -197,6 +216,9 @@ export class ProfilesState {
   async exportProfile(id: ProfileId) {
     const name = this.nameOf(id);
     const answer = await this.run("export", () => api.exportProfile(id));
+    if (answer === null) {
+      return;
+    }
     if (!answer.ok) {
       this.outcome = { kind: "failed", error: answer.error };
     } else if (answer.value === null) {
@@ -209,6 +231,9 @@ export class ProfilesState {
   async importProfile() {
     this.importProblem = null;
     const answer = await this.run("import", () => api.importProfile());
+    if (answer === null) {
+      return;
+    }
     if (!answer.ok) {
       this.importProblem = answer.error;
       return;
@@ -222,8 +247,9 @@ export class ProfilesState {
   }
 
   async dismiss(notice: StoreNotice) {
+    const scope = this.scope;
     const answer = await api.dismissStoreNotice(notice);
-    if (!answer.ok) {
+    if (!answer.ok && scope === this.scope) {
       this.outcome = { kind: "failed", error: answer.error };
     }
     await this.refresh();
@@ -266,10 +292,13 @@ export class ProfilesState {
     }
   }
 
-  private async run<T>(work: Work, action: () => Promise<Answer<T>>): Promise<Answer<T>> {
+  /** `null` when the session or the store changed meanwhile: the answer belongs to an ended scope. */
+  private async run<T>(work: Work, action: () => Promise<Answer<T>>): Promise<Answer<T> | null> {
+    const scope = this.scope;
     this.working = work;
     try {
-      return await action();
+      const answer = await action();
+      return scope === this.scope ? answer : null;
     } finally {
       this.working = null;
     }

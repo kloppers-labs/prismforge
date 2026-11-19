@@ -24,13 +24,14 @@ export function fakeShell(initial: SessionSnapshot | null, handlers: Record<stri
     session,
     applying: null,
     connect_apply: null,
+    on_connect: "NotApplicable",
   });
   mockIPC(
     (command, args) => {
       const plain = (args ?? {}) as Record<string, unknown>;
       calls.push({ command, args: plain });
       if (command === "view") {
-        return { revision: 1, session: initial, applying: null, connect_apply: null };
+        return { revision: 1, session: initial, applying: null, connect_apply: null, on_connect: "NotApplicable" };
       }
       const handler = handlers[command] ?? (command === "profile_store" ? () => storeEmpty : undefined);
       if (!handler) {

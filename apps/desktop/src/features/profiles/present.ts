@@ -3,6 +3,7 @@ import type { Change } from "../../lib/api/bindings/Change";
 import type { DeviceRef } from "../../lib/api/bindings/DeviceRef";
 import type { EffectProblem } from "../../lib/api/bindings/EffectProblem";
 import type { ItemOutcome } from "../../lib/api/bindings/ItemOutcome";
+import type { OnConnect } from "../../lib/api/bindings/OnConnect";
 import type { ProfileItem } from "../../lib/api/bindings/ProfileItem";
 import type { ProfileSummary } from "../../lib/api/bindings/ProfileSummary";
 import type { ResolutionCounts } from "../../lib/api/bindings/ResolutionCounts";
@@ -168,27 +169,53 @@ export function connectHeadline(name: string, report: ApplyReport): string {
   return `PrismForge applied ${name} in part when it connected. ${applySummary(report)}`;
 }
 
-/** True once this session has been connected; its apply-on-connect has then run or been skipped. */
-export function wasConnected(session: SessionSnapshot | null): boolean {
-  const counters = session?.diagnostics.counters;
-  return counters !== undefined && counters.connect_attempts > counters.connect_failures;
+function stopped(session: SessionSnapshot | null): boolean {
+  const connection = session?.connection;
+  return typeof connection === "object" && connection !== null && "Disconnected" in connection && connection.Disconnected.reason !== null;
 }
 
-export function notConnectedText(session: SessionSnapshot | null): string {
-  if (session === null) {
-    return "PrismForge is not connected. Connect first. A profile marked to apply when PrismForge connects is applied when you connect.";
+/** Every sentence about a pending apply on connect comes from the state the shell publishes. */
+export function onConnectText(state: OnConnect, session: SessionSnapshot | null): string {
+  if (stopped(session)) {
+    const next =
+      typeof state === "object" && "Armed" in state
+        ? ` When you connect, PrismForge applies ${state.Armed.name} as soon as it has read the devices.`
+        : state === "NotArmed"
+          ? " No profile is marked to apply on connect."
+          : "";
+    return `The connection stopped and PrismForge does not try again. Connect again from the Connection screen.${next}`;
   }
-  if (wasConnected(session)) {
-    return "PrismForge lost the connection and is trying again. A profile marked to apply when PrismForge connects is not applied again when the connection comes back. It is applied after you disconnect and connect.";
+  if (state === "NotApplicable") {
+    return session === null
+      ? "When you connect, PrismForge applies the profile marked to apply on connect, if there is one, as soon as it has read the devices."
+      : "Profiles are not available in this window, so no profile is applied when PrismForge connects.";
   }
-  return "PrismForge is not connected yet. A profile marked to apply when PrismForge connects is applied once the connection is made.";
+  if (state === "NotArmed") {
+    return "No profile is marked to apply on connect. A profile you mark before PrismForge has read the devices is applied then.";
+  }
+  if ("Armed" in state) {
+    return `PrismForge will apply ${state.Armed.name} as soon as it has read the devices.`;
+  }
+  const { applied, next } = state.Fired;
+  const done = applied
+    ? `PrismForge applied ${applied} once when it connected. It is not applied again in this session, also not when the connection comes back.`
+    : "No profile was marked when PrismForge connected, so none was applied. A profile marked now is not applied in this session.";
+  return next ? `${done} After you disconnect and connect, PrismForge applies ${next}.` : done;
 }
 
-export function waitingText(name: string, session: SessionSnapshot | null): string {
-  if (wasConnected(session)) {
-    return `${name} was not applied: PrismForge is not connected. When the connection comes back by itself, the profile is not applied again. Apply it once PrismForge is connected.`;
+export function notConnectedText(state: OnConnect, session: SessionSnapshot | null): string {
+  if (stopped(session)) {
+    return onConnectText(state, session);
   }
-  return `${name} waits for the connection. It is applied once the connection is made.`;
+  const lead = session === null ? "PrismForge is not connected. Connect first." : "PrismForge is not connected right now.";
+  return `${lead} ${onConnectText(state, session)}`;
+}
+
+export function waitingText(name: string, state: OnConnect, session: SessionSnapshot | null): string {
+  if (typeof state === "object" && "Armed" in state && state.Armed.name === name) {
+    return `${name} will be applied as soon as PrismForge has read the devices.`;
+  }
+  return `${name} was not applied: PrismForge is not connected. ${onConnectText(state, session)}`;
 }
 
 export function frameRateText(report: ApplyReport): string {
