@@ -3,7 +3,7 @@
   import type { Names } from "../../lib/names";
   import { namesLine, replaced } from "./batch";
   import { canStop, type Mode } from "./present";
-  import { acrossText } from "../setup/flow";
+  import AcrossMode from "../setup/AcrossMode.svelte";
   import type { EffectsState } from "./state.svelte";
 
   let { effects, session, names }: { effects: EffectsState; session: SessionSnapshot; names: Names } = $props();
@@ -67,7 +67,7 @@
     </p>
   </div>
   {#if typeof effects.mode === "object"}
-    <p class="across"><span aria-hidden="true">▦</span> {acrossText(effects.mode.AcrossSetup.view, effects.mode.AcrossSetup.flow)}. Changes keep this mode.</p>
+    <AcrossMode view={effects.mode.AcrossSetup.view} flow={effects.mode.AcrossSetup.flow} />
   {/if}
   {#if !stoppable}
     <p id="stop-none" class="note">Stop is off. No PrismForge effect runs on these targets.</p>
@@ -75,11 +75,6 @@
 </section>
 
 <style>
-  .across {
-    color: var(--text-dim);
-    font-size: var(--font-s);
-  }
-
   .bar {
     display: grid;
     gap: var(--space-2);

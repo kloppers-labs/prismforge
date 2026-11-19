@@ -90,6 +90,36 @@
     }
   }
 
+  let nameProblem = $state<string | null>(null);
+
+  $effect(() => {
+    void one;
+    nameProblem = null;
+  });
+
+  function rename(input: HTMLInputElement) {
+    if (!component) {
+      return;
+    }
+    if (input.value.trim() === "") {
+      nameProblem = `Enter a name. The component keeps the name ${component.name}.`;
+      input.value = component.name;
+      return;
+    }
+    nameProblem = null;
+    setup.rename(component.id, input.value);
+  }
+
+  function reverseHint(geometry: Geometry): string {
+    if ("Ring" in geometry || "Perimeter" in geometry) {
+      return "LED 1 stays where it is and the LEDs run the other way round.";
+    }
+    if ("Matrix" in geometry) {
+      return "LED 1 moves to the corner of the last LED, so the LEDs run in reverse.";
+    }
+    return "LED 1 moves to the other end, so the LEDs run in reverse.";
+  }
+
   function bounded(value: number): number {
     return Math.min(Math.max(Math.round(value), 1), COMPONENT_LED_LIMIT);
   }
@@ -141,8 +171,10 @@
         type="text"
         autocomplete="off"
         value={component.name}
-        onchange={(event) => event.currentTarget.value.trim() !== "" && setup.rename(component!.id, event.currentTarget.value)}
+        aria-describedby={nameProblem ? "component-name-problem" : undefined}
+        onchange={(event) => rename(event.currentTarget)}
       />
+      {#if nameProblem}<p id="component-name-problem" class="problem-text">{nameProblem}</p>{/if}
     </div>
 
     <fieldset class="block">
@@ -229,8 +261,8 @@
         </div>
       {/if}
       {#if !("Point" in component.geometry)}
-        <button type="button" class="small" onclick={() => reshape(reversed(component!.geometry), "Reverse the LED order")}>Reverse the LED order</button>
-        <p class="hint">Use this when the lights run the other way round on the hardware. Identify shows the order.</p>
+        <button type="button" class="small" onclick={() => reshape(reversed(component!.geometry), "Reverse the direction")}>Reverse the direction</button>
+        <p class="hint">{reverseHint(component.geometry)} Use it when the lights run the other way round on the hardware; Identify shows the order.</p>
       {/if}
     </fieldset>
 
@@ -290,7 +322,7 @@
 
 {#if deleting && component}
   <Dialog title="Delete {component.name}?" {opener} onclose={() => (deleting = false)}>
-    <p>The component leaves every view and its output. Undo brings it back until you save. Your lights stay as they are.</p>
+    <p>The component leaves every view and its output. Undo brings it back into the drawing until you discard changes or close PrismForge, also after a save. Your lights stay as they are.</p>
     {#snippet actions()}
       <button type="button" onclick={() => (deleting = false)}>Keep component</button>
       <button
@@ -380,6 +412,11 @@
 
   .problem {
     color: var(--problem);
+  }
+
+  .problem-text {
+    color: var(--warning);
+    font-size: var(--font-s);
   }
 
   .unwired {

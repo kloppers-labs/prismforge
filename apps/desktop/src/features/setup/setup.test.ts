@@ -264,3 +264,49 @@ test("an_output_with_nothing_in_this_view_is_left_as_it_is_and_never_called_dark
   expect(bar.textContent).toContain("Not in the PC view, so an effect across it leaves this output as it is.");
   expect(bar.textContent).not.toContain("dark");
 });
+
+test("a_number_field_shows_the_value_the_drawing_keeps_when_a_change_is_clamped_or_ignored", async () => {
+  fakeShell(demoConnected, setupHandlers());
+  render(App);
+  const list = await openSetup();
+  await fireEvent.click(componentRow(list, "Rear fan"));
+  const x = () => within(inspector()).getByRole("spinbutton", { name: "X" }) as HTMLInputElement;
+
+  await fireEvent.change(x(), { target: { value: "5000" } });
+  await waitFor(() => expect(x().value).toBe("1000"));
+  await fireEvent.change(x(), { target: { value: "5000" } });
+
+  await waitFor(() => expect(x().value).toBe("1000"));
+});
+
+test("an_empty_name_is_not_taken_and_says_why", async () => {
+  fakeShell(demoConnected, setupHandlers());
+  render(App);
+  const list = await openSetup();
+  await fireEvent.click(componentRow(list, "Rear fan"));
+  const name = within(inspector()).getByRole("textbox", { name: "Name" }) as HTMLInputElement;
+
+  await fireEvent.change(name, { target: { value: "   " } });
+
+  await waitFor(() => expect(name.value).toBe("Rear fan"));
+  expect(within(inspector()).getByText("Enter a name. The component keeps the name Rear fan.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Undo" }).hasAttribute("disabled")).toBe(true);
+});
+
+test("delete_says_undo_brings_it_back_also_after_a_save", async () => {
+  fakeShell(demoConnected, setupHandlers());
+  render(App);
+  const list = await openSetup();
+  await fireEvent.click(componentRow(list, "Rear fan"));
+
+  await fireEvent.click(within(inspector()).getByRole("button", { name: "Delete component…" }));
+  const dialog = await screen.findByRole("dialog", { name: "Delete Rear fan?" });
+  expect(dialog.textContent).toContain("Undo brings it back into the drawing until you discard changes or close PrismForge, also after a save. Your lights stay as they are.");
+  await fireEvent.click(within(dialog).getByRole("button", { name: "Delete component" }));
+  await fireEvent.click(screen.getByRole("button", { name: "Save setup" }));
+  await waitFor(() => expect(screen.getByRole("region", { name: "Setup actions" }).textContent).toContain("Saved just now"));
+
+  await fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+  expect(within(screen.getByRole("listbox", { name: "Components in the PC view" })).getByRole("option", { name: "Rear fan" })).toBeTruthy();
+});

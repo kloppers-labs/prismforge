@@ -5,6 +5,7 @@ import type { TargetResult } from "../../lib/api/bindings/TargetResult";
 import { failureText } from "../../lib/errors";
 import type { Names } from "../../lib/names";
 import { distinction } from "../devices/present";
+import { excludedText } from "../setup/present";
 import { retryable } from "./retry";
 import { deviceOf, runningOn, stopText, targetName } from "./present";
 import type { BatchFeedback } from "./state.svelte";
@@ -77,7 +78,7 @@ export function summarize(batch: BatchFeedback, session: SessionSnapshot, names:
     key: `excluded|${status.output}`,
     label: status.label,
     state: "Not sent",
-    text: `${status.zone_name ? `${status.zone_name} on ${status.label}` : status.label}: not sent. ${status.problem ? "Its parts in the setup no longer fit it." : `This zone is no longer ${status.zone_name ?? "the one placed in the setup"}.`} Place it again in Setup.`,
+    text: excludedText(status),
     settled: false,
   }));
   const rows = [...batch.report.results.map((result) => row(session, names, result, server)), ...excluded];

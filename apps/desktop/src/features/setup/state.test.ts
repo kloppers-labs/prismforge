@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import type { SetupStoreView } from "../../lib/api/bindings/SetupStoreView";
 import { fakeShell, refuse } from "../../test/backend";
 import { errorSetupExceedsOutput } from "../../test/fixtures/errors";
@@ -109,4 +109,24 @@ test("the_problems_follow_the_devices_the_session_reports", async () => {
   state.edit("Change LED count", (setup) => setGeometry(setup, "c-cooler-left", { Strip: { leds: 9, first: "AtStart" } }));
 
   expect(state.issues).toEqual([]);
+});
+
+test("a_change_of_devices_during_a_read_reads_the_setup_again_afterwards", async () => {
+  let answer: (view: SetupStoreView) => void = () => {};
+  let reads = 0;
+  fakeShell(demoConnected, {
+    setup: () => {
+      reads += 1;
+      return reads === 1 ? new Promise<SetupStoreView>((resolve) => (answer = resolve)) : setupRealTower;
+    },
+  });
+  const state = new SetupState(() => demoConnected);
+
+  state.follow(demoConnected);
+  state.follow(openRgbSetupDevices);
+  await vi.waitFor(() => expect(reads).toBe(1));
+  answer(tower());
+
+  await vi.waitFor(() => expect(reads).toBe(2));
+  await vi.waitFor(() => expect(state.stored?.kind).toBe("Real"));
 });

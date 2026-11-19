@@ -94,7 +94,7 @@
   <p id="across-why" class="hint">
     {across.blocked ?? (across.effect === null ? "Choose an effect. The drawing shows a draft of it; your devices stay as they are until you apply it." : "Your devices stay as they are until you press Apply.")}
   </p>
-  <AcrossResults {across} {setup} {session} {names} />
+  <AcrossResults {across} {session} {names} />
 </section>
 
 <style>

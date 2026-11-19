@@ -160,7 +160,7 @@ test("outputs_whose_zone_changed_are_listed_with_the_reason_and_retry_resends_on
   await fireEvent.click(within(panel()).getByRole("button", { name: "Apply across the PC view" }));
 
   const results = await within(panel()).findByRole("status", { name: "Results for each target" });
-  expect(results.textContent).toContain("Board logo on Demo Motherboard (Board edge): not sent. This zone is no longer Board logo, so its parts may not fit. Place it again on the zone it is on now.");
+  expect(results.textContent).toContain("Board logo on Demo Motherboard: not sent. This zone is no longer Board logo, so the parts placed on it may not fit. Place them again in Setup on the zone it is on now.");
   expect(results.textContent).toMatch(/Demo Light Bar: skipped\. This device has no Direct Mode\./);
   await fireEvent.click(within(results).getByRole("button", { name: "Retry 1 target" }));
 

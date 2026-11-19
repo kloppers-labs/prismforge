@@ -97,6 +97,7 @@ export class SetupState {
   private parked = new Map<StoreKind, Parked>();
   private key = "";
   private loading: Promise<void> | null = null;
+  private again = false;
 
   constructor(private readonly session: () => SessionSnapshot | null) {}
 
@@ -109,8 +110,19 @@ export class SetupState {
     }
   }
 
+  /** A load asked for while a read runs reads again once that read ends, so a newer setup is never dropped. */
   load(): Promise<void> {
-    this.loading ??= this.read().finally(() => (this.loading = null));
+    if (this.loading) {
+      this.again = true;
+      return this.loading;
+    }
+    this.loading = this.read().finally(() => {
+      this.loading = null;
+      if (this.again) {
+        this.again = false;
+        void this.load();
+      }
+    });
     return this.loading;
   }
 

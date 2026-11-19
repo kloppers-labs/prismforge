@@ -213,7 +213,16 @@ export function reversed(geometry: Geometry): Geometry {
     return { Perimeter: { ...geometry.Perimeter, turn: geometry.Perimeter.turn === "Clockwise" ? "CounterClockwise" : "Clockwise" } };
   }
   if ("Matrix" in geometry) {
-    return { Matrix: { ...geometry.Matrix, runs: geometry.Matrix.runs === "AlongRows" ? "AlongColumns" : "AlongRows" } };
+    return { Matrix: { ...geometry.Matrix, first: lastCorner(geometry) } };
   }
   return geometry;
+}
+
+/** The corner the last LED of a matrix sits in; starting there with the same runs gives the LEDs in reverse. */
+function lastCorner(geometry: Extract<Geometry, { Matrix: unknown }>): Corner {
+  const last = localLeds(geometry).at(-1) ?? { x: 0, y: 0 };
+  if (last.y < 0) {
+    return last.x < 0 ? "TopLeft" : "TopRight";
+  }
+  return last.x < 0 ? "BottomLeft" : "BottomRight";
 }

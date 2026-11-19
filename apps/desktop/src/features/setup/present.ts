@@ -5,6 +5,7 @@ import type { Placement } from "../../lib/api/bindings/Placement";
 import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { Setup } from "../../lib/api/bindings/Setup";
 import type { SetupOutput } from "../../lib/api/bindings/SetupOutput";
+import type { SetupOutputStatus } from "../../lib/api/bindings/SetupOutputStatus";
 import type { SetupProblem } from "../../lib/api/bindings/SetupProblem";
 import type { ViewId } from "../../lib/api/bindings/ViewId";
 import { nameProblemText } from "../../lib/errors";
@@ -241,4 +242,14 @@ export function identifyText(setup: Setup, id: ComponentId, names: Names, sessio
     return `Identify lights ${where}.`;
   }
   return `Identify lights ${where}, so ${listText(together.map((each) => nameOf(setup, each)))} light together. PrismForge cannot light one part of a zone alone.`;
+}
+
+/** Why an output got nothing from an apply across the setup; one wording for Setup and Effects. */
+export function excludedText(status: SetupOutputStatus): string {
+  const where = status.zone_name ? `${status.zone_name} on ${status.label}` : status.label;
+  const why =
+    status.problem !== null
+      ? "The parts placed on it no longer fit the LEDs it has now. Change them in Setup."
+      : `This zone is no longer ${status.zone_name ?? "the one placed in the setup"}, so the parts placed on it may not fit. Place them again in Setup on the zone it is on now.`;
+  return `${where}: not sent. ${why}`;
 }

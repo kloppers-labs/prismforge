@@ -101,7 +101,7 @@ test("an_apply_across_from_effects_lists_the_targets_that_got_nothing_and_retrie
   await fireEvent.click(button("Apply to 2 targets"));
 
   const results = await screen.findByRole("status", { name: "Results for each target" });
-  expect(results.textContent).toContain("Board logo on Demo Motherboard: not sent. This zone is no longer Board logo");
+  expect(results.textContent).toContain("Board logo on Demo Motherboard: not sent. This zone is no longer Board logo, so the parts placed on it may not fit. Place them again in Setup on the zone it is on now.");
   await fireEvent.click(within(results).getByRole("button", { name: "Retry 1 target" }));
   await wait(50);
 

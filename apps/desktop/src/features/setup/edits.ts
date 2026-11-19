@@ -15,7 +15,7 @@ export const ROTATION_STEP = 15;
 export const NUDGE = 10;
 export const SIZE_LIMITS = { min: 10, max: 1000 } as const;
 export const VIEWS = { pc: "v-pc", desk: "v-desk" } as const satisfies Record<string, ViewId>;
-const VIEW_NAMES: Record<ViewId, string> = { [VIEWS.pc]: "PC", [VIEWS.desk]: "Desk" };
+export const VIEW_NAMES: Record<ViewId, string> = { [VIEWS.pc]: "PC", [VIEWS.desk]: "Desk" };
 
 export type OutputChoice = { device: DeviceRef; zone: number | null; label: string; zoneName: string | null };
 

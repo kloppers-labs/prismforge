@@ -20,7 +20,7 @@ import {
   wire,
   withViews,
 } from "./edits";
-import { ledCount, viewLeds, withLeds, reversed } from "./geometry";
+import { ledCount, localLeds, viewLeds, withLeds, reversed } from "./geometry";
 import { History } from "./history";
 import { chainOf, parts, sharedWith } from "./wiring";
 
@@ -250,4 +250,26 @@ describe("undo and redo", () => {
 
 test("the_view_extent_is_fixed_so_numbers_mean_the_same_on_every_screen", () => {
   expect(CANVAS).toEqual({ width: 1000, height: 700 });
+});
+
+describe("reversing the direction", () => {
+  test.each([
+    ["rows", "AlongRows", false, 4, 3],
+    ["columns", "AlongColumns", false, 4, 3],
+    ["serpentine rows, even lines", "AlongRows", true, 3, 4],
+    ["serpentine rows, odd lines", "AlongRows", true, 4, 3],
+    ["serpentine columns", "AlongColumns", true, 4, 3],
+  ] as const)("a_reversed_matrix_runs_the_same_leds_backwards_%s", (_, runs, serpentine, columns, rows) => {
+    for (const first of ["TopLeft", "TopRight", "BottomRight", "BottomLeft"] as const) {
+      const matrix: Geometry = { Matrix: { columns, rows, first, runs, serpentine } };
+
+      const back = localLeds(reversed(matrix));
+
+      const forward = localLeds(matrix).reverse();
+      back.forEach((led, index) => {
+        expect(led.x).toBeCloseTo(forward[index]!.x, 9);
+        expect(led.y).toBeCloseTo(forward[index]!.y, 9);
+      });
+    }
+  });
 });

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from "svelte";
+
   let {
     id,
     label,
@@ -34,11 +36,14 @@
       {step}
       {value}
       aria-describedby={describedby}
-      onchange={(event) => {
-        const next = Number(event.currentTarget.value);
-        if (event.currentTarget.value.trim() !== "" && Number.isFinite(next)) {
+      onchange={async (event) => {
+        const input = event.currentTarget;
+        const next = Number(input.value);
+        if (input.value.trim() !== "" && Number.isFinite(next)) {
           onchange(next);
         }
+        await tick();
+        input.value = String(value);
       }}
     />
     {#if unit}<span class="unit" aria-hidden="true">{unit}</span>{/if}
