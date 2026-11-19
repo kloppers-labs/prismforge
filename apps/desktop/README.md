@@ -67,7 +67,7 @@ PRISMFORGE_UPDATE_GENERATED=1 cargo test -p prismforge-desktop --features ts --t
 | `set_device_name(device, name)`, `set_zone_name(device, zone, name)` | Set or, with `null`, clear the user's name for a device or zone. |
 | `dismiss_store_notice(notice)` | Removes one repaired-file notice from the list. |
 
-The event `session-view` carries the latest view. The view also names the profile being applied (`applying`) and the result of the last apply on connect (`connect_apply`). It is sent at most once per 50 ms, and a burst of changes arrives as its latest state. Each view has a rising `revision`; the interface ignores a view with a lower number than the one it shows.
+The event `session-view` carries the latest view. The view also names the profile being applied (`applying`), the result of the last apply on connect (`connect_apply`), and whether this session will still apply a marked profile when it connects (`on_connect`: not applicable, not armed, armed with the profile, or fired). It is sent at most once per 50 ms, and a burst of changes arrives as its latest state. Each view has a rising `revision`; the interface ignores a view with a lower number than the one it shows.
 
 Nothing connects and nothing is written to a device until the user selects an action. One action writes more than its name says: when a profile is set to "Apply this profile when PrismForge connects", Connect also applies that profile as soon as the connection is made. Closing the window quits the app after the session has stopped. The session restores the devices it runs effects on before it stops.
 

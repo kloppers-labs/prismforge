@@ -73,7 +73,18 @@ The shell seeds the backend with `Profiles::known_devices`, creates the session,
 
 ### Apply on connect
 
-The watcher feeds every snapshot to `ConnectTrigger` and calls `apply_marked` when it is due. The profile applies once each time the session becomes live after the user connects. A connection that the session restores by itself after a loss is the same connect: the profile is not applied again, and the effects in the session resume. The Profiles screen says so while the session retries, and the connection screen says that Connect applies a marked profile. PrismForge never starts or connects by itself, so the user must start PrismForge and connect for the profile to apply. The window shows the result of each automatic apply with a line per setting.
+The watcher feeds every snapshot to `ConnectTrigger` and calls `apply_marked` when it is due. The profile applies once each time the session becomes live after the user connects. A connection that the session restores by itself after a loss is the same connect: the profile is not applied again, and the effects in the session resume. The connection screen says that Connect applies a marked profile.
+
+The shell publishes the session's state in the view (`on_connect`), taken from the trigger and the store's current mark, and nothing else:
+
+| State | Meaning |
+|---|---|
+| `NotApplicable` | No session, or its store is not available. Nothing is applied on connect. |
+| `NotArmed` | The trigger has not come due and no profile is marked. A profile marked before the devices are read is applied then. |
+| `Armed` | The trigger has not come due; this profile is applied as soon as the devices are read. This holds also while the session retries after a connect whose first device scan failed. |
+| `Fired` | The trigger came due in this session, with or without a marked profile. Nothing more is applied in this session, also not after a lost connection. `next` names the profile the next user connect applies. |
+
+The trigger reads the mark when it comes due, so marking or unmarking a profile before then changes what is applied; after it, a change of mark affects only the next connect. The shell publishes the state again after every change of mark, rename or delete. A session that stopped by itself (for example an unsupported protocol) re-arms the trigger, but it does not retry; the next connect is a new session with a fresh trigger. The interface picks every sentence about a pending apply on connect from this state, and drops a command result that arrives after its session or store changed. PrismForge never starts or connects by itself, so the user must start PrismForge and connect for the profile to apply. The window shows the result of each automatic apply with a line per setting.
 
 ### Lock order
 
