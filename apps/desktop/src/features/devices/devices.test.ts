@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { IdentifyOutcome } from "../../lib/api/bindings/IdentifyOutcome";
@@ -79,9 +79,12 @@ test("explains_identify_before_first_use", async () => {
 
   await select("Demo Graphics Card");
   expect(screen.getByText("Identify lights it white for 3 seconds, then asks the demo backend to put back the earlier lighting.")).toBeTruthy();
-  const how = screen.getByText("How identify works").closest("details") as HTMLDetailsElement;
-  expect(how.open).toBe(false);
-  expect(within(how).getByText(/PrismForge cannot see that\. PrismForge never saves to device memory\./)).toBeTruthy();
+  const caveat = screen.getByText(/PrismForge cannot see that\. PrismForge never saves to device memory\./);
+  expect(caveat.closest("details:not([open])")).toBeNull();
+
+  await fireEvent.click(screen.getByRole("button", { name: "Identify device" }));
+
+  await waitFor(() => expect((screen.getByText("How identify works").closest("details") as HTMLDetailsElement).open).toBe(false));
 });
 
 const expectations: [string, IdentifyOutcome, RegExp[]][] = [
@@ -227,4 +230,14 @@ test("zone_rows_have_short_buttons_with_full_names", async () => {
 
   expect(identify.textContent?.trim()).toBe("Identify");
   expect(rename.textContent?.trim()).toBe("Rename");
+});
+
+test("the_identical_device_note_promises_no_fix_the_core_does_not_keep", async () => {
+  fakeShell(openRgbDegraded);
+  render(App);
+  await select("Fixture Fan");
+
+  const note = screen.getByText(/looks identical to another device/).parentElement as HTMLElement;
+  expect(note.textContent).not.toMatch(/disconnect the other one|unplug/i);
+  expect(note.textContent).toMatch(/no way yet to tell them apart by hand/);
 });

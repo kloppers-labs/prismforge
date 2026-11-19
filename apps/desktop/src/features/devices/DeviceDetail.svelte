@@ -90,7 +90,7 @@
     {#if isAmbiguous(device)}
       <div class="note warning">
         <p>This device looks identical to another device. PrismForge will not light it until it can tell the two apart.</p>
-        <p>The devices report the same name, vendor and zones, and no serial number or location that differs. To light one of them now, disconnect the other one, then rescan.</p>
+        <p>The devices report the same name, vendor and zones, and no serial number or location that differs. PrismForge has no way yet to tell them apart by hand, so Identify and effects are off for both.</p>
       </div>
     {/if}
 

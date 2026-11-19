@@ -49,7 +49,7 @@
   </div>
 
   <p class="explain">Identify lights it white for 3 seconds, then asks {server} to put back the earlier lighting.</p>
-  <Details summary="How identify works">{@render explanation()}</Details>
+  <Details summary="How identify works" open={!app.identifiedOnce}>{@render explanation()}</Details>
 </div>
 
 <style>
