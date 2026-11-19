@@ -41,7 +41,7 @@ export function profileChipMenu(app: AppState, status: ProfileStatus): Menu {
   const items: MenuItem[] = [];
   const saveable = status.saveable;
   if (saveable) {
-    items.push({ id: "profile-chip.save", label: "Save changes…", run: strip(app, () => app.saveActiveChanges(saveable)) });
+    items.push({ id: "profile-chip.save", label: `Save changes to ${status.title}`, run: strip(app, () => app.saveActiveChanges(saveable)) });
   }
   items.push({ id: "profile-chip.open", label: "Open Profiles", run: strip(app, () => app.openProfiles()) });
   return { label: "Profile actions", items };

@@ -4,7 +4,7 @@ export const MIRRORS = {
   "connection.connect": "Connect to OpenRGB in the connection panel",
   "connection.demo": "Start demo mode in the connection panel",
   "connection.end": "Disconnect or Stop retrying in the connection panel",
-  "profile-chip.save": "Save changes… in the profile panel",
+  "profile-chip.save": "Save changes to the active profile, in the profile panel",
   "profile-chip.open": "Open Profiles in the profile panel",
   "device.set-lighting": "Set lighting on the device page",
   "device.identify": "Identify device on the device page",

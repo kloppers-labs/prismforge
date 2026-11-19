@@ -23,7 +23,7 @@
     <div class="actions">
       {#if status.saveable}
         {@const id = status.saveable}
-        <button type="button" data-mirror="profile-chip.save" onclick={() => (close(), app.uncover(), app.saveActiveChanges(id))}>Save changes…</button>
+        <button type="button" data-mirror="profile-chip.save" onclick={() => (close(), app.uncover(), app.saveActiveChanges(id))}>Save changes to {status.title}</button>
       {/if}
       <button type="button" data-mirror="profile-chip.open" onclick={() => (close(), app.uncover(), app.openProfiles())}>Open Profiles</button>
     </div>

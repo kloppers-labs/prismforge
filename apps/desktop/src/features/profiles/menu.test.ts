@@ -47,11 +47,11 @@ test("the_profile_row_menu_offers_the_actions_of_that_profile", async () => {
     "Duplicate",
     "Export…",
     "Apply this profile when PrismForge connects",
-    "Delete…",
+    "Delete",
   ]);
   const mark = within(active).getByRole("menuitemcheckbox", { name: "Apply this profile when PrismForge connects" });
   expect(mark.getAttribute("aria-checked")).toBe("false");
-  expect(within(active).getByRole("menuitem", { name: "Delete…" }).previousElementSibling?.getAttribute("role")).toBe("separator");
+  expect(within(active).getByRole("menuitem", { name: "Delete" }).previousElementSibling?.getAttribute("role")).toBe("separator");
   await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
 
   expect(itemLabels(await openMenu(await row("Evening (2)"), "Actions for Evening (2)"))).not.toContain("Save changes to Evening (2)");
@@ -74,7 +74,7 @@ test("delete_in_the_menu_asks_first_and_returns_focus_to_the_row", async () => {
   render(App);
   const older = await row("Evening (2)");
 
-  await pick(older, "Actions for Evening (2)", "Delete…");
+  await pick(older, "Actions for Evening (2)", "Delete");
   const dialog = await screen.findByRole("dialog", { name: "Delete Evening (2)?" });
   expect(within(dialog).getByText(/The profile file is removed from this computer\./)).toBeTruthy();
   expect(args(shell, "delete_profile")).toEqual([]);
@@ -82,7 +82,7 @@ test("delete_in_the_menu_asks_first_and_returns_focus_to_the_row", async () => {
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(document.activeElement).toBe(older);
 
-  await pick(older, "Actions for Evening (2)", "Delete…");
+  await pick(older, "Actions for Evening (2)", "Delete");
   await fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete profile" }));
   expect(args(shell, "delete_profile")).toEqual([{ id: OLDER }]);
 });
@@ -188,7 +188,7 @@ test("a_menu_request_is_dropped_when_another_row_is_chosen_before_the_details_lo
   );
   render(App);
 
-  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Delete…");
+  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Delete");
   await fireEvent.click(await row("Evening"));
   await screen.findByRole("article", { name: "Evening" });
   slow = false;

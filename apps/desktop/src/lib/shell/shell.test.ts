@@ -279,7 +279,7 @@ test("the_profile_chip_saves_changes_and_opens_profiles", async () => {
   await within(await findStrip()).findByRole("button", { name: /^Profile: Evening/ });
 
   const panel = await openProfileChip();
-  await fireEvent.click(within(panel).getByRole("button", { name: "Save changes…" }));
+  await fireEvent.click(within(panel).getByRole("button", { name: "Save changes to Evening" }));
 
   await waitFor(() => expect(shell.calls.find((call) => call.command === "preview_profile_update")?.args).toEqual({ id: "p-0000000000000001" }));
   expect(current()).toEqual(["Profiles"]);
@@ -526,7 +526,7 @@ test("below_the_docking_width_save_changes_opens_a_live_dialog_outside_any_inert
   await within(strip()).findByRole("button", { name: /^Profile: Evening/ });
 
   const panel = await openProfileChip();
-  await fireEvent.click(within(panel).getByRole("button", { name: "Save changes…" }));
+  await fireEvent.click(within(panel).getByRole("button", { name: "Save changes to Evening" }));
 
   const dialog = await screen.findByRole("dialog");
   uncovered();

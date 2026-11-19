@@ -85,8 +85,8 @@ test("the_profile_chip_menu_saves_changes_and_opens_profiles_like_its_panel", as
   const chip = await within(await findStrip()).findByRole("button", { name: /^Profile: Evening/ });
 
   const menu = await openMenu(chip, "Profile actions");
-  expect(itemLabels(menu)).toEqual(["Save changes…", "Open Profiles"]);
-  await fireEvent.click(within(menu).getByRole("menuitem", { name: "Save changes…" }));
+  expect(itemLabels(menu)).toEqual(["Save changes to Evening", "Open Profiles"]);
+  await fireEvent.click(within(menu).getByRole("menuitem", { name: "Save changes to Evening" }));
   await waitFor(() => expect(shell.calls.find((call) => call.command === "preview_profile_update")?.args).toEqual({ id: "p-0000000000000001" }));
   expect(await screen.findByRole("dialog", { name: "Save changes to Evening?" })).toBeTruthy();
   await fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));

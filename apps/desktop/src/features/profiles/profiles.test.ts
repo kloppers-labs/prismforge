@@ -246,7 +246,7 @@ test("export_states_what_the_file_holds_before_a_destination_is_chosen", async (
   render(App);
   const article = await chooseProfile("Evening");
 
-  await fireEvent.click(within(article).getByRole("button", { name: "Export" }));
+  await fireEvent.click(within(article).getByRole("button", { name: "Export…" }));
   const dialog = await screen.findByRole("dialog", { name: "Export Evening" });
   expect(within(dialog).getByText(EXPORT_TEXT)).toBeTruthy();
   expect(dialog.textContent).not.toMatch(/identify this computer/);

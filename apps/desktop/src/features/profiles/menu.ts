@@ -44,7 +44,7 @@ export function profileMenu(context: ProfilesMenuContext, profile: ProfileSummar
       checked: marked,
       run: () => profiles.setApplyOnConnect(marked ? null : id),
     },
-    { id: "profile.delete", label: "Delete…", danger: true, reason: applying, run: (origin) => profiles.ask(id, "delete", origin) },
+    { id: "profile.delete", label: "Delete", danger: true, reason: applying, run: (origin) => profiles.ask(id, "delete", origin) },
   );
   return { label: `Actions for ${profile.name}`, items };
 }

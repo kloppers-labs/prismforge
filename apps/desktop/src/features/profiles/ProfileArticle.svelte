@@ -163,7 +163,7 @@
       <button type="button" class="small" data-mirror="profile.duplicate" disabled={profiles.working !== null} onclick={() => profiles.duplicate(details.id)}>
         Duplicate
       </button>
-      <button type="button" class="small" data-mirror="profile.export" bind:this={exportButton} onclick={() => openDialog("export", exportButton)}>Export</button>
+      <button type="button" class="small" data-mirror="profile.export" bind:this={exportButton} onclick={() => openDialog("export", exportButton)}>Export…</button>
     </span>
     <button
       type="button"
