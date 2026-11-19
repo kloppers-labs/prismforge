@@ -249,7 +249,7 @@
     <h2 id="quit-title">Quit PrismForge</h2>
     <div class="help">
       <p>Stops PrismForge effects, puts back the lighting from before where it can, disconnects and ends PrismForge. The shortcut is {quitShortcut()}. Quit in the tray menu does the same. While PrismForge quits, further Quit requests wait for it.</p>
-      <p>When the system ends PrismForge instead, for example when you log out or shut down, PrismForge tries the same for up to 6 seconds. The system may end it sooner, and then the devices keep the last effect frame. Ending PrismForge in Task Manager or Activity Monitor puts nothing back.</p>
+      <p>When the system ends PrismForge instead, for example when you log out or shut down, PrismForge tries the same for up to 4 seconds. The system may end it sooner, and then the devices keep the last effect frame. Ending PrismForge in Task Manager or Activity Monitor puts nothing back.</p>
     </div>
     <button type="button" disabled={quitting} onclick={() => lifecycle.quit()}>
       {quitting ? "Quitting PrismForge" : "Quit PrismForge"}

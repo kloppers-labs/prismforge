@@ -141,7 +141,7 @@ async fn the_stop_at_process_end_releases_effects_and_never_waits_past_its_limit
         .await
         .expect("effect");
 
-    let finished = stop_within(&shell, Duration::from_secs(6)).await;
+    let finished = stop_within(&shell, Duration::from_secs(4)).await;
 
     assert!(finished);
     assert!(matches!(
@@ -172,8 +172,8 @@ async fn the_stop_at_process_end_releases_effects_and_never_waits_past_its_limit
     tokio::time::sleep(Duration::from_millis(100)).await;
     let started = Instant::now();
 
-    let ended = stop_within(&stuck, Duration::from_secs(6)).await;
+    let ended = stop_within(&stuck, Duration::from_secs(4)).await;
 
     assert!(!ended);
-    assert!(started.elapsed() <= Duration::from_secs(6));
+    assert!(started.elapsed() <= Duration::from_secs(4));
 }

@@ -55,8 +55,8 @@ impl ViewSink for WindowSink {
     }
 }
 
-/// The release limit of the session plus a margin; the last stop at process end never waits longer.
-const LAST_STOP_LIMIT: Duration = Duration::from_secs(6);
+/// Below the 5 seconds after which Windows ends a hidden app at session end or lists it as blocking.
+const LAST_STOP_LIMIT: Duration = Duration::from_secs(4);
 
 pub fn run() {
     let builder = tauri::Builder::default();
