@@ -12,7 +12,7 @@
 </script>
 
 <div class="inventory">
-  <DeviceList {entries} selected={current?.key ?? null} issues={session.issues.length} onselect={(key) => (app.selected = key)} />
+  <DeviceList {entries} selected={current?.key ?? null} issues={session.issues.length} names={app.names} onselect={(key) => (app.selected = key)} />
   {#if current}
     {#key current.key}
       <DeviceDetail {app} {session} device={current.device} />

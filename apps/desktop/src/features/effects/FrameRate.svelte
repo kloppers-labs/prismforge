@@ -3,7 +3,12 @@
   import { failureText } from "../../lib/errors";
   import type { EffectsState } from "./state.svelte";
 
-  let { effects, range, current }: { effects: EffectsState; range: Bounds; current: number } = $props();
+  let {
+    effects,
+    range,
+    current,
+    held,
+  }: { effects: EffectsState; range: Bounds; current: number; held: string | null } = $props();
 
   let text = $state("");
   let problem = $state<string | null>(null);
@@ -46,8 +51,11 @@
       aria-invalid={problem ? "true" : undefined}
       aria-describedby={problem ? "frame-rate-problem" : undefined}
     />
-    <button type="submit">Set frame rate</button>
+    <button type="submit" disabled={held !== null} aria-describedby={held ? "frame-rate-held" : undefined}>Set frame rate</button>
   </form>
+  {#if held}
+    <p id="frame-rate-held" class="hint">Off now. {held}</p>
+  {/if}
   {#if problem}
     <p id="frame-rate-problem" class="problem">{problem}</p>
   {/if}
@@ -73,6 +81,10 @@
 
   .rate p {
     max-width: 72ch;
+  }
+
+  .hint {
+    font-size: 13px;
   }
 
   form {

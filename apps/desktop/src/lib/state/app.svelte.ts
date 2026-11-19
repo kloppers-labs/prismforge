@@ -3,10 +3,12 @@ import type { DeviceRef } from "../api/bindings/DeviceRef";
 import type { IdentifyOutcome } from "../api/bindings/IdentifyOutcome";
 import type { ShellView } from "../api/bindings/ShellView";
 import { EffectsState } from "../../features/effects/state.svelte";
+import { ProfilesState } from "../../features/profiles/state.svelte";
+import { isLive } from "../../features/devices/present";
 
 export type Work = "connect" | "demo" | "disconnect" | "refresh";
 
-export type Screen = "devices" | "effects";
+export type Screen = "devices" | "effects" | "profiles";
 
 export type IdentifyTarget = { device: DeviceRef; zone: number | null };
 
@@ -16,7 +18,7 @@ export type IdentifyState =
   | { kind: "failed"; target: IdentifyTarget; error: Failure };
 
 export class AppState {
-  view = $state<ShellView>({ revision: 0, session: null });
+  view = $state<ShellView>({ revision: 0, session: null, applying: null, connect_apply: null, on_connect: "NotApplicable" });
   working = $state<Work | null>(null);
   problem = $state<Failure | null>(null);
   identify = $state<IdentifyState | null>(null);
@@ -24,7 +26,19 @@ export class AppState {
   selected = $state<string | null>(null);
   diagnosticsOpen = $state(false);
   screen = $state<Screen>("devices");
-  readonly effects = new EffectsState(() => this.view);
+  connectApplyDismissed = $state(false);
+  readonly profiles = new ProfilesState();
+  readonly effects = new EffectsState(
+    () => this.view,
+    () => this.profiles.names,
+    () => this.profiles.refreshSoon(),
+  );
+  private storeKey = storeKey(this.view);
+  private sessionKey = sessionKey(this.view);
+
+  get names() {
+    return this.profiles.names;
+  }
 
   get session() {
     return this.view.session;
@@ -40,8 +54,36 @@ export class AppState {
   }
 
   accept(view: ShellView) {
-    if (view.revision > this.view.revision) {
-      this.view = view;
+    if (view.revision <= this.view.revision) {
+      return;
+    }
+    this.view = view;
+    if (view.connect_apply === null) {
+      this.connectApplyDismissed = false;
+    }
+    const session = sessionKey(view);
+    if (session !== this.sessionKey) {
+      this.sessionKey = session;
+      this.profiles.endScope();
+    }
+    const key = storeKey(view);
+    if (key !== this.storeKey) {
+      this.storeKey = key;
+      this.storeChanged();
+    }
+  }
+
+  openProfiles() {
+    this.screen = "profiles";
+    return this.profiles.refresh();
+  }
+
+  /** The store opens on first use, so without a session it is read only when the user opens Profiles. */
+  private storeChanged() {
+    if (this.view.session === null && this.screen !== "profiles") {
+      this.profiles.forget();
+    } else {
+      this.profiles.refreshSoon();
     }
   }
 
@@ -55,6 +97,7 @@ export class AppState {
 
   disconnect() {
     this.effects.leave();
+    this.profiles.endScope();
     return this.run("disconnect", api.disconnect);
   }
 
@@ -75,6 +118,7 @@ export class AppState {
     this.identify = null;
     this.selected = null;
     this.effects.reset();
+    this.profiles.endScope();
     return this.run(work, action);
   }
 
@@ -89,6 +133,21 @@ export class AppState {
       this.accept(answer.value);
     }
   }
+}
+
+function sessionKey(view: ShellView): string {
+  return view.session?.backend.origin ?? "none";
+}
+
+function storeKey(view: ShellView): string {
+  const session = view.session;
+  return [
+    session?.backend.origin ?? "none",
+    session && isLive(session) ? "live" : "idle",
+    session?.devices.length ?? 0,
+    view.applying?.id ?? "",
+    view.connect_apply ? "applied" : "",
+  ].join("|");
 }
 
 function isView(value: unknown): value is ShellView {

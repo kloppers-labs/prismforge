@@ -7,14 +7,19 @@
   import { modeBlocked, outputOf } from "./present";
   import type { EffectsState } from "./state.svelte";
 
-  let { effects, session, device }: { effects: EffectsState; session: SessionSnapshot; device: SessionDevice } = $props();
+  let {
+    effects,
+    session,
+    device,
+    held,
+  }: { effects: EffectsState; session: SessionSnapshot; device: SessionDevice; held: string | null } = $props();
 
   let ref = $derived(reference(device));
   let capabilities = $derived(device.descriptor.capabilities);
   let modes = $derived(
     capabilities.modes.map((mode, index) => ({ index, name: mode.name })).filter((mode) => mode.index !== capabilities.direct_mode),
   );
-  let blocked = $derived(modeBlocked(session, device));
+  let blocked = $derived(held ?? modeBlocked(session, device));
   let owner = $derived(ref === null ? null : (outputOf(session, ref)?.owner ?? null));
   let selected = $derived(owner !== null && typeof owner === "object" && "HardwareMode" in owner ? owner.HardwareMode.mode : null);
   let feedback = $derived(effects.modeFeedback);

@@ -18,6 +18,7 @@ Every licence below is compatible with GPL-3.0-or-later. No dependency is GPL-2.
 | `serde` | 1.0.229 | MIT OR Apache-2.0 | all crates |
 | `tauri` | 2.12.6 | Apache-2.0 OR MIT | desktop app |
 | `tauri-build` | 2.7.5 | Apache-2.0 OR MIT | desktop app, build time |
+| `tauri-plugin-dialog` | 2.8.4 | Apache-2.0 OR MIT | desktop app: the native save and open dialogs for profile export and import, opened from Rust only |
 | `ts-rs` | 12.0.1 | MIT | `ts` feature only, generates the TypeScript types |
 | `serde_json` | 1.0.154 | MIT OR Apache-2.0 | `prismforge-core` (profile and store files, with the `preserve_order` feature), desktop app tests, effects crate tests; also a Tauri dependency |
 
@@ -25,12 +26,14 @@ Every licence below is compatible with GPL-3.0-or-later. No dependency is GPL-2.
 
 The `preserve_order` feature of `serde_json` adds `indexmap` 2.14.2 (Apache-2.0 OR MIT) and `foldhash` 0.2.0 (Zlib) to its dependencies. Both were already in `Cargo.lock` through Tauri, so the counts below did not change.
 
-`Cargo.lock` holds 428 third-party crates for all platforms, most of them from Tauri. The count per licence on 2026-11-18:
+`tauri-plugin-dialog` adds four crates: `tauri-plugin-dialog` itself, `tauri-plugin` 2.7.4 (Apache-2.0 OR MIT, a build helper), `tauri-plugin-fs` 2.7.1 (Apache-2.0 OR MIT) and `rfd` 0.17.2 (MIT, the native dialogs). The dialog crate uses a path type from `tauri-plugin-fs`. PrismForge does not register the file system plugin, and the window has no file system or dialog permission.
+
+`Cargo.lock` holds 432 third-party crates for all platforms, most of them from Tauri. The count per licence on 2026-11-19:
 
 | Licence (as the manifest writes it) | Crates |
 |---|---|
-| MIT OR Apache-2.0, Apache-2.0 OR MIT, MIT/Apache-2.0, Apache-2.0/MIT, Apache-2.0 / MIT | 245 |
-| MIT | 105 |
+| MIT OR Apache-2.0, Apache-2.0 OR MIT, MIT/Apache-2.0, Apache-2.0/MIT, Apache-2.0 / MIT | 248 |
+| MIT | 106 |
 | Unicode-3.0 | 18 |
 | Zlib OR Apache-2.0 OR MIT, MIT OR Zlib OR Apache-2.0, MIT OR Apache-2.0 OR Zlib | 21 |
 | Unlicense OR MIT, Unlicense/MIT | 11 |
@@ -57,6 +60,8 @@ The `preserve_order` feature of `serde_json` adds `indexmap` 2.14.2 (Apache-2.0 
 | `@testing-library/svelte` | 5.4.2 | MIT | tests |
 | `jsdom` | 31.0.1 | MIT | tests |
 | `@tauri-apps/cli` | 2.12.5 | Apache-2.0 OR MIT | native build tool |
+
+The interface does not use the npm package `@tauri-apps/plugin-dialog`. Rust opens the dialogs.
 
 ## npm: transitive dependencies
 

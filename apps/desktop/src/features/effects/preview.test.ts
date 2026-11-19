@@ -70,7 +70,7 @@ test("never_starts_or_stops_physical_output", async () => {
   const { shell } = await animatedPreview();
   await wait(300);
 
-  expect(new Set(shell.commands())).toEqual(new Set(["view", "effect_catalog", "preview_effect"]));
+  expect(new Set(shell.commands())).toEqual(new Set(["view", "profile_store", "effect_catalog", "preview_effect"]));
 });
 
 test("shows_one_still_frame_when_motion_is_reduced", async () => {

@@ -9,9 +9,12 @@ use prismforge_core::{ConnectionState, DeviceRef, RgbBackend};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+use crate::apply_lock::{ApplyLock, Permit};
 use crate::forward::forward;
+use crate::on_connect::{Report, apply_on_connect};
 use crate::publisher::{Publisher, ViewSink};
-use crate::view::{CommandError, ShellView};
+use crate::stores::{StoreKind, Stores};
+use crate::view::{CommandError, OnConnect, ShellView};
 
 #[derive(Debug, Clone)]
 pub struct ShellConfig {
@@ -31,24 +34,34 @@ impl Default for ShellConfig {
 }
 
 /// Owns at most one session; a new session starts only after the previous one has fully stopped.
-pub struct Shell<S> {
+pub struct Shell<S: ViewSink> {
     config: ShellConfig,
     publisher: Arc<Publisher<S>>,
-    active: Mutex<Option<Active>>,
+    // Lock order: active, apply slot, output gate, on-connect report, store; a session handle holder never waits for active.
+    active: Mutex<Option<Active<S>>>,
+    pub(crate) stores: Stores,
+    pub(crate) lock: Arc<ApplyLock<S>>,
 }
 
-struct Active {
+struct Active<S> {
     handle: SessionHandle,
+    kind: StoreKind,
+    report: Option<Arc<Report<S>>>,
     session: JoinHandle<()>,
     forwarder: JoinHandle<()>,
+    keeper: Option<JoinHandle<()>>,
+    watcher: Option<JoinHandle<()>>,
 }
 
 impl<S: ViewSink> Shell<S> {
-    pub fn new(sink: S, config: ShellConfig) -> Self {
+    pub fn new(sink: S, config: ShellConfig, stores: Stores) -> Self {
+        let publisher = Arc::new(Publisher::new(sink));
         Self {
             config,
-            publisher: Arc::new(Publisher::new(sink)),
+            lock: Arc::new(ApplyLock::new(publisher.clone())),
+            publisher,
             active: Mutex::new(None),
+            stores,
         }
     }
 
@@ -56,14 +69,39 @@ impl<S: ViewSink> Shell<S> {
         self.publisher.current()
     }
 
+    /// Seeds the backend with the stored registry and keeps it beside the session, then connects.
     pub async fn start<B: RgbBackend + Send + 'static>(
         &self,
-        backend: B,
+        mut backend: B,
     ) -> Result<ShellView, CommandError> {
         let mut active = self.active.lock().await;
         end(active.take()).await;
+        self.publisher.set_connect_apply(None);
+        self.publisher.set_on_connect(OnConnect::NotApplicable);
+        let kind = StoreKind::of(backend.info().origin);
+        let profiles = self.stores.profiles(kind).await.ok();
+        if let Some(profiles) = &profiles {
+            backend.seed_known_devices(profiles.known_devices().await);
+        }
         let (handle, session) = Session::new(backend, self.config.session.clone());
         let session = tokio::spawn(session.run());
+        let keeper = profiles.clone().map(|profiles| {
+            let known = handle.known_devices();
+            tokio::spawn(async move { profiles.keep_registry(known).await })
+        });
+        let report =
+            profiles.map(|profiles| Arc::new(Report::new(profiles, self.publisher.clone())));
+        if let Some(report) = &report {
+            report.publish().await;
+        }
+        let watcher = report.clone().map(|report| {
+            tokio::spawn(apply_on_connect(
+                report,
+                handle.clone(),
+                self.lock.clone(),
+                self.publisher.clone(),
+            ))
+        });
         let mut updates = handle.subscribe();
         drop(handle.connect());
         let first = updates
@@ -71,8 +109,10 @@ impl<S: ViewSink> Shell<S> {
             .await
             .map(|snapshot| snapshot.clone());
         let Ok(first) = first else {
+            stop_beside(watcher).await;
             drop(handle);
             let _ = session.await;
+            finish(keeper).await;
             self.publisher.publish(None);
             return Err(SessionError::Stopped.into());
         };
@@ -84,8 +124,12 @@ impl<S: ViewSink> Shell<S> {
         ));
         *active = Some(Active {
             handle,
+            kind,
+            report,
             session,
             forwarder,
+            keeper,
+            watcher,
         });
         Ok(view)
     }
@@ -93,7 +137,22 @@ impl<S: ViewSink> Shell<S> {
     pub async fn stop(&self) -> ShellView {
         let mut active = self.active.lock().await;
         end(active.take()).await;
+        self.publisher.set_connect_apply(None);
+        self.publisher.set_on_connect(OnConnect::NotApplicable);
         self.publisher.publish(None)
+    }
+
+    /// Publishes the apply-on-connect state again; called after every command that can change the mark.
+    pub(crate) async fn report_on_connect(&self) {
+        let report = self
+            .active
+            .lock()
+            .await
+            .as_ref()
+            .and_then(|active| active.report.clone());
+        if let Some(report) = report {
+            report.publish().await;
+        }
     }
 
     pub async fn refresh(&self) -> Result<(), CommandError> {
@@ -107,10 +166,36 @@ impl<S: ViewSink> Shell<S> {
         zone: Option<usize>,
     ) -> Result<IdentifyOutcome, CommandError> {
         let duration = self.config.identify_duration;
-        let reply = self
-            .queue(|handle| handle.identify(device, zone, duration))
+        let (_permit, reply) = self
+            .queue_output(|handle| handle.identify(device, zone, duration))
             .await?;
         Ok(reply.await?)
+    }
+
+    /// The session's handle, if any, and the store that belongs to it; no session means the real store.
+    pub(crate) async fn current(&self) -> (Option<SessionHandle>, StoreKind) {
+        parts(self.active.lock().await.as_ref())
+    }
+
+    /// Like [`Self::current`], with an output permit taken while `active` is held.
+    pub(crate) async fn permitted(
+        &self,
+    ) -> Result<(Permit, Option<SessionHandle>, StoreKind), CommandError> {
+        let active = self.active.lock().await;
+        let permit = self.lock.permit()?;
+        let (handle, kind) = parts(active.as_ref());
+        Ok((permit, handle, kind))
+    }
+
+    /// Queues an output command and takes its permit while `active` is held.
+    pub(crate) async fn queue_output<F: Future>(
+        &self,
+        command: impl FnOnce(&SessionHandle) -> F,
+    ) -> Result<(Permit, F), CommandError> {
+        let active = self.active.lock().await;
+        let active = active.as_ref().ok_or(CommandError::NoSession)?;
+        let permit = self.lock.permit()?;
+        Ok((permit, command(&active.handle)))
     }
 
     /// Queues while holding the lock, so a command never reaches a session that is being replaced.
@@ -124,21 +209,53 @@ impl<S: ViewSink> Shell<S> {
     }
 }
 
-async fn end(active: Option<Active>) {
+fn parts<S>(active: Option<&Active<S>>) -> (Option<SessionHandle>, StoreKind) {
+    active.map_or((None, StoreKind::Real), |active| {
+        (Some(active.handle.clone()), active.kind)
+    })
+}
+
+/// The watcher holds a handle, so it stops first; the keeper writes the last registry after the session.
+async fn end<S: ViewSink>(active: Option<Active<S>>) {
     let Some(Active {
         handle,
+        report,
         session,
         forwarder,
+        keeper,
+        watcher,
+        ..
     }) = active
     else {
         return;
     };
     forwarder.abort();
     let _ = forwarder.await;
+    stop_beside(watcher).await;
+    if let Some(report) = report {
+        report.close().await;
+    }
     drop(handle);
     let _ = session.await;
+    finish(keeper).await;
+}
+
+async fn finish(task: Option<JoinHandle<()>>) {
+    if let Some(task) = task {
+        let _ = task.await;
+    }
+}
+
+async fn stop_beside(task: Option<JoinHandle<()>>) {
+    if let Some(task) = task {
+        task.abort();
+        let _ = task.await;
+    }
 }
 
 fn is_unstarted(snapshot: &SessionSnapshot) -> bool {
     snapshot.connection == ConnectionState::Disconnected { reason: None }
 }
+
+#[cfg(test)]
+mod tests;

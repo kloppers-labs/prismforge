@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::device::DeviceRef;
-use crate::profile::{DeviceResolution, DeviceStatus, EffectProblem, Profile, ProfileId, resolve};
-use crate::session::SessionDevice;
+use crate::profile::{
+    DeviceResolution, DeviceStatus, EffectProblem, Profile, ProfileId, ProfileItem, SkipReason,
+    preflight, resolve,
+};
+use crate::session::{SessionDevice, SessionSnapshot};
 use crate::store::StoreError;
 use crate::store::envelope::FileProblem;
 use crate::store::notice::StoreNotice;
@@ -28,6 +31,9 @@ pub struct ProfileSummary {
     pub id: ProfileId,
     pub name: String,
     pub devices: usize,
+    pub effects: usize,
+    pub modes: usize,
+    pub external: usize,
     /// `None` when there are no current devices to match against.
     pub resolution: Option<ResolutionCounts>,
 }
@@ -56,9 +62,33 @@ pub struct ProfileDetails {
     pub name: String,
     pub frame_rate: u32,
     pub apply_on_connect: bool,
+    /// False when there was no session to match against; then every device reads as missing.
+    pub checked: bool,
     pub devices: Vec<DeviceResolution>,
+    /// Every stored setting in apply order, with what apply would do with it today.
+    pub settings: Vec<StoredSetting>,
     /// Stored effects this version cannot run; they stay in the profile.
     pub unsupported: Vec<UnsupportedEffect>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct StoredSetting {
+    pub device: DeviceRef,
+    pub label: String,
+    /// The stored name of the zone an effect targets.
+    pub zone_name: Option<String>,
+    pub item: ProfileItem,
+    /// The effect's name in this version; `None` for an effect this version does not have.
+    pub effect_label: Option<String>,
+    pub today: Readiness,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub enum Readiness {
+    Ready,
+    Skipped { reason: SkipReason },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,6 +136,9 @@ impl ProfileSummary {
             id: id.clone(),
             name: profile.name.clone(),
             devices: profile.devices.len(),
+            effects: profile.assignments.len(),
+            modes: profile.modes.len(),
+            external: profile.external.len(),
             resolution: devices.map(|devices| ResolutionCounts::of(&resolve(profile, devices))),
         }
     }
@@ -130,15 +163,23 @@ impl ProfileDetails {
     pub(crate) fn of(
         id: &ProfileId,
         profile: &Profile,
-        devices: &[SessionDevice],
+        now: Option<&SessionSnapshot>,
         apply_on_connect: Option<&ProfileId>,
     ) -> Self {
+        let (devices, owners) = now.map_or((&[][..], &[][..]), |snapshot| {
+            (&snapshot.devices[..], &snapshot.output.devices[..])
+        });
         Self {
             id: id.clone(),
             name: profile.name.clone(),
             frame_rate: profile.frame_rate,
             apply_on_connect: apply_on_connect == Some(id),
+            checked: now.is_some(),
             devices: resolve(profile, devices),
+            settings: preflight(profile, devices, owners)
+                .into_iter()
+                .map(|checked| StoredSetting::of(profile, checked))
+                .collect(),
             unsupported: profile
                 .assignments
                 .iter()
@@ -151,6 +192,39 @@ impl ProfileDetails {
                     })
                 })
                 .collect(),
+        }
+    }
+}
+
+impl StoredSetting {
+    fn of(profile: &Profile, checked: crate::profile::Checked) -> Self {
+        let stored = profile.device(&checked.device);
+        let zone_name = match &checked.item {
+            ProfileItem::Effect {
+                zone: Some(zone), ..
+            } => stored
+                .and_then(|device| device.identity.zones.get(*zone))
+                .map(|zone| zone.name.clone()),
+            _ => None,
+        };
+        let effect_label = match &checked.item {
+            ProfileItem::Effect { effect, .. } => prismforge_effects::definitions()
+                .into_iter()
+                .find(|definition| &definition.id == effect)
+                .map(|definition| definition.label),
+            _ => None,
+        };
+        Self {
+            label: stored
+                .map(|device| device.label.clone())
+                .unwrap_or_default(),
+            device: checked.device,
+            zone_name,
+            item: checked.item,
+            effect_label,
+            today: checked
+                .skip
+                .map_or(Readiness::Ready, |reason| Readiness::Skipped { reason }),
         }
     }
 }

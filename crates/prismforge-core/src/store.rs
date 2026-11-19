@@ -22,7 +22,7 @@ use crate::profile::{
     NAME_LIMIT, NameProblem, Profile, ProfileId, clean_name, decode_export, decode_local,
     encode_export, encode_local,
 };
-use crate::session::{SessionDevice, SessionError};
+use crate::session::{SessionDevice, SessionError, SessionSnapshot};
 use crate::store::durable::{Loaded, StoreFile, Unwritten};
 
 pub use durable::{STORE_FILE_LIMIT, WriteFailure, WriteStep};
@@ -32,12 +32,12 @@ pub use envelope::{
 };
 pub use files::{FileOps, StdFileOps};
 pub use notice::{NoticeEvent, StoreNotice};
-pub use registry::{Registry, RegistryDevice, ZoneName};
+pub use registry::{DeviceNames, Registry, RegistryDevice, ZoneLabel, ZoneName};
 pub use service::{ApplyOutcome, ConnectTrigger, Profiles, Saved};
 pub use settings::Settings;
 pub use summary::{
     ExportReport, ExportedProfile, ImportError, ImportReport, ProfileDetails, ProfileSummary,
-    ResolutionCounts, StoreSummary, UnreadableProfile, UnsupportedEffect,
+    Readiness, ResolutionCounts, StoreSummary, StoredSetting, UnreadableProfile, UnsupportedEffect,
 };
 
 /// Largest file `import` accepts.
@@ -154,6 +154,15 @@ impl ProfileStore {
 
     pub fn note(&mut self, notice: StoreNotice) {
         self.notices.push(notice);
+    }
+
+    /// Removes the first notice equal to `notice`; false when there was none.
+    pub fn dismiss(&mut self, notice: &StoreNotice) -> bool {
+        let Some(index) = self.notices.iter().position(|known| known == notice) else {
+            return false;
+        };
+        self.notices.remove(index);
+        true
     }
 
     pub fn profile(&self, id: &ProfileId) -> Result<&Profile, StoreError> {
@@ -335,18 +344,18 @@ impl ProfileStore {
     pub fn import_file(
         &mut self,
         source: &Path,
-        devices: &[SessionDevice],
+        now: Option<&SessionSnapshot>,
     ) -> Result<ImportReport, ImportError> {
         let bytes = durable::read_bounded(self.ops.as_ref(), source, IMPORT_LIMIT)
             .map_err(|problem| ImportError::Unreadable { problem })?;
-        self.import(&bytes, devices)
+        self.import(&bytes, now)
     }
 
     /// Checks the whole file before anything is stored, then stores it as a new profile.
     pub fn import(
         &mut self,
         bytes: &[u8],
-        devices: &[SessionDevice],
+        now: Option<&SessionSnapshot>,
     ) -> Result<ImportReport, ImportError> {
         if bytes.len() as u64 > IMPORT_LIMIT {
             return Err(ImportError::Unreadable {
@@ -362,19 +371,19 @@ impl ProfileStore {
         let profile = self.profile(&id)?;
         Ok(ImportReport {
             renamed_from: (profile.name != requested).then_some(requested),
-            details: ProfileDetails::of(&id, profile, devices, self.apply_on_connect()),
+            details: ProfileDetails::of(&id, profile, now, self.apply_on_connect()),
         })
     }
 
     pub fn details(
         &self,
         id: &ProfileId,
-        devices: &[SessionDevice],
+        now: Option<&SessionSnapshot>,
     ) -> Result<ProfileDetails, StoreError> {
         Ok(ProfileDetails::of(
             id,
             self.profile(id)?,
-            devices,
+            now,
             self.apply_on_connect(),
         ))
     }

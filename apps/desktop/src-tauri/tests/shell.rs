@@ -11,7 +11,8 @@ use prismforge_testkit::{DemoBackend, DemoOutput};
 use tokio::time::Instant;
 
 use support::logged::{Log, LoggedBackend};
-use support::{Recorder, is_connected, is_retrying};
+use support::temp::TempDir;
+use support::{Recorder, is_connected, is_retrying, stores};
 
 fn config() -> ShellConfig {
     ShellConfig {
@@ -27,9 +28,14 @@ fn config() -> ShellConfig {
     }
 }
 
-fn shell() -> (Shell<Recorder>, Recorder) {
+fn shell() -> (Shell<Recorder>, Recorder, TempDir) {
     let recorder = Recorder::default();
-    (Shell::new(recorder.clone(), config()), recorder)
+    let (stores, dir) = stores("shell");
+    (
+        Shell::new(recorder.clone(), config(), stores),
+        recorder,
+        dir,
+    )
 }
 
 fn unreachable_demo() -> DemoBackend {
@@ -46,7 +52,7 @@ fn device_count(snapshot: &Option<SessionSnapshot>) -> usize {
 
 #[tokio::test(start_paused = true)]
 async fn demo_mode_shows_only_simulated_devices() {
-    let (shell, recorder) = shell();
+    let (shell, recorder, _dir) = shell();
 
     shell.start(DemoBackend::new()).await.expect("start");
     let view = recorder.wait_for(is_connected).await;
@@ -68,7 +74,7 @@ async fn demo_mode_shows_only_simulated_devices() {
 
 #[tokio::test(start_paused = true)]
 async fn switching_mode_stops_the_previous_session_before_the_next_connects() {
-    let (shell, recorder) = shell();
+    let (shell, recorder, _dir) = shell();
     let log = Log::default();
     shell
         .start(LoggedBackend {
@@ -108,7 +114,7 @@ async fn switching_mode_stops_the_previous_session_before_the_next_connects() {
 
 #[tokio::test(start_paused = true)]
 async fn stopping_restores_a_running_identify_at_once() {
-    let (shell, recorder) = shell();
+    let (shell, recorder, _dir) = shell();
     let backend = DemoBackend::new();
     let controls = backend.controls();
     shell.start(backend).await.expect("start");
@@ -136,7 +142,7 @@ async fn stopping_restores_a_running_identify_at_once() {
 
 #[tokio::test(start_paused = true)]
 async fn commands_without_a_session_are_refused() {
-    let (shell, recorder) = shell();
+    let (shell, recorder, _dir) = shell();
 
     let refresh = shell.refresh().await;
     let identify = shell.identify(DeviceRef::new("demo-light-bar"), None).await;
@@ -150,7 +156,7 @@ async fn commands_without_a_session_are_refused() {
 
 #[tokio::test(start_paused = true)]
 async fn start_returns_while_a_slow_backend_is_still_connecting() {
-    let (shell, _recorder) = shell();
+    let (shell, _recorder, _dir) = shell();
     let backend = DemoBackend::new();
     backend.controls().set_call_delay(Duration::from_secs(10));
     let started = Instant::now();
@@ -168,6 +174,7 @@ async fn start_returns_while_a_slow_backend_is_still_connecting() {
 #[tokio::test(start_paused = true)]
 async fn a_full_command_queue_answers_busy_without_waiting() {
     let recorder = Recorder::default();
+    let (stores, _dir) = stores("busy");
     let shell = Shell::new(
         recorder,
         ShellConfig {
@@ -177,6 +184,7 @@ async fn a_full_command_queue_answers_busy_without_waiting() {
             },
             ..config()
         },
+        stores,
     );
     let backend = DemoBackend::new();
     backend.controls().set_call_delay(Duration::from_secs(10));

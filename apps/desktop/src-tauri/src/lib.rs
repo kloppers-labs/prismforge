@@ -1,9 +1,14 @@
+mod apply_lock;
 mod commands;
 mod effects;
 mod exit;
 mod forward;
+mod on_connect;
+mod profile_commands;
+mod profiles;
 mod publisher;
 mod shell;
+mod stores;
 mod view;
 
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
@@ -13,7 +18,11 @@ pub use exit::{ExitGuard, stop_then_exit};
 pub use forward::forward;
 pub use publisher::{Publisher, ViewSink};
 pub use shell::{Shell, ShellConfig};
-pub use view::{CommandError, ShellView};
+pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};
+pub use view::{
+    ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, MarkProblem, Marked,
+    OnConnect, ShellView,
+};
 
 pub const VIEW_EVENT: &str = "session-view";
 
@@ -29,9 +38,11 @@ impl ViewSink for WindowSink {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let sink = WindowSink(app.handle().clone());
-            app.manage(Shell::new(sink, ShellConfig::default()));
+            let stores = Stores::new(app.path().app_config_dir()?);
+            app.manage(Shell::new(sink, ShellConfig::default(), stores));
             app.manage(ExitGuard::default());
             Ok(())
         })
@@ -50,6 +61,21 @@ pub fn run() {
             commands::clear_external,
             commands::set_frame_rate,
             commands::preview_effect,
+            profile_commands::profile_store,
+            profile_commands::profile_details,
+            profile_commands::create_profile,
+            profile_commands::preview_profile_update,
+            profile_commands::update_profile,
+            profile_commands::rename_profile,
+            profile_commands::duplicate_profile,
+            profile_commands::delete_profile,
+            profile_commands::apply_profile,
+            profile_commands::set_apply_on_connect,
+            profile_commands::export_profile,
+            profile_commands::import_profile,
+            profile_commands::set_device_name,
+            profile_commands::set_zone_name,
+            profile_commands::dismiss_store_notice,
         ])
         .build(tauri::generate_context!())
         .expect("PrismForge could not start")

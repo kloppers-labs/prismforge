@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-zone-name"
+description = "Enables the set_zone_name command without any pre-configured scope."
+commands.allow = ["set_zone_name"]
+
+[[permission]]
+identifier = "deny-set-zone-name"
+description = "Denies the set_zone_name command without any pre-configured scope."
+commands.deny = ["set_zone_name"]

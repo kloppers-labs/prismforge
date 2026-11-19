@@ -1,14 +1,21 @@
 <script lang="ts">
   import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+  import type { Names } from "../../lib/names";
   import { deviceKey, hasDirectMode, ledCount, reference } from "../devices/present";
   import { shortOwner } from "./present";
 
   let {
     session,
     selected,
+    names,
     onselect,
-  }: { session: SessionSnapshot; selected: OutputTarget | null; onselect: (target: OutputTarget) => void } = $props();
+  }: {
+    session: SessionSnapshot;
+    selected: OutputTarget | null;
+    names: Names;
+    onselect: (target: OutputTarget) => void;
+  } = $props();
 
   let entries = $derived(
     session.devices.map((device, index) => ({ key: deviceKey(device, index), ref: reference(device), device })),
@@ -25,7 +32,7 @@
     {#each entries as { key, ref, device } (key)}
       <li>
         <div class="device" role="group" aria-labelledby="target-{key}">
-          <p id="target-{key}" class="name">{device.descriptor.name}</p>
+          <p id="target-{key}" class="name">{names.device(device)}</p>
           <p class="owner">{shortOwner(session, device)}</p>
           {#if !device.available || !hasDirectMode(device)}
             <p class="tags">
@@ -46,7 +53,7 @@
               {#each device.descriptor.zones as zone, index (index)}
                 <li>
                   <button type="button" disabled={ref === null} aria-current={current(ref, index)} onclick={() => ref !== null && onselect({ device: ref, zone: index })}>
-                    {zone.name} <span class="meta">{ledCount(zone.led_count)}</span>
+                    {names.zone(device, index)} <span class="meta">{ledCount(zone.led_count)}</span>
                   </button>
                 </li>
               {/each}

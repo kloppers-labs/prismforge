@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use prismforge_core::session::SessionSnapshot;
 
-use crate::view::ShellView;
+use crate::view::{ApplyingProfile, ConnectApply, OnConnect, ShellView};
 
 pub trait ViewSink: Send + Sync + 'static {
     fn deliver(&self, view: &ShellView);
@@ -21,6 +21,9 @@ impl<S: ViewSink> Publisher<S> {
             current: Mutex::new(ShellView {
                 revision: 0,
                 session: None,
+                applying: None,
+                connect_apply: None,
+                on_connect: OnConnect::NotApplicable,
             }),
         }
     }
@@ -30,11 +33,25 @@ impl<S: ViewSink> Publisher<S> {
     }
 
     pub fn publish(&self, session: Option<SessionSnapshot>) -> ShellView {
+        self.change(|view| view.session = session)
+    }
+
+    pub fn set_applying(&self, applying: Option<ApplyingProfile>) -> ShellView {
+        self.change(|view| view.applying = applying)
+    }
+
+    pub fn set_connect_apply(&self, connect_apply: Option<ConnectApply>) -> ShellView {
+        self.change(|view| view.connect_apply = connect_apply)
+    }
+
+    pub fn set_on_connect(&self, on_connect: OnConnect) -> ShellView {
+        self.change(|view| view.on_connect = on_connect)
+    }
+
+    fn change(&self, edit: impl FnOnce(&mut ShellView)) -> ShellView {
         let mut current = self.lock();
-        *current = ShellView {
-            revision: current.revision + 1,
-            session,
-        };
+        edit(&mut current);
+        current.revision += 1;
         self.sink.deliver(&current);
         current.clone()
     }

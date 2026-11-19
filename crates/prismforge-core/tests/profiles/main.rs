@@ -2,6 +2,7 @@ mod apply;
 mod displaced;
 mod durability;
 mod format;
+mod overview;
 mod portable;
 mod property;
 mod quiet;

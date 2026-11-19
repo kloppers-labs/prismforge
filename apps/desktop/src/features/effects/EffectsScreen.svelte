@@ -7,7 +7,7 @@
   import ExternalControl from "./ExternalControl.svelte";
   import FrameRate from "./FrameRate.svelte";
   import HardwareModes from "./HardwareModes.svelte";
-  import { deviceOf } from "./present";
+  import { applyingText, deviceOf } from "./present";
   import TargetList from "./TargetList.svelte";
   import TargetStatus from "./TargetStatus.svelte";
 
@@ -17,6 +17,7 @@
   let target = $derived(effects.target);
   let device = $derived(target ? deviceOf(session, target) : null);
   let catalog = $derived(effects.catalog);
+  let held = $derived(applyingText(app.view));
 
   onMount(() => {
     effects.load();
@@ -25,7 +26,7 @@
 </script>
 
 <div class="screen">
-  <TargetList {session} selected={target} onselect={(next) => effects.select(next)} />
+  <TargetList {session} selected={target} names={app.names} onselect={(next) => effects.select(next)} />
   <div class="workspace">
     {#if !catalog}
       {#if effects.catalogProblem}
@@ -39,10 +40,10 @@
     {:else}
       {#if target && device}
         {#key `${target.device}-${target.zone}`}
-          <TargetStatus {session} {device} zone={target.zone} />
-          <EffectEditor {effects} {catalog} {session} {device} zone={target.zone} />
-          <HardwareModes {effects} {session} {device} />
-          <ExternalControl {effects} {session} {device} />
+          <TargetStatus {session} {device} zone={target.zone} names={app.names} />
+          <EffectEditor {effects} {catalog} {session} {device} zone={target.zone} {held} />
+          <HardwareModes {effects} {session} {device} {held} />
+          <ExternalControl {effects} {session} {device} {held} />
         {/key}
       {:else if target}
         <p class="empty">This device is not in the device list any more. Choose another target.</p>
@@ -52,7 +53,7 @@
           <p>Choose a device or one of its zones on the left. Then choose an effect and apply it.</p>
         </div>
       {/if}
-      <FrameRate {effects} range={catalog.frame_rate} current={session.output.frame_rate} />
+      <FrameRate {effects} range={catalog.frame_rate} current={session.output.frame_rate} {held} />
     {/if}
   </div>
 </div>

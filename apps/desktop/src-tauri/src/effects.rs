@@ -93,7 +93,8 @@ impl<S: ViewSink> Shell<S> {
     where
         F: Future<Output = Result<T, OutputError>>,
     {
-        Ok(self.queue(command).await?.await?)
+        let (_permit, reply) = self.queue_output(command).await?;
+        Ok(reply.await?)
     }
 }
 

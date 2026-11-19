@@ -5,6 +5,7 @@ import { afterEach } from "vitest";
 import { VIEW_EVENT } from "../lib/api/client";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
+import { storeEmpty } from "./fixtures/stores";
 
 export type Call = { command: string; args: Record<string, unknown> };
 type Handler = (args: Record<string, unknown>) => unknown;
@@ -18,15 +19,21 @@ afterEach(() => {
 export function fakeShell(initial: SessionSnapshot | null, handlers: Record<string, Handler> = {}) {
   const calls: Call[] = [];
   let revision = 1;
-  const view = (session: SessionSnapshot | null): ShellView => ({ revision: ++revision, session });
+  const view = (session: SessionSnapshot | null): ShellView => ({
+    revision: ++revision,
+    session,
+    applying: null,
+    connect_apply: null,
+    on_connect: "NotApplicable",
+  });
   mockIPC(
     (command, args) => {
       const plain = (args ?? {}) as Record<string, unknown>;
       calls.push({ command, args: plain });
       if (command === "view") {
-        return { revision: 1, session: initial };
+        return { revision: 1, session: initial, applying: null, connect_apply: null, on_connect: "NotApplicable" };
       }
-      const handler = handlers[command];
+      const handler = handlers[command] ?? (command === "profile_store" ? () => storeEmpty : undefined);
       if (!handler) {
         throw new Error(`unexpected command ${command}`);
       }

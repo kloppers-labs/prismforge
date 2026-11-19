@@ -2,12 +2,16 @@
   import { onMount } from "svelte";
   import ConnectionScreen from "./features/connection/ConnectionScreen.svelte";
   import DemoBanner from "./features/connection/DemoBanner.svelte";
+  import ProfileStatus from "./features/connection/ProfileStatus.svelte";
   import SessionBar from "./features/connection/SessionBar.svelte";
   import WaitingPanel from "./features/connection/WaitingPanel.svelte";
   import { isSimulated, summarise } from "./features/connection/wording";
   import DiagnosticsDrawer from "./features/diagnostics/DiagnosticsDrawer.svelte";
   import Inventory from "./features/devices/Inventory.svelte";
   import EffectsScreen from "./features/effects/EffectsScreen.svelte";
+  import ConnectApplyNotice from "./features/profiles/ConnectApplyNotice.svelte";
+  import ProfilesScreen from "./features/profiles/ProfilesScreen.svelte";
+  import RepairedBanner from "./features/profiles/RepairedBanner.svelte";
   import { failureText } from "./lib/errors";
   import Mark from "./lib/Mark.svelte";
   import { AppState } from "./lib/state/app.svelte";
@@ -24,6 +28,14 @@
   let summary = $derived(session ? summarise(session) : null);
   let inventory = $derived(session !== null && !stopped && session.devices.length > 0);
   let diagnosticsButton: HTMLButtonElement | undefined = $state();
+  let store = $derived(app.profiles.store);
+  let active = $derived(app.profiles.active);
+  let connectApply = $derived(app.connectApplyDismissed ? null : app.view.connect_apply);
+  let labels = $derived({
+    names: app.names,
+    session,
+    effect: (id: string) => app.effects.catalog?.effects.find((effect) => effect.id === id)?.label ?? null,
+  });
 
   onMount(() => {
     let unlisten: (() => void) | undefined;
@@ -47,15 +59,21 @@
       <Mark />
       <span class="name">PrismForge</span>
     </div>
-    {#if inventory}
-      <nav class="screens" aria-label="Screens">
-        <button type="button" aria-current={app.screen === "devices" ? "page" : undefined} onclick={() => (app.screen = "devices")}>
-          Devices
-        </button>
+    <nav class="screens" aria-label="Screens">
+      <button type="button" aria-current={app.screen === "devices" ? "page" : undefined} onclick={() => (app.screen = "devices")}>
+        {inventory ? "Devices" : "Connection"}
+      </button>
+      {#if inventory}
         <button type="button" aria-current={app.screen === "effects" ? "page" : undefined} onclick={() => (app.screen = "effects")}>
           Effects
         </button>
-      </nav>
+      {/if}
+      <button type="button" aria-current={app.screen === "profiles" ? "page" : undefined} onclick={() => app.openProfiles()}>
+        Profiles
+      </button>
+    </nav>
+    {#if active && store}
+      <ProfileStatus name={active.name} unsaved={store.summary.unsaved_changes} onopen={() => app.openProfiles()} />
     {/if}
     {#if session && !stopped}
       <SessionBar {app} {session} />
@@ -74,6 +92,14 @@
 
   {#if session && isSimulated(session)}
     <DemoBanner />
+  {/if}
+
+  {#if store && store.summary.notices.length > 0 && app.screen !== "profiles"}
+    <RepairedBanner onopen={() => app.openProfiles()} />
+  {/if}
+
+  {#if connectApply}
+    <ConnectApplyNotice applied={connectApply} {labels} ondismiss={() => (app.connectApplyDismissed = true)} />
   {/if}
 
   {#if app.problem}
@@ -95,7 +121,9 @@
   {/if}
 
   <main>
-    {#if !session || stopped}
+    {#if app.screen === "profiles"}
+      <ProfilesScreen {app} />
+    {:else if !session || stopped}
       <ConnectionScreen {app} stopped={session} />
     {:else if session.devices.length === 0}
       <WaitingPanel {session} />
@@ -107,7 +135,7 @@
   </main>
 
   {#if app.diagnosticsOpen}
-    <DiagnosticsDrawer {session} onclose={closeDiagnostics} />
+    <DiagnosticsDrawer {session} {store} onclose={closeDiagnostics} />
   {/if}
 </div>
 

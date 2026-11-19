@@ -14,6 +14,21 @@ fn main() {
         "clear_external",
         "set_frame_rate",
         "preview_effect",
+        "profile_store",
+        "profile_details",
+        "create_profile",
+        "preview_profile_update",
+        "update_profile",
+        "rename_profile",
+        "duplicate_profile",
+        "delete_profile",
+        "apply_profile",
+        "set_apply_on_connect",
+        "export_profile",
+        "import_profile",
+        "set_device_name",
+        "set_zone_name",
+        "dismiss_store_notice",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("tauri build configuration");

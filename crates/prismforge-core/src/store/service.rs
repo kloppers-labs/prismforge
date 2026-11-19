@@ -16,7 +16,7 @@ use crate::store::notice::{NoticeEvent, StoreNotice};
 use crate::store::summary::{
     ExportReport, ImportError, ImportReport, ProfileDetails, StoreSummary,
 };
-use crate::store::{FileOps, ProfileStore, StoreError};
+use crate::store::{DeviceNames, FileOps, ProfileStore, StoreError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -89,9 +89,10 @@ impl Profiles {
         id: &ProfileId,
         handle: Option<&SessionHandle>,
     ) -> Result<ProfileDetails, StoreError> {
-        let devices = devices_of(handle);
+        let now = handle.map(SessionHandle::snapshot);
         let id = id.clone();
-        self.with(move |store| store.details(&id, &devices)).await
+        self.with(move |store| store.details(&id, now.as_ref()))
+            .await
     }
 
     pub async fn profile(&self, id: &ProfileId) -> Result<Profile, StoreError> {
@@ -279,9 +280,18 @@ impl Profiles {
         source: PathBuf,
         handle: Option<&SessionHandle>,
     ) -> Result<ImportReport, ImportError> {
-        let devices = devices_of(handle);
-        self.with(move |store| store.import_file(&source, &devices))
+        let now = handle.map(SessionHandle::snapshot);
+        self.with(move |store| store.import_file(&source, now.as_ref()))
             .await
+    }
+
+    /// The user's names for devices and zones; devices without any name are left out.
+    pub async fn names(&self) -> Vec<DeviceNames> {
+        self.with(|store| store.registry().names()).await
+    }
+
+    pub async fn dismiss_notice(&self, notice: StoreNotice) -> bool {
+        self.with(move |store| store.dismiss(&notice)).await
     }
 
     pub async fn known_devices(&self) -> Vec<KnownDevice> {
@@ -385,6 +395,11 @@ pub struct ConnectTrigger {
 }
 
 impl ConnectTrigger {
+    /// True once it came due in this connect; it is armed again only after a disconnect.
+    pub fn fired(&self) -> bool {
+        self.applied
+    }
+
     pub fn due(&mut self, snapshot: &SessionSnapshot) -> bool {
         let disconnected = snapshot
             .diagnostics
@@ -425,10 +440,4 @@ async fn intents(handle: &SessionHandle, after: u64) -> Result<IntentLog, StoreE
         .intents_after(after)
         .await
         .map_err(|error| StoreError::SessionUnavailable { error })
-}
-
-fn devices_of(handle: Option<&SessionHandle>) -> Vec<SessionDevice> {
-    handle
-        .map(|handle| handle.snapshot().devices)
-        .unwrap_or_default()
 }
