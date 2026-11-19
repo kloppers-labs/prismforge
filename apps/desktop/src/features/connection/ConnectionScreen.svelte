@@ -5,7 +5,7 @@
   import type { AppState } from "../../lib/state/app.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import Prerequisites from "./Prerequisites.svelte";
-  import { summarise } from "./wording";
+  import { nextStep, summarise } from "./wording";
 
   let { app, stopped }: { app: AppState; stopped: SessionSnapshot | null } = $props();
 
@@ -17,6 +17,8 @@
   let hostValid = $derived(host.trim().length > 0);
   let fromLast = $derived(remembered !== null && remembered.host === host.trim() && remembered.port === port);
   let summary = $derived(stopped ? summarise(stopped) : null);
+  let start = $derived(app.lifecycle.view?.start_profile ?? null);
+  let marked = $derived(start !== null && typeof start === "object" && "Marked" in start ? start.Marked.name : null);
   let problem = $derived(
     !hostValid
       ? "Enter the address of the computer that runs OpenRGB."
@@ -51,7 +53,7 @@
       {#each summary.reasons as reason (reason)}
         <p>{reason}</p>
       {/each}
-      <p>Check that OpenRGB runs with its SDK server on, then connect again.</p>
+      {#if stopped}<p>{nextStep(stopped)}</p>{/if}
     </Notice>
   {/if}
 
@@ -95,6 +97,9 @@
             <p class="help">OpenRGB on this computer uses 127.0.0.1 and port 6742.</p>
           {/if}
         </div>
+        {#if marked}
+          <p class="marked">Connecting applies {marked}, the profile marked to apply on connect, as soon as the devices are read.</p>
+        {/if}
         <button class="primary" type="submit" disabled={!hostValid || !portValid || app.working !== null}>
           {#if app.working === "connect"}<span class="spinner" aria-hidden="true"></span>Connecting…{:else}Connect{/if}
         </button>
@@ -195,6 +200,11 @@
   .help {
     font-size: var(--font-s);
     color: var(--text-dim);
+  }
+
+  .marked {
+    color: var(--text);
+    font-size: var(--font-s);
   }
 
   .problem {

@@ -44,7 +44,7 @@ export function summarise(session: SessionSnapshot): ConnectionSummary {
       label: "Retrying",
       reasons: [
         explain(reason, where, session),
-        `PrismForge tries again by itself, with a longer wait each time, at most 30 seconds. Try ${attempt} is next.`,
+        `PrismForge tries again by itself, with a longer wait each time, at most 30 seconds. Retry ${attempt} is next.`,
       ],
       retrying: true,
     };
@@ -109,4 +109,24 @@ function lossText(cause: LossCause): string {
 
 export function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+export function nextStep(session: SessionSnapshot): string {
+  const connection = session.connection;
+  const reason = typeof connection === "object" && "Disconnected" in connection ? connection.Disconnected.reason : null;
+  if (reason === null || reason === "InventoryStale") {
+    return "Connect again.";
+  }
+  if (reason === "ServerUnreachable") {
+    return "Check that OpenRGB runs with its SDK server on, then connect again.";
+  }
+  if ("UnsupportedProtocol" in reason) {
+    return reason.UnsupportedProtocol.server_version === null
+      ? "Wait until OpenRGB has started, then connect again."
+      : "Update OpenRGB to 1.0 or later, then connect again.";
+  }
+  if ("ConnectionLost" in reason) {
+    return "Check that OpenRGB still runs, then connect again.";
+  }
+  return "Connect again.";
 }

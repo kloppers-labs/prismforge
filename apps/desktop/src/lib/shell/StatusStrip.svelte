@@ -8,7 +8,8 @@
   let { app, onconnect, region = $bindable() }: { app: AppState; onconnect: () => void; region?: HTMLElement } = $props();
 
   let connection = $derived(connectionStatus(app.session));
-  let profile = $derived(profileStatus(app.view, app.profiles.store));
+  let start = $derived(app.lifecycle.view?.start_profile ?? null);
+  let profile = $derived(profileStatus(app.view, app.profiles.store, start !== null && typeof start === "object" && "Marked" in start ? start.Marked.name : null));
   let background = $derived(
     app.lifecycle.settings?.on_close === "Background" && app.lifecycle.trayAvailable
       ? "Closing the window keeps PrismForge running in the background."
