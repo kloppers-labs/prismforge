@@ -6,7 +6,7 @@ PrismForge has no subscription, no account, no advertisements and no telemetry.
 
 ## Status
 
-PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone, or on several at once in step, from a selection or a saved group, and shows the colours it sends. Its profiles screen saves the lighting as profiles on this computer, applies them, and exports and imports them. Devices and zones can have your own names. It has no layout yet.
+PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone, or on several at once in step, from a selection or a saved group, and shows the colours it sends. Its profiles screen saves the lighting as profiles on this computer, applies them, and exports and imports them. Devices and zones can have your own names. The Rust core has a setup model: where each LED is, mirrored and daisy-chained fans, and effects that run across several devices as one picture. The views to build it, the PC view and the desk view, are not built yet.
 
 | Part | Status |
 |---|---|
@@ -26,7 +26,8 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | Profiles in the Rust core: versioned files, backups and recovery, device registry on disk, capture, apply with a result per setting, export and import without private data | Built. Tested on real files in temporary folders with the demo backend and the fake server only. |
 | Profiles screen in the app: save, update with a change list, apply with a result per setting, rename, duplicate, delete, export, import, apply on connect, repaired-file notices; device and zone names | Built. Tested through the shell and the interface tests only. Native dialogs not run by hand. |
 | Tray, close or quit, one instance, start with the system, start hidden, connect at start, Settings screen | Built. Tested through the shell with fake window and start-entry seams and in interface tests. Native macOS build only; not run by hand, not run on Windows. |
-| Layout | Not started |
+| Setup model in the Rust core: components with a declared shape, outputs with mirrored branches and daisy chains, views, a place for each LED, effects across the setup as one picture, the setup file, profile schema 2 | Built. Tested in Rust with generic fixtures, the demo backend and the fake server in simulated time only. No interface yet. |
+| Setup views: PC view and desk view | Not started |
 
 ## Requirements
 
@@ -109,7 +110,7 @@ cargo run -p prismforge-openrgb --example probe -- --device <ref from listing> -
 | Path | Content |
 |---|---|
 | `crates/prismforge-effects` | The built-in effects as pure functions, their control definitions and instance validation. No input or output. |
-| `crates/prismforge-core` | Device types, capabilities, errors, identity matching, backend contract, scene and ownership types, and the session with its output scheduler. |
+| `crates/prismforge-core` | Device types, capabilities, errors, identity matching, backend contract, scene and ownership types, the session with its output scheduler, profiles and the store, and the setup model. |
 | `crates/prismforge-openrgb` | OpenRGB SDK client and the adapter for the backend contract. |
 | `crates/prismforge-testkit` | Scripted fake OpenRGB server, device fixtures for tests, and the simulated demo backend. |
 | `apps/desktop` | Svelte and TypeScript interface. |
