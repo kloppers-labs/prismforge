@@ -127,7 +127,8 @@ export function profileStatus(view: ShellView, store: StoreView | null, marked: 
   if (store === null && view.session !== null && !ended(view.session)) {
     return null;
   }
-  const armed = typeof view.on_connect === "object" && "Armed" in view.on_connect ? view.on_connect.Armed.name : view.session === null ? marked : null;
+  const idle = view.session === null || ended(view.session);
+  const armed = typeof view.on_connect === "object" && "Armed" in view.on_connect ? view.on_connect.Armed.name : idle ? marked : null;
   if (view.session === null && armed === null) {
     return null;
   }
@@ -138,7 +139,7 @@ export function profileStatus(view: ShellView, store: StoreView | null, marked: 
     name: detail ? `Profile: none active, ${detail}` : "Profile: none active",
     lines: [
       "No profile is active. A profile becomes active when you apply it or save it while PrismForge is connected.",
-      ...(view.session === null && armed !== null
+      ...(idle && armed !== null
         ? [`When you connect to OpenRGB, PrismForge applies ${armed} as soon as it has read the devices.`]
         : markLines(view)),
     ],

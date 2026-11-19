@@ -4,11 +4,12 @@ import { lifecycleStartPath } from "../../test/fixtures/lifecycles";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
-import { summarise } from "./wording";
+import { nextStep, summarise } from "./wording";
 import { connectionChip, findDemoMarker, openConnection, waitForConnection } from "../../test/shell";
 import {
   demoConnected,
   openRgbAllRejected,
+  openRgbConnected,
   openRgbConnecting,
   openRgbLostRetryFailed,
   openRgbLostWhileConnected,
@@ -234,4 +235,37 @@ test("the_retry_number_counts_retries_after_the_first_connect", async () => {
 
   expect(await screen.findByText(/PrismForge tries again by itself.*Retry 3 is next\./)).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/Try 3 is next/);
+});
+
+test("a_stopped_server_with_a_marked_profile_shows_the_same_mark_in_the_line_and_the_chip", async () => {
+  fakeShell(openRgbOldServer, { lifecycle: () => lifecycleStartPath });
+  render(App);
+
+  visible(await screen.findByText(/^Connecting applies Evening, the profile marked to apply on connect/));
+  expect(await screen.findByRole("button", { name: "Profile: none active, Evening applies on connect" })).toBeTruthy();
+});
+
+test("a_mark_made_during_a_session_shows_after_disconnect", async () => {
+  const marked = { ...lifecycleStartPath, revision: 30 };
+  const shell = fakeShell(openRgbConnected, {
+    lifecycle: () => ({ ...lifecycleStartPath, start_profile: "NotMarked" }),
+    disconnect: () => (void shell.pushLifecycle(marked), shell.view(null)),
+  });
+  render(App);
+  await waitForConnection("Connected");
+
+  await fireEvent.click(within(await openConnection()).getByRole("button", { name: /^Disconnect/ }));
+
+  visible(await screen.findByText(/^Connecting applies Evening/));
+  expect(await screen.findByRole("button", { name: "Profile: none active, Evening applies on connect" })).toBeTruthy();
+  await shell.pushLifecycle({ ...lifecycleStartPath, start_profile: "NotMarked", revision: 31 });
+  await waitFor(() => expect(screen.queryByText(/^Connecting applies/)).toBeNull());
+  expect(screen.queryByRole("button", { name: /^Profile:/ })).toBeNull();
+});
+
+test("a_server_that_did_not_answer_the_version_request_gets_advice_for_both_causes", () => {
+  const stopped = structuredClone(openRgbOldServer);
+  stopped.connection = { Disconnected: { reason: { UnsupportedProtocol: { server_version: null } } } };
+
+  expect(nextStep(stopped)).toBe("Wait a moment, then connect again. If OpenRGB still does not answer, restart it, or update it to 1.0 or later.");
 });

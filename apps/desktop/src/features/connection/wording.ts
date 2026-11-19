@@ -122,7 +122,7 @@ export function nextStep(session: SessionSnapshot): string {
   }
   if ("UnsupportedProtocol" in reason) {
     return reason.UnsupportedProtocol.server_version === null
-      ? "Wait until OpenRGB has started, then connect again."
+      ? "Wait a moment, then connect again. If OpenRGB still does not answer, restart it, or update it to 1.0 or later."
       : "Update OpenRGB to 1.0 or later, then connect again.";
   }
   if ("ConnectionLost" in reason) {
