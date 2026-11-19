@@ -3,6 +3,9 @@ import type { Change } from "../../lib/api/bindings/Change";
 import type { DeviceRef } from "../../lib/api/bindings/DeviceRef";
 import type { EffectProblem } from "../../lib/api/bindings/EffectProblem";
 import type { ItemOutcome } from "../../lib/api/bindings/ItemOutcome";
+import type { ConnectApply } from "../../lib/api/bindings/ConnectApply";
+import type { MarkProblem } from "../../lib/api/bindings/MarkProblem";
+import type { Marked } from "../../lib/api/bindings/Marked";
 import type { OnConnect } from "../../lib/api/bindings/OnConnect";
 import type { ProfileItem } from "../../lib/api/bindings/ProfileItem";
 import type { ProfileSummary } from "../../lib/api/bindings/ProfileSummary";
@@ -135,9 +138,11 @@ export function applySummary(report: ApplyReport): string {
   if (skipped === 0) {
     return rate ? rate.trim() : `${total === 1 ? "Its setting was" : `All ${total} settings were`} accepted.`;
   }
-  const every = total === 1 ? "Its setting was" : `All ${total} settings were`;
-  const part = skipped === total ? `${every} skipped` : `${skipped} of ${total} settings were skipped`;
-  return `${part} and stay in the profile.${rate}`;
+  if (skipped === total) {
+    const every = total === 1 ? "Its setting was skipped and stays" : `All ${total} settings were skipped and stay`;
+    return `${every} in the profile.${rate}`;
+  }
+  return `${skipped} of ${total} settings were skipped and stay in the profile.${rate}`;
 }
 
 /** A partial result, a refused frame rate or an empty profile never reads as a complete apply. */
@@ -175,14 +180,43 @@ function stopped(session: SessionSnapshot | null): boolean {
 }
 
 /** Every sentence about a pending apply on connect comes from the state the shell publishes. */
+function markProblemText(problem: MarkProblem): string {
+  return problem === "NewerVersion" ? "needs a newer PrismForge, so this version cannot read it" : "is not in the store any more";
+}
+
+function profileLabel(name: string): string {
+  return name || "the profile marked to apply on connect";
+}
+
+/** The one text for what apply on connect did; the notice and the status line both use it. */
+export function connectResultText(ran: ConnectApply): string {
+  const outcome = ran.outcome;
+  if ("Applied" in outcome) {
+    return connectHeadline(profileLabel(ran.name), outcome.Applied.report);
+  }
+  return `PrismForge could not apply ${profileLabel(ran.name)} when it connected. ${failureText(outcome.Failed.error)}`;
+}
+
+function nextText(next: Marked | null): string {
+  if (next === null) {
+    return "";
+  }
+  return "Ready" in next
+    ? ` After you disconnect and connect, PrismForge applies ${next.Ready.name} by itself.`
+    : ` The profile marked for the next connect ${markProblemText(next.Unreadable.problem)}, so nothing is applied then.`;
+}
+
+/** Every sentence about a pending apply on connect comes from the state the shell publishes. */
 export function onConnectText(state: OnConnect, session: SessionSnapshot | null): string {
   if (stopped(session)) {
-    const next =
-      typeof state === "object" && "Armed" in state
-        ? ` When you connect, PrismForge applies ${state.Armed.name} as soon as it has read the devices.`
-        : state === "NotArmed"
-          ? " No profile is marked to apply on connect."
-          : "";
+    let next = "";
+    if (state === "NotArmed") {
+      next = " No profile is marked to apply on connect.";
+    } else if (typeof state === "object" && "Armed" in state) {
+      next = ` When you connect, PrismForge applies ${state.Armed.name} as soon as it has read the devices.`;
+    } else if (typeof state === "object" && "Unreadable" in state) {
+      next = ` The profile marked to apply on connect ${markProblemText(state.Unreadable.problem)}. Nothing is applied when you connect.`;
+    }
     return `The connection stopped and PrismForge does not try again. Connect again from the Connection screen.${next}`;
   }
   if (state === "NotApplicable") {
@@ -196,11 +230,14 @@ export function onConnectText(state: OnConnect, session: SessionSnapshot | null)
   if ("Armed" in state) {
     return `PrismForge will apply ${state.Armed.name} as soon as it has read the devices.`;
   }
-  const { applied, next } = state.Fired;
-  const done = applied
-    ? `PrismForge applied ${applied} once when it connected. It is not applied again in this session, also not when the connection comes back.`
-    : "No profile was marked when PrismForge connected, so none was applied. A profile marked now is not applied in this session.";
-  return next ? `${done} After you disconnect and connect, PrismForge applies ${next}.` : done;
+  if ("Unreadable" in state) {
+    return `The profile marked to apply on connect ${markProblemText(state.Unreadable.problem)}. Nothing is applied when PrismForge connects.`;
+  }
+  const { ran, next } = state.Fired;
+  const done = ran
+    ? `${connectResultText(ran)} Apply on connect does not run again by itself in this session, also not when the connection comes back. You can still apply a profile yourself.`
+    : "No profile was marked when PrismForge connected, so none was applied by itself. A profile you mark now is not applied by itself in this session. You can still apply it yourself.";
+  return `${done}${nextText(next)}`;
 }
 
 export function notConnectedText(state: OnConnect, session: SessionSnapshot | null): string {
@@ -215,7 +252,7 @@ export function waitingText(name: string, state: OnConnect, session: SessionSnap
   if (typeof state === "object" && "Armed" in state && state.Armed.name === name) {
     return `${name} will be applied as soon as PrismForge has read the devices.`;
   }
-  return `${name} was not applied: PrismForge is not connected. ${onConnectText(state, session)}`;
+  return `${name} was not applied now: PrismForge is not connected. ${onConnectText(state, session)}`;
 }
 
 export function frameRateText(report: ApplyReport): string {

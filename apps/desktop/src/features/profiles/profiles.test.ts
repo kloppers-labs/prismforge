@@ -10,7 +10,8 @@ import { importedRenamed } from "../../test/fixtures/imports";
 import { detailsEvening, detailsImported, detailsOffline } from "../../test/fixtures/profileDetails";
 import { previewChanges, previewNone, savedChanges, savedNew } from "../../test/fixtures/saves";
 import { demoConnected, openRgbConnected } from "../../test/fixtures/sessions";
-import { viewArmedRetrying, viewFiredRetrying, viewStoppedArmed } from "../../test/fixtures/views";
+import { viewArmedRetrying, viewConnectApplied, viewFiredRetrying, viewStoppedArmed } from "../../test/fixtures/views";
+import type { ConnectOutcome } from "../../lib/api/bindings/ConnectOutcome";
 import type { ShellView } from "../../lib/api/bindings/ShellView";
 import {
   storeEmpty,
@@ -168,12 +169,12 @@ test("a_marked_profile_that_waits_for_a_connection_says_what_the_trigger_will_do
   const shell = fakeShell(demoConnected, handlers(storeTwo, { apply_profile: () => waitingForConnection }));
   render(App);
   const article = await chooseProfile("Evening");
-  await shell.pushView({ ...shell.view(demoConnected), revision: 50, on_connect: { Fired: { applied: "Evening", next: "Evening" } } });
+  await shell.pushView({ ...shell.view(demoConnected), revision: 50, on_connect: { Fired: { ran: viewConnectApplied.connect_apply, next: { Ready: { name: "Evening" } } } } });
 
   await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
 
-  await waitFor(() => expect(result().textContent).toMatch(/Evening was not applied: PrismForge is not connected\./));
-  expect(result().textContent).toMatch(/It is not applied again in this session, also not when the connection comes back\./);
+  await waitFor(() => expect(result().textContent).toMatch(/Evening was not applied now: PrismForge is not connected\./));
+  expect(result().textContent).toMatch(/PrismForge applied Evening when it connected\. All 4 settings were accepted\. Apply on connect does not run again by itself in this session/);
   await shell.pushView({ ...shell.view(demoConnected), revision: 60, on_connect: { Armed: { id: EVENING, name: "Evening" } } });
   await waitFor(() => expect(result().textContent).toMatch(/^\s*Evening will be applied as soon as PrismForge has read the devices\./));
 });
@@ -511,7 +512,7 @@ test("a_fired_profile_is_said_not_to_apply_again_while_the_session_retries", asy
 
   await waitFor(() =>
     expect(onConnect().textContent?.trim()).toBe(
-      "PrismForge applied Desk once when it connected. It is not applied again in this session, also not when the connection comes back. After you disconnect and connect, PrismForge applies Desk.",
+      "PrismForge applied Desk when it connected. Its setting was accepted. Apply on connect does not run again by itself in this session, also not when the connection comes back. You can still apply a profile yourself. After you disconnect and connect, PrismForge applies Desk by itself.",
     ),
   );
 });
@@ -553,4 +554,104 @@ test("a_result_that_arrives_after_the_session_ended_is_dropped", async () => {
   await wait(250);
 
   expect(result().textContent?.trim()).toBe("");
+});
+
+function firedWith(outcome: ConnectOutcome, name = "Desk"): ShellView {
+  const view = structuredClone(viewFiredRetrying);
+  const state = view.on_connect;
+  if (typeof state !== "object" || !("Fired" in state) || !state.Fired.ran) {
+    throw new Error("fixture is not fired with a result");
+  }
+  state.Fired.ran = { ...state.Fired.ran, name, outcome };
+  view.connect_apply = state.Fired.ran;
+  return view;
+}
+
+function deskReport(change: (report: Extract<ConnectOutcome, { Applied: unknown }>["Applied"]["report"]) => void): ConnectOutcome {
+  const state = viewFiredRetrying.on_connect;
+  if (typeof state !== "object" || !("Fired" in state) || !state.Fired.ran || !("Applied" in state.Fired.ran.outcome)) {
+    throw new Error("fixture is not an applied result");
+  }
+  const report = structuredClone(state.Fired.ran.outcome.Applied.report);
+  change(report);
+  return { Applied: { report } };
+}
+
+async function statusAndNotice(view: ShellView) {
+  await deskWith(view);
+  const notice = await screen.findByRole("status", { name: "Applied on connect" });
+  await waitFor(() => expect(onConnect().textContent).toMatch(/does not run again by itself/));
+  return { status: onConnect().textContent?.trim() ?? "", notice: notice.textContent ?? "" };
+}
+
+test("a_fired_apply_with_a_refused_frame_rate_reads_as_partial_in_the_status_and_the_notice", async () => {
+  const { status, notice } = await statusAndNotice(
+    firedWith(deskReport((report) => (report.frame_rate = { Refused: { error: { Session: "Busy" } } }))),
+  );
+
+  const headline = "PrismForge applied Desk in part when it connected. The frame rate was refused.";
+  expect(status.startsWith(headline)).toBe(true);
+  expect(notice).toContain(headline);
+  expect(status).not.toMatch(/Its setting was accepted/);
+});
+
+test("a_fired_apply_where_every_setting_was_skipped_reads_the_same_in_the_status_and_the_notice", async () => {
+  const { status, notice } = await statusAndNotice(
+    firedWith(
+      deskReport((report) => {
+        for (const item of report.items) {
+          item.outcome = { Skipped: { reason: "Missing" } };
+        }
+      }),
+    ),
+  );
+
+  const headline = "PrismForge connected. Nothing from Desk was applied. Its setting was skipped and stays in the profile.";
+  expect(status.startsWith(headline)).toBe(true);
+  expect(notice).toContain(headline);
+});
+
+test("a_failed_apply_on_connect_reads_the_same_in_the_status_and_the_notice", async () => {
+  const { status, notice } = await statusAndNotice(
+    firedWith(
+      { Failed: { error: { Store: { NewerFile: { file: "profiles/p-0000000000000003.json", problem: { NewerVersion: { found: 2, supported: 1 } } } } } } },
+      "",
+    ),
+  );
+
+  const headline = "PrismForge could not apply the profile marked to apply on connect when it connected.";
+  expect(status.startsWith(headline)).toBe(true);
+  expect(notice).toContain(headline);
+  expect(status).toMatch(/needs a newer PrismForge/);
+});
+
+test("an_unreadable_marked_profile_says_nothing_is_applied_and_why", async () => {
+  await deskWith({ ...viewArmedRetrying, on_connect: { Unreadable: { id: "p-0000000000000003", problem: "NewerVersion" } } });
+
+  await waitFor(() =>
+    expect(onConnect().textContent?.trim()).toBe(
+      "The profile marked to apply on connect needs a newer PrismForge, so this version cannot read it. Nothing is applied when PrismForge connects.",
+    ),
+  );
+});
+
+test("a_missing_marked_profile_says_nothing_is_applied_and_why", async () => {
+  await deskWith({ ...viewArmedRetrying, on_connect: { Unreadable: { id: "p-0000000000000003", problem: "Missing" } } });
+
+  await waitFor(() =>
+    expect(onConnect().textContent?.trim()).toBe(
+      "The profile marked to apply on connect is not in the store any more. Nothing is applied when PrismForge connects.",
+    ),
+  );
+});
+
+test("after_it_fired_with_nothing_marked_a_new_mark_is_not_applied_by_itself", async () => {
+  await deskWith({ ...viewFiredRetrying, connect_apply: null, on_connect: { Fired: { ran: null, next: { Ready: { name: "Desk" } } } } });
+
+  await waitFor(() =>
+    expect(onConnect().textContent?.trim()).toBe(
+      "No profile was marked when PrismForge connected, so none was applied by itself. A profile you mark now is not applied by itself in this session. You can still apply it yourself. After you disconnect and connect, PrismForge applies Desk by itself.",
+    ),
+  );
+  expect(onConnect().textContent).not.toMatch(/is not applied in this session/);
 });
