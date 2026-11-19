@@ -22,7 +22,7 @@ Run these in `apps/desktop`.
 | `pnpm test` | Runs the interface tests in jsdom. |
 | `pnpm build` | Builds the web interface into `dist`. |
 | `pnpm check:build` | Builds the web interface as `pnpm build` does, into the folder that the Tauri bundle takes (`dist`), and fails if the bundler used any module from `src/dev-preview` or `src/test`, or if the output holds preview text. CI runs it. |
-| `pnpm tauri:build` | Builds the native app and its installers into `target/release/bundle` at the repository root. The build is not signed. |
+| `pnpm tauri:build` | Builds the native app and its installers into `target/release/bundle` at the repository root. The build is not signed. Tauri builds the interface with `pnpm check:build`, so the bundle holds the checked files. |
 
 ## Generated files
 
@@ -85,11 +85,21 @@ Effect commands return `CommandError`. `InvalidEffect` carries the structured va
 
 The window has three parts. `src/lib/shell` holds them. `docs/decisions/0005-shell-and-design-tokens.md` explains the choices.
 
-- **The rail** on the left lists the areas: Devices, Effects and Profiles, then Diagnostics and Settings at its foot. The list is the same in every connection state. The current area has a filled background, an accent bar and a bold label. Below 1100 px the rail is 72 px wide and shows each label under its icon.
+- **The rail** on the left lists the areas: Devices, Effects and Profiles, then Diagnostics and Settings at its foot. The list is the same in every connection state. The current area has a filled background, an accent bar and a bold label. Below 1100 px, and while Diagnostics docks below 1400 px, the rail is 72 px wide and shows each label under its icon.
 - **The status strip** at the top of the page shows the connection, demo mode and the active profile. The connection chip opens a panel with the reason in words and the actions for that state: Rescan devices, or Connect to OpenRGB and Start demo mode; Disconnect or Stop retrying sit apart below a line. A panel whose only action ends the session opens with focus on the panel, not on that action. The profile chip shows unsaved changes, a profile that is being applied, and the profile set to apply on connect; its panel has Save changes and Open Profiles. In demo mode a striped "Demo mode" marker and a striped edge stay on every screen.
 - **The notice slot** under the strip holds command problems, a failed close or quit, connection problems, repaired files, the tray stop report and the apply-on-connect result. Problems come first, then cautions, then the rest; within a tone the newest is first. With more than one notice only the first shows, with "Show all N notices", and a notice that arrives behind the count is announced. A connection notice stays until the connection changes.
 
-Without a connection, Devices shows the connection form, and Effects shows how to connect. From 1400 px wide, Diagnostics opens beside the page. Below that it covers the page, which cannot take focus until Diagnostics closes; choosing an area, any action in the status strip and any dialog close it first.
+Without a connection, Devices shows the connection form, and Effects shows how to connect. From 1182 px wide, Diagnostics opens beside the page: 320 px wide with the compact rail below 1400 px, 400 px wide from 1400 px. Below 1182 px it covers the page, which cannot take focus until Diagnostics closes; choosing an area, any action in the status strip and any dialog close it first. The notices stay visible above it. Diagnostics has Copy as text for a bug report.
+
+## The screens
+
+- **Devices.** The list is one Tab stop; the arrow keys move through it. Devices with the same name show their location, serial tail or count. The device header holds Set lighting (opens Effects with the device chosen), Identify device and Rename, and says what drives the device now. Zone rows have short Identify and Rename buttons.
+- **Connection.** The form starts from the address of the last Connect. Both ways in, OpenRGB and demo mode, stay side by side down to 920 px. While PrismForge waits for OpenRGB, the page offers Stop and change the address and Start demo mode.
+- **Effects.** A command bar at the top holds the target, Apply effect, Stop effect and the edit mode: Live when edits go to the device, Draft when they wait for Apply, Off with the reason. The whole effect card selects the effect. A device left to another program shows a notice with Hand back to PrismForge. Hardware modes and the other-program form sit behind Details.
+- **Profiles.** The selected profile comes first. Save current lighting… in the list header opens a dialog. Results show under the profile's actions.
+- **Settings.** Grouped: closing the window, starting with the system, effect output (the frame rate), files and quit. Each switch says its consequence in one line; more sits behind Details.
+
+Long explanations sit behind a Details disclosure under one short line. Selected rows everywhere use the rail's cue. See decisions 14 to 18 in `docs/decisions/0005-shell-and-design-tokens.md`.
 
 | Keys | What they do |
 |---|---|
@@ -106,7 +116,7 @@ The design tokens are in `src/lib/tokens.css`: colour roles, type, spacing, radi
 
 `pnpm preview:ui` serves the real `App` at `http://localhost:1430` with a fake Tauri transport and the fixtures in `src/test/fixtures`. It is for design work, screenshots and contributors without hardware. It never starts Rust and never reaches hardware. A badge in the corner says "Interface preview: simulated data" and opens a list of states.
 
-- `?state=<name>` picks a state. The names are in `src/dev-preview/scenarios.ts`, for example `first-run`, `retrying`, `lost`, `demo-unsaved`, `effects-running`, `profiles-unresolved`, `applying`, `notices`, `settings`, `diagnostics` and `long-names`.
+- `?state=<name>` picks a state. The names are in `src/dev-preview/scenarios.ts`, for example `first-run`, `first-run-remembered`, `retrying`, `lost`, `demo-unsaved`, `effects-running`, `profiles-unresolved`, `applying`, `notices`, `settings`, `diagnostics`, `effects-demo-diagnostics` and `long-names`. A state with an OpenRGB session uses a copy of a store fixture marked as the real store.
 - `&area=Effects` opens an area. `&open=connection` or `&open=profile` opens a chip panel. `&diagnostics` opens Diagnostics.
 - Commands that the preview does not simulate fail with a plain message.
 
