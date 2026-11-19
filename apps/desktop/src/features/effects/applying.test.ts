@@ -53,3 +53,19 @@ test("the_apply_on_connect_result_is_shown_per_target", async () => {
   await fireEvent.click(within(notice).getByRole("button", { name: "Dismiss" }));
   expect(screen.queryByRole("status", { name: "Applied on connect" })).toBeNull();
 });
+
+test("an_apply_on_connect_with_a_skipped_setting_is_not_called_applied", async () => {
+  const shell = fakeShell(demoConnected, effectHandlers());
+  render(App);
+  await screen.findByRole("navigation", { name: /Devices/ });
+  const partly = structuredClone(viewConnectApplied);
+  const outcome = partly.connect_apply?.outcome;
+  if (outcome && "Applied" in outcome) {
+    outcome.Applied.report.frame_rate = { Refused: { error: { Session: "Busy" } } };
+  }
+
+  await shell.pushView({ ...partly, revision: 50 });
+
+  const notice = await screen.findByRole("status", { name: "Applied on connect" });
+  expect(notice.textContent).toMatch(/PrismForge applied Evening in part when it connected\. The frame rate was refused\./);
+});

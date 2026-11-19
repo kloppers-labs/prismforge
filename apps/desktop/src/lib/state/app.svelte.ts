@@ -34,6 +34,7 @@ export class AppState {
     () => this.profiles.refreshSoon(),
   );
   private storeKey = storeKey(this.view);
+  private sessionKey = sessionKey(this.view);
 
   get names() {
     return this.profiles.names;
@@ -59,6 +60,11 @@ export class AppState {
     this.view = view;
     if (view.connect_apply === null) {
       this.connectApplyDismissed = false;
+    }
+    const session = sessionKey(view);
+    if (session !== this.sessionKey) {
+      this.sessionKey = session;
+      this.profiles.endScope();
     }
     const key = storeKey(view);
     if (key !== this.storeKey) {
@@ -91,6 +97,7 @@ export class AppState {
 
   disconnect() {
     this.effects.leave();
+    this.profiles.endScope();
     return this.run("disconnect", api.disconnect);
   }
 
@@ -111,6 +118,7 @@ export class AppState {
     this.identify = null;
     this.selected = null;
     this.effects.reset();
+    this.profiles.endScope();
     return this.run(work, action);
   }
 
@@ -125,6 +133,10 @@ export class AppState {
       this.accept(answer.value);
     }
   }
+}
+
+function sessionKey(view: ShellView): string {
+  return view.session?.backend.origin ?? "none";
 }
 
 function storeKey(view: ShellView): string {

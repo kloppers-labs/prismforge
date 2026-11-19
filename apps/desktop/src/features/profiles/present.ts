@@ -120,29 +120,75 @@ export function outcomeText(labels: Labels, outcome: ItemOutcome): string {
   return outcome === "Applied" ? "Applied." : `Skipped. ${skipText(labels, outcome.Skipped.reason)}`;
 }
 
+export function fullyApplied(report: ApplyReport): boolean {
+  return "Applied" in report.frame_rate && report.items.length > 0 && report.items.every((item) => item.outcome === "Applied");
+}
+
 export function applySummary(report: ApplyReport): string {
   const total = report.items.length;
   const skipped = report.items.filter((item) => item.outcome !== "Applied").length;
-  const every = total === 1 ? "Its setting was" : `All ${total} settings were`;
+  const rate = "Refused" in report.frame_rate ? " The frame rate was refused." : "";
+  if (total === 0) {
+    return `There was nothing to apply: it holds no effect, hardware mode or program statement.${rate}`;
+  }
   if (skipped === 0) {
-    return `${every} accepted.`;
+    return rate ? rate.trim() : `${total === 1 ? "Its setting was" : `All ${total} settings were`} accepted.`;
   }
-  if (skipped === total) {
-    return `${every} skipped and stay in the profile.`;
-  }
-  return `${skipped} of ${total} settings were skipped and stay in the profile.`;
+  const every = total === 1 ? "Its setting was" : `All ${total} settings were`;
+  const part = skipped === total ? `${every} skipped` : `${skipped} of ${total} settings were skipped`;
+  return `${part} and stay in the profile.${rate}`;
 }
 
+/** A partial result, a refused frame rate or an empty profile never reads as a complete apply. */
 export function applyHeadline(name: string, report: ApplyReport): string {
   const total = report.items.length;
   const skipped = report.items.filter((item) => item.outcome !== "Applied").length;
-  if (skipped === 0) {
+  const rate = "Refused" in report.frame_rate ? " The frame rate was refused." : "";
+  if (total === 0) {
+    return `${name} has nothing to apply: it holds no effect, hardware mode or program statement.${rate}`;
+  }
+  if (fullyApplied(report)) {
     return `${name} is applied. ${applySummary(report)}`;
   }
   if (skipped === total) {
     return `Nothing from ${name} was applied. ${applySummary(report)}`;
   }
   return `${name} is applied in part. ${applySummary(report)}`;
+}
+
+export function connectHeadline(name: string, report: ApplyReport): string {
+  const total = report.items.length;
+  const skipped = report.items.filter((item) => item.outcome !== "Applied").length;
+  if (fullyApplied(report)) {
+    return `PrismForge applied ${name} when it connected. ${applySummary(report)}`;
+  }
+  if (total === 0 || skipped === total) {
+    return `PrismForge connected. ${applyHeadline(name, report)}`;
+  }
+  return `PrismForge applied ${name} in part when it connected. ${applySummary(report)}`;
+}
+
+/** True once this session has been connected; its apply-on-connect has then run or been skipped. */
+export function wasConnected(session: SessionSnapshot | null): boolean {
+  const counters = session?.diagnostics.counters;
+  return counters !== undefined && counters.connect_attempts > counters.connect_failures;
+}
+
+export function notConnectedText(session: SessionSnapshot | null): string {
+  if (session === null) {
+    return "PrismForge is not connected. Connect first. A profile marked to apply when PrismForge connects is applied when you connect.";
+  }
+  if (wasConnected(session)) {
+    return "PrismForge lost the connection and is trying again. A profile marked to apply when PrismForge connects is not applied again when the connection comes back. It is applied after you disconnect and connect.";
+  }
+  return "PrismForge is not connected yet. A profile marked to apply when PrismForge connects is applied once the connection is made.";
+}
+
+export function waitingText(name: string, session: SessionSnapshot | null): string {
+  if (wasConnected(session)) {
+    return `${name} was not applied: PrismForge is not connected. When the connection comes back by itself, the profile is not applied again. Apply it once PrismForge is connected.`;
+  }
+  return `${name} waits for the connection. It is applied once the connection is made.`;
 }
 
 export function frameRateText(report: ApplyReport): string {

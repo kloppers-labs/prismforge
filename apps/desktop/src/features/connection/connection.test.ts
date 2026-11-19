@@ -125,3 +125,14 @@ test("ignores_a_view_older_than_the_one_shown", async () => {
   expect(await screen.findByRole("complementary", { name: "Demo mode" })).toBeTruthy();
   expect(screen.queryByText(/^Retrying/)).toBeNull();
 });
+
+test("the_connection_screen_says_a_marked_profile_is_applied_on_connect", async () => {
+  fakeShell(null);
+  render(App);
+
+  expect(
+    await screen.findByText(
+      "PrismForge does not download, install or change OpenRGB. It writes nothing to your devices until you choose an action such as Identify, Apply effect or Apply profile, or until it connects while a profile is set to “Apply this profile when PrismForge connects”: that profile is applied as soon as the connection is made.",
+    ),
+  ).toBeTruthy();
+});

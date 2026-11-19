@@ -1,17 +1,18 @@
 <script lang="ts">
   import { flushSync } from "svelte";
   import type { ProfileDetails } from "../../lib/api/bindings/ProfileDetails";
+  import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { StoreSummary } from "../../lib/api/bindings/StoreSummary";
   import Dialog from "../../lib/Dialog.svelte";
   import { failureText } from "../../lib/errors";
   import ApplyOnConnect from "./ApplyOnConnect.svelte";
   import ChangeList from "./ChangeList.svelte";
-  import type { Labels } from "./present";
+  import { notConnectedText, type Labels } from "./present";
   import SettingsList from "./SettingsList.svelte";
   import type { ProfilesState } from "./state.svelte";
 
   const EXPORT_PRIVACY =
-    "The file holds the profile name, the model names of its devices and any names you typed. It holds no serial numbers, device locations or other details that identify this computer.";
+    "The file holds the profile name, its settings, the model names of its devices and the program names you typed for “Another program”. It leaves out serial numbers, device locations, your names for devices and zones, and the profile's id on this computer.";
 
   let {
     profiles,
@@ -20,6 +21,7 @@
     labels,
     live,
     applying,
+    session,
   }: {
     profiles: ProfilesState;
     details: ProfileDetails;
@@ -27,17 +29,13 @@
     labels: Labels;
     live: boolean;
     applying: string | null;
+    session: SessionSnapshot | null;
   } = $props();
 
   let name = $derived(details.name);
   let active = $derived(summary.active === details.id);
   let marked = $derived(summary.apply_on_connect === details.id);
-  let applyReason = $derived(
-    applying ??
-      (live
-        ? null
-        : "PrismForge is not connected. Connect first. A profile marked to apply when PrismForge connects applies then."),
-  );
+  let applyReason = $derived(applying ?? (live ? null : notConnectedText(session)));
   let unsaved = $derived(summary.unsaved_changes);
   let dialog = $state<"delete" | "export" | null>(null);
   let renaming = $state(false);
@@ -137,8 +135,7 @@
   {/if}
   {#if live && !active}
     <p class="hint">
-      To save changes to this profile, apply it first. PrismForge links your changes to a profile from the moment you apply
-      or save it, until PrismForge closes.
+      To save changes to this profile, apply it first. PrismForge links your changes to a profile from the moment you apply or save it, until you disconnect, switch between demo mode and OpenRGB, or close PrismForge.
     </p>
   {/if}
 

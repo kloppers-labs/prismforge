@@ -68,14 +68,18 @@
       <ResultPanel outcome={profiles.outcome} {labels} onsavenew={() => nameField?.focus()} />
       <ImportResult report={profiles.imported} problem={profiles.importProblem} />
 
-      {#if live}
-        <SaveCurrent {profiles} bind:field={nameField} />
-      {:else}
-        <p class="quiet">Connect to save the current lighting as a profile.</p>
-      {/if}
+      {#key profiles.scope}
+        {#if live}
+          <SaveCurrent {profiles} bind:field={nameField} />
+        {:else}
+          <p class="quiet">Connect to save the current lighting as a profile.</p>
+        {/if}
+      {/key}
 
       {#if details}
-        <ProfileArticle {profiles} {details} summary={store.summary} {labels} {live} {applying} />
+        {#key profiles.scope}
+          <ProfileArticle {profiles} {details} summary={store.summary} {labels} {live} {applying} {session} />
+        {/key}
       {:else if profiles.detailsProblem}
         <p class="quiet" role="alert">{failureText(profiles.detailsProblem)}</p>
       {:else if store.summary.profiles.length === 0}

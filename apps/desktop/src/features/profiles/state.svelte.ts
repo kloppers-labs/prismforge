@@ -39,6 +39,8 @@ export class ProfilesState {
   imported = $state<ImportReport | null>(null);
   importProblem = $state<Failure | null>(null);
   pendingUpdate = $state<PendingUpdate | null>(null);
+  /** Rises when the session ends or the store kind changes; results and drafts of the old scope go. */
+  scope = $state(0);
   names = $derived(new Names(this.store?.names ?? []));
   active = $derived(this.store?.summary.profiles.find((profile) => profile.id === this.store?.summary.active) ?? null);
 
@@ -53,6 +55,9 @@ export class ProfilesState {
       return;
     }
     this.storeProblem = null;
+    if (this.store !== null && this.store.kind !== answer.value.kind) {
+      this.endScope();
+    }
     this.store = answer.value;
     const known = answer.value.summary.profiles.some((profile) => profile.id === this.selected);
     if (this.selected !== null && !known) {
@@ -67,6 +72,14 @@ export class ProfilesState {
   refreshSoon() {
     clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => this.refresh(), REFRESH_DELAY_MS);
+  }
+
+  endScope() {
+    this.scope += 1;
+    this.outcome = null;
+    this.imported = null;
+    this.importProblem = null;
+    this.pendingUpdate = null;
   }
 
   forget() {

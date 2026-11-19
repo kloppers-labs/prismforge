@@ -9,7 +9,7 @@ import * as errors from "../../test/fixtures/errors";
 import { importedRenamed } from "../../test/fixtures/imports";
 import { detailsEvening, detailsImported, detailsOffline } from "../../test/fixtures/profileDetails";
 import { previewChanges, previewNone, savedChanges, savedNew } from "../../test/fixtures/saves";
-import { demoConnected } from "../../test/fixtures/sessions";
+import { demoConnected, demoEffectsNotConnected, openRgbConnected, openRgbRefused } from "../../test/fixtures/sessions";
 import {
   storeEmpty,
   storeOffline,
@@ -20,6 +20,8 @@ import {
 } from "../../test/fixtures/stores";
 
 const EVENING = "p-0000000000000001";
+const EXPORT_TEXT =
+  "The file holds the profile name, its settings, the model names of its devices and the program names you typed for “Another program”. It leaves out serial numbers, device locations, your names for devices and zones, and the profile's id on this computer.";
 const OLDER = "p-0000000000000002";
 
 function details(args: Record<string, unknown>) {
@@ -134,6 +136,8 @@ test("not_active_offers_save_as_new_and_explains_it", async () => {
 
   await waitFor(() => expect(result().textContent).toMatch(/Evening \(2\) is not the profile applied in this session/));
   expect(result().getAttribute("class")).not.toMatch(/problem/);
+  expect(result().textContent).toMatch(/until you disconnect, switch between demo mode and OpenRGB, or close PrismForge\./);
+  expect(result().textContent).not.toMatch(/until it closes/);
   await fireEvent.click(within(result()).getByRole("button", { name: "Save as a new profile" }));
   expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Profile name" }));
 });
@@ -165,7 +169,9 @@ test("a_marked_profile_that_waits_for_a_connection_says_so", async () => {
 
   await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
 
-  await waitFor(() => expect(result().textContent).toMatch(/Evening waits for a connection\. It applies once when PrismForge connects\./));
+  await waitFor(() => expect(result().textContent).toMatch(/Evening was not applied: PrismForge is not connected\./));
+  expect(result().textContent).toMatch(/When the connection comes back by itself, the profile is not applied again\./);
+  expect(result().textContent).not.toMatch(/applies once when PrismForge connects/);
 });
 
 test("delete_asks_first_and_says_the_file_leaves_this_computer", async () => {
@@ -230,9 +236,8 @@ test("export_states_what_the_file_holds_before_a_destination_is_chosen", async (
 
   await fireEvent.click(within(article).getByRole("button", { name: "Export" }));
   const dialog = await screen.findByRole("dialog", { name: "Export Evening" });
-  expect(dialog.textContent).toMatch(
-    /The file holds the profile name, the model names of its devices and any names you typed\. It holds no serial numbers, device locations or other details that identify this computer\./,
-  );
+  expect(within(dialog).getByText(EXPORT_TEXT)).toBeTruthy();
+  expect(dialog.textContent).not.toMatch(/identify this computer/);
   expect(called(shell, "export_profile")).toHaveLength(0);
   await fireEvent.click(within(dialog).getByRole("button", { name: "Choose where to save" }));
 
@@ -347,7 +352,8 @@ test("without_an_active_profile_save_changes_says_to_apply_or_save_first", async
 
   expect(within(article).queryByRole("button", { name: "Save changes to Evening" })).toBeNull();
   expect(within(article).getByText(/To save changes to this profile, apply it first\./)).toBeTruthy();
-  expect(within(article).getByText(/until PrismForge closes/)).toBeTruthy();
+  expect(within(article).getByText(/until you disconnect, switch between demo mode and OpenRGB, or close PrismForge\./)).toBeTruthy();
+  expect(within(article).queryByText(/until PrismForge closes/)).toBeNull();
 });
 
 test("demo_profiles_are_marked_as_demo_on_the_profiles_screen", async () => {
@@ -386,4 +392,117 @@ test("another_instance_holding_the_store_is_explained", async () => {
   await openProfiles();
 
   expect(await screen.findByText(/Another PrismForge window is using the profile folder\./)).toBeTruthy();
+});
+
+test("apply_on_connect_is_not_promised_again_while_the_session_retries_after_a_loss", async () => {
+  fakeShell(demoEffectsNotConnected, handlers(storeTwo));
+  render(App);
+  const article = await chooseProfile("Evening");
+
+  expect(
+    within(article).getByText(
+      "Apply is off. PrismForge lost the connection and is trying again. A profile marked to apply when PrismForge connects is not applied again when the connection comes back. It is applied after you disconnect and connect.",
+    ),
+  ).toBeTruthy();
+  expect(within(article).queryByText(/applies then/)).toBeNull();
+});
+
+test("apply_on_connect_is_promised_while_the_first_connection_is_being_made", async () => {
+  fakeShell(openRgbRefused, { profile_store: () => storeOffline, profile_details: () => detailsOffline });
+  render(App);
+  const list = await openProfiles();
+  await fireEvent.click(within(list).getByRole("button", { name: /^Desk/ }));
+  const article = await screen.findByRole("article", { name: "Desk" });
+
+  expect(
+    within(article).getByText(
+      "Apply is off. PrismForge is not connected yet. A profile marked to apply when PrismForge connects is applied once the connection is made.",
+    ),
+  ).toBeTruthy();
+});
+
+function withRate(refused: boolean, items: boolean): typeof appliedFully {
+  const outcome = structuredClone(appliedFully);
+  if (typeof outcome === "object") {
+    if (refused) {
+      outcome.Applied.frame_rate = { Refused: { error: { Session: "Busy" } } };
+    }
+    if (!items) {
+      outcome.Applied.items = [];
+    }
+  }
+  return outcome;
+}
+
+test("a_refused_frame_rate_makes_the_apply_partial", async () => {
+  fakeShell(demoConnected, handlers(storeTwo, { apply_profile: () => withRate(true, true) }));
+  render(App);
+  const article = await chooseProfile("Evening");
+
+  await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
+
+  await waitFor(() => expect(result().textContent).toMatch(/Evening is applied in part\. The frame rate was refused\./));
+  expect(result().textContent).not.toMatch(/Evening is applied\. /);
+});
+
+test("a_profile_without_settings_says_it_had_nothing_to_apply", async () => {
+  fakeShell(demoConnected, handlers(storeTwo, { apply_profile: () => withRate(false, false) }));
+  render(App);
+  const article = await chooseProfile("Evening");
+
+  await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
+
+  await waitFor(() => expect(result().textContent).toMatch(/Evening has nothing to apply: it holds no effect, hardware mode or program statement\./));
+  expect(result().textContent).not.toMatch(/All 0 settings/);
+});
+
+test("results_from_the_demo_store_go_when_a_session_with_openrgb_takes_over", async () => {
+  const real = structuredClone(storeOffline);
+  let store: StoreView = storeTwo;
+  const shell = fakeShell(
+    demoConnected,
+    handlers(storeTwo, {
+      profile_store: () => store,
+      apply_profile: () => appliedFully,
+      import_profile: () => importedRenamed,
+    }),
+  );
+  render(App);
+  const article = await chooseProfile("Evening");
+  await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
+  await waitFor(() => expect(result().textContent).toMatch(/Evening is applied\./));
+  await fireEvent.click(screen.getByRole("button", { name: "Import a profile" }));
+  await waitFor(() => expect(screen.getByRole("status", { name: "Import result" }).textContent).toMatch(/Imported as/));
+  await fireEvent.click(within(await screen.findByRole("article", { name: "Evening (2)" })).getByRole("button", { name: "Delete" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+
+  store = real;
+  await shell.push(openRgbConnected);
+
+  await waitFor(() => expect(result().textContent?.trim()).toBe(""));
+  expect(screen.getByRole("status", { name: "Import result" }).textContent?.trim()).toBe("");
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("results_go_after_disconnect_and_reconnect", async () => {
+  const shell = fakeShell(
+    demoConnected,
+    handlers(storeTwo, {
+      apply_profile: () => appliedFully,
+      disconnect: () => ({ revision: 100, session: null, applying: null, connect_apply: null }),
+    }),
+  );
+  render(App);
+  const article = await chooseProfile("Evening");
+  await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
+  await waitFor(() => expect(result().textContent).toMatch(/Evening is applied\./));
+  await fireEvent.click(within(article).getByRole("button", { name: "Rename" }));
+  expect(screen.getByRole("textbox", { name: "New name" })).toBeTruthy();
+
+  await fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  await shell.pushView({ revision: 200, session: demoConnected, applying: null, connect_apply: null });
+
+  await waitFor(() => expect(screen.getByRole("navigation", { name: "Screens" }).textContent).toMatch(/Devices/));
+  expect(result().textContent?.trim()).toBe("");
+  expect(screen.queryByRole("textbox", { name: "New name" })).toBeNull();
 });

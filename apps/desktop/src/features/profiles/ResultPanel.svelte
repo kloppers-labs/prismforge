@@ -3,7 +3,7 @@
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import ApplyReportList from "./ApplyReportList.svelte";
   import ChangeList from "./ChangeList.svelte";
-  import { applyHeadline, count, type Labels } from "./present";
+  import { applyHeadline, count, fullyApplied, waitingText, type Labels } from "./present";
   import type { Outcome } from "./state.svelte";
 
   let { outcome, labels, onsavenew }: { outcome: Outcome | null; labels: Labels; onsavenew: () => void } = $props();
@@ -14,11 +14,11 @@
 <div class="result" class:problem role="status" aria-label="Profile result">
   {#if outcome?.kind === "applied"}
     {#if outcome.outcome === "WaitingForConnection"}
-      <p class="headline">{outcome.name} waits for a connection. It applies once when PrismForge connects.</p>
+      <p class="headline">{waitingText(outcome.name, labels.session)}</p>
     {:else}
       {@const report = outcome.outcome.Applied}
       <p class="headline">
-        <ToneIcon tone={report.items.every((item) => item.outcome === "Applied") ? "ok" : "warning"} />
+        <ToneIcon tone={fullyApplied(report) ? "ok" : "warning"} />
         {applyHeadline(outcome.name, report)}
       </p>
       <ApplyReportList {report} {labels} />
@@ -35,7 +35,7 @@
     <p class="headline">
       {outcome.name} is not the profile applied in this session, so PrismForge cannot tell which changes belong to it.
     </p>
-    <p>PrismForge links your changes to a profile only from the moment you apply or save it, and only until it closes. You can keep the current lighting as a new profile instead.</p>
+    <p>PrismForge links your changes to a profile only from the moment you apply or save it, until you disconnect, switch between demo mode and OpenRGB, or close PrismForge. You can keep the current lighting as a new profile instead.</p>
     <div><button type="button" onclick={onsavenew}>Save as a new profile</button></div>
   {:else if outcome?.kind === "exported"}
     <p class="headline">Exported {outcome.name}.</p>

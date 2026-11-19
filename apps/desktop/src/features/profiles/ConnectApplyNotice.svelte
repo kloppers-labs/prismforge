@@ -3,7 +3,7 @@
   import { failureText } from "../../lib/errors";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import ApplyReportList from "./ApplyReportList.svelte";
-  import { applySummary, type Labels } from "./present";
+  import { connectHeadline, fullyApplied, type Labels } from "./present";
 
   let { applied, labels, ondismiss }: { applied: ConnectApply; labels: Labels; ondismiss: () => void } = $props();
 
@@ -14,8 +14,8 @@
   {#if "Applied" in outcome}
     {@const report = outcome.Applied.report}
     <p class="headline">
-      <ToneIcon tone={report.items.every((item) => item.outcome === "Applied") ? "ok" : "warning"} />
-      PrismForge applied {applied.name} when it connected. {applySummary(report)}
+      <ToneIcon tone={fullyApplied(report) ? "ok" : "warning"} />
+      {connectHeadline(applied.name, report)}
     </p>
     <ApplyReportList {report} {labels} />
   {:else}

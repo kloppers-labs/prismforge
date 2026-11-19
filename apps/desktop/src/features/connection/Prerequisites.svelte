@@ -5,7 +5,7 @@
     <li>Its SDK server is on. In OpenRGB, open the SDK Server tab and select Start Server, or start OpenRGB with the <code>--server</code> option.</li>
     <li>The port here matches the port shown in that tab.</li>
   </ul>
-  <p>PrismForge does not download, install or change OpenRGB. It writes nothing to your devices until you choose an action such as Identify, Apply effect or Apply profile.</p>
+  <p>PrismForge does not download, install or change OpenRGB. It writes nothing to your devices until you choose an action such as Identify, Apply effect or Apply profile, or until it connects while a profile is set to “Apply this profile when PrismForge connects”: that profile is applied as soon as the connection is made.</p>
 </section>
 
 <style>
