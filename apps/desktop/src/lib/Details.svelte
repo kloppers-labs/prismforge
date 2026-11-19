@@ -1,11 +1,17 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import type { MirrorId } from "./shell/mirrors";
 
-  let { summary = "Details", open = $bindable(false), children }: { summary?: string; open?: boolean; children: Snippet } = $props();
+  let {
+    summary = "Details",
+    open = $bindable(false),
+    mirror,
+    children,
+  }: { summary?: string; open?: boolean; mirror?: MirrorId; children: Snippet } = $props();
 </script>
 
 <details class="details" bind:open>
-  <summary>{summary}</summary>
+  <summary data-mirror={mirror}>{summary}</summary>
   <div class="body">{@render children()}</div>
 </details>
 

@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { EffectCatalog } from "../../lib/api/bindings/EffectCatalog";
+  import type { EffectDefinition } from "../../lib/api/bindings/EffectDefinition";
+  import type { Menu } from "../../lib/shell/menu.svelte";
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import ControlField from "./controls/ControlField.svelte";
   import EffectPicker from "./EffectPicker.svelte";
@@ -13,7 +15,15 @@
     device,
     zone,
     locked,
-  }: { effects: EffectsState; catalog: EffectCatalog; device: SessionDevice; zone: number | null; locked: boolean } = $props();
+    menu,
+  }: {
+    effects: EffectsState;
+    catalog: EffectCatalog;
+    device: SessionDevice;
+    zone: number | null;
+    locked: boolean;
+    menu: (effect: EffectDefinition) => Menu | null;
+  } = $props();
 
   let checked = $derived(effects.checked);
 </script>
@@ -26,6 +36,7 @@
     running={effects.running?.effect.effect ?? null}
     disabled={locked}
     onchoose={(id) => effects.choose(id)}
+    {menu}
   />
 
   {#if effects.definition && checked}

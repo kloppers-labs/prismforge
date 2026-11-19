@@ -2,6 +2,8 @@
   import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { Names } from "../../lib/names";
+  import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
+  import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import { deviceKey, hasDirectMode, ledCount, reference } from "../devices/present";
   import { targetMark } from "./present";
 
@@ -10,12 +12,18 @@
     selected,
     names,
     onselect,
+    menu,
   }: {
     session: SessionSnapshot;
     selected: OutputTarget | null;
     names: Names;
     onselect: (target: OutputTarget) => void;
+    menu: (device: SessionDevice, target: OutputTarget) => Menu | null;
   } = $props();
+
+  function menuFor(device: SessionDevice, ref: string | null, zone: number | null): Menu | null {
+    return ref === null ? null : menu(device, { device: ref, zone });
+  }
 
   let list: HTMLElement | undefined = $state();
   let entries = $derived(
@@ -77,8 +85,10 @@
                 disabled={ref === null}
                 tabindex={stop(ref, null)}
                 aria-current={current(ref, null)}
+                data-mirror="target.choose"
                 onclick={() => ref !== null && onselect({ device: ref, zone: null })}
                 onkeydown={move}
+                use:contextMenu={() => menuFor(device, ref, null)}
               >
                 <span class="row"><span>Whole device</span><span class="pick-meta">{ledCount(device.descriptor.led_count)}</span></span>
               </button>
@@ -92,8 +102,10 @@
                     disabled={ref === null}
                     tabindex={stop(ref, index)}
                     aria-current={current(ref, index)}
+                    data-mirror="target.choose"
                     onclick={() => ref !== null && onselect({ device: ref, zone: index })}
                     onkeydown={move}
+                    use:contextMenu={() => menuFor(device, ref, index)}
                   >
                     <span class="row"><span>{names.zone(device, index)}</span><span class="pick-meta">{ledCount(zone.led_count)}</span></span>
                   </button>

@@ -1,5 +1,7 @@
 <script lang="ts">
+  import type { ProfileSummary } from "../../lib/api/bindings/ProfileSummary";
   import type { StoreView } from "../../lib/api/bindings/StoreView";
+  import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
   import { contents, found, unsavedText } from "./present";
   import type { ProfilesState } from "./state.svelte";
 
@@ -9,7 +11,15 @@
     live,
     onsave,
     saveButton = $bindable(),
-  }: { profiles: ProfilesState; store: StoreView | null; live: boolean; onsave: () => void; saveButton?: HTMLButtonElement } = $props();
+    menu,
+  }: {
+    profiles: ProfilesState;
+    store: StoreView | null;
+    live: boolean;
+    onsave: () => void;
+    saveButton?: HTMLButtonElement;
+    menu: (profile: ProfileSummary) => Menu | null;
+  } = $props();
 
   let summary = $derived(store?.summary ?? null);
   let rows: HTMLButtonElement[] = $state([]);
@@ -56,6 +66,7 @@
             aria-current={profiles.selected === profile.id ? "true" : undefined}
             onclick={() => profiles.select(profile.id)}
             onkeydown={(event) => move(event, index)}
+            use:contextMenu={() => menu(profile)}
           >
             <span class="pick-name">{profile.name}</span>
             <span class="pick-meta">{contents(profile)}</span>

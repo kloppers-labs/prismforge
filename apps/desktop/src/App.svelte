@@ -8,7 +8,9 @@
   import ProfilesScreen from "./features/profiles/ProfilesScreen.svelte";
   import ClosePrompt from "./features/settings/ClosePrompt.svelte";
   import SettingsScreen from "./features/settings/SettingsScreen.svelte";
+  import ContextMenu from "./lib/shell/ContextMenu.svelte";
   import { areaFor, cycleRegion, isQuit } from "./lib/shell/keyboard";
+  import { currentBuild, guardNativeMenu } from "./lib/shell/nativeMenu";
   import NeedsConnection from "./lib/shell/NeedsConnection.svelte";
   import NoticeSlot from "./lib/shell/NoticeSlot.svelte";
   import Rail from "./lib/shell/Rail.svelte";
@@ -60,6 +62,8 @@
   $effect(() => follow(COVER_QUERY, (matches) => (app.layoutCovers = matches)));
   $effect(() => follow(COMPACT_QUERY, (matches) => (compactWindow = matches)));
   $effect(() => follow(SQUEEZE_QUERY, (matches) => (squeezed = matches)));
+
+  $effect(() => guardNativeMenu(window, currentBuild()));
 
   $effect(() => {
     if (overlays.dialogs > 0) {
@@ -190,6 +194,7 @@
   {#if app.lifecycle.view?.close_prompt}
     <ClosePrompt lifecycle={app.lifecycle} />
   {/if}
+  <ContextMenu />
 </div>
 
 <style>

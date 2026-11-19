@@ -22,7 +22,9 @@ The window has a new shell (plan 2, Task 7). A rail on the left holds Devices, E
 
 The screens were swept against the audit (plan 2, Task 8). Effects has a command bar at the top with Apply effect, Stop effect and the edit mode (Live, Draft or Off); the lifecycle text, hardware modes and the other-program form sit behind Details; the frame rate moved to Settings. Devices has Set lighting, says what drives each device, tells devices with the same name apart, and has short zone buttons. The connection form starts from the last address and the waiting page offers a way back and demo mode. Profiles shows the selected profile first and saves the current lighting from a dialog. Settings is grouped with one line per switch. Diagnostics docks at the default window size with the compact rail and a 320 px drawer, and copies itself as text. Lists share one selection cue and one Tab stop each. See decisions 10 and 14 to 18 in `docs/decisions/0005-shell-and-design-tokens.md`.
 
-All tests pass on macOS. The Task 8 commits have no Windows CI result yet. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+Rows, effect cards, the status strip chips and the Diagnostics sections have context menus (plan 2, Task 8b, on branch `task-8b-context-menus`, waiting for review). A right-click, Shift+F10 or the Menu key opens an in-app menu with the actions of the buttons on the same screen; each item calls the same method as its button, keeps its reason when it is off and keeps its confirmation dialog. Destructive items sit last in the problem colour. Each Diagnostics section got a Copy section button. A release build no longer shows the WebView's own menu (Reload, Inspect) outside text fields. See decisions 19 and 20 in `docs/decisions/0005-shell-and-design-tokens.md`.
+
+All tests pass on macOS. The Task 8b commits have no Windows CI result yet. The Task 8 commits have no Windows CI result yet. Windows CI passed on `c8c661a`, the last Task 7 commit (run 44492091594). The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -77,6 +79,21 @@ The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
+
+Task 8b run on macOS (Apple Silicon) on 2026-11-19, at `474115e`, the last code commit of Task 8b fix round 2.
+
+| Command | Result |
+|---|---|
+| `cargo fmt --all --check` | Pass |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
+| `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
+| `cargo test --workspace` | Pass: 331 tests (no Rust change in Task 8b) |
+| `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 330 interface tests in 25 files (76 new in Task 8b: 11 in fix round 1, 4 in fix round 2) |
+| `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (265 modules, 3 files checked) |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `474115e`: `PrismForge.app` (15.57 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.53 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (265 modules). |
+
+Every menu was opened in the interface preview in Orca's browser (Chromium on macOS) at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300, at the right and bottom edges, from the keyboard on a profile row and a zone button, and on Diagnostics docked (1440 × 900) and covering (1100 × 700). Every menu stayed inside the window with its 8 px margin. Fix round 1 retook the zone row at 640 × 400, a Diagnostics section at 460 × 300, the keyboard menus, the profile menus with the new labels, and a keyboard menu that moves with its row when the target list scrolls. The screenshots are design evidence only.
 
 Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `10a6bd0`, the last code commit of Task 8 fix round 3.
 
@@ -243,6 +260,7 @@ Not done:
 - **The shell is not seen in the native window.** Task 7 was checked in the browser preview only: no native window chrome, no WebView2, no forced colours, no screen reader. Focus rings were not visible in the preview screenshots, because the preview tab does not hold system focus.
 - **The strip divider can stand alone.** When the strip wraps at 200 % text, the divider between the chips ends the first row.
 - **Screen copy is still long.** The audit's per-screen findings (E1 to E16, P1 to P10, C1 to C9, D2 to D10) are for Task 8. The Effects paragraph now states the stored close choice, but its full rewrite (E2) is Task 8.
+- **Context menus are checked in the browser preview only.** WebView2's own secondary-click and Menu-key events, the suppression of its menu in a release build, and a screen reader on the menu are not checked. Selected text outside a field cannot be copied from a right-click menu in a release build; Ctrl+C still copies it, and Diagnostics says so when the clipboard fails. Whether WebView2 sends `contextmenu` for a disabled button is not known; the guard listens in the capture phase, but if no event is sent, WebView2's own menu may appear on a disabled button.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## What only the owner can check (Task 8)
@@ -252,6 +270,7 @@ Not done:
 - A screen reader pass (Narrator or NVDA) over each screen, the notices and the Details disclosures.
 - Copy as text in Diagnostics: that the clipboard works in the native window.
 - Real hardware: Set lighting, the Live and Draft marks, and Hand back with a real other program.
+- Context menus in the native window on Windows: a right-click, Shift+F10 and the Menu key on a device row, a profile row and the connection chip; no WebView menu (Reload, Inspect) outside text fields in the installed build; Cut, Copy and Paste in the Host field; a menu at the right and bottom edges at 200 % scaling; Narrator or NVDA reading a disabled item with its reason, announcing Shift+F10 on rows, chips and the buttons inside zone rows, and reading "is now off" once when an item turns off while focused; a right-click on a disabled button (for example Identify device on the light bar) shows no WebView menu.
 
 ## Missing information from the owner
 

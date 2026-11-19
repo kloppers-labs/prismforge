@@ -3,11 +3,12 @@
   import Icon from "./Icon.svelte";
   import Popover from "./Popover.svelte";
   import type { ProfileStatus } from "./status";
+  import { profileChipMenu } from "./stripMenus";
 
   let { app, status }: { app: AppState; status: ProfileStatus } = $props();
 </script>
 
-<Popover id="profile-panel" label={status.name} panelLabel="Profile details">
+<Popover id="profile-panel" label={status.name} panelLabel="Profile details" menu={() => profileChipMenu(app, status)}>
   {#snippet trigger()}
     <span class="icon" class:busy={status.busy}><Icon name="profiles" /></span>
     <span class="title">{status.title}</span>
@@ -22,9 +23,9 @@
     <div class="actions">
       {#if status.saveable}
         {@const id = status.saveable}
-        <button type="button" onclick={() => (close(), app.uncover(), app.saveActiveChanges(id))}>Save changes…</button>
+        <button type="button" data-mirror="profile-chip.save" onclick={() => (close(), app.uncover(), app.saveActiveChanges(id))}>Save changes to {status.title}</button>
       {/if}
-      <button type="button" onclick={() => (close(), app.uncover(), app.openProfiles())}>Open Profiles</button>
+      <button type="button" data-mirror="profile-chip.open" onclick={() => (close(), app.uncover(), app.openProfiles())}>Open Profiles</button>
     </div>
   {/snippet}
 </Popover>

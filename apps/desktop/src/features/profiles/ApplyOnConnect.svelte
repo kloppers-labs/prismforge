@@ -7,7 +7,7 @@
 </script>
 
 <div class="switch-row">
-  <Switch label="Apply this profile when PrismForge connects" {on} describedby={id} {onchange} />
+  <Switch label="Apply this profile when PrismForge connects" {on} describedby={id} mirror="profile.apply-on-connect" {onchange} />
   <p {id} class="hint">When PrismForge connects, it applies this profile once. PrismForge connects by itself only when “Connect to OpenRGB when PrismForge starts” is on in Settings.</p>
   <p class="hint">Only one profile can do this; turning it on here turns it off for the others.</p>
   {#if status}

@@ -78,4 +78,6 @@
   --rail-w-compact: 72px;
   --drawer-w: 400px;
   --drawer-w-compact: 320px;
+  --menu-w-min: 200px;
+  --menu-w-max: 320px;
 }

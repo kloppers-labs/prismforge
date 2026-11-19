@@ -3,8 +3,13 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { StoreView } from "../../lib/api/bindings/StoreView";
   import type { Names } from "../../lib/names";
+  import { copyShortcut } from "../../lib/platform";
+  import { contextMenu } from "../../lib/shell/menu.svelte";
   import { deviceKey, reference } from "../devices/present";
   import { errorName, eventText, raw, reportText, type ReportPart } from "./format";
+  import { sectionMenu } from "./menu";
+
+  type Section = "store" | "connection" | "backend" | "error" | "counters" | "output" | "devices" | "events";
 
   let { session, store, names, onclose }: { session: SessionSnapshot | null; store: StoreView | null; names: Names; onclose: () => void } = $props();
 
@@ -15,17 +20,18 @@
     return device ? names.device(device) : ref;
   }
 
-  function parts(): ReportPart[] {
-    const list: ReportPart[] = [];
+  function parts(): (ReportPart & { key: Section })[] {
+    const list: (ReportPart & { key: Section })[] = [];
     if (store) {
-      list.push({ title: "Profile store", rows: [["Store", store.kind]] });
+      list.push({ key: "store", title: "Profile store", rows: [["Store", store.kind]] });
     }
     if (!session) {
-      return [...list, { title: "Connection", rows: [["Session", "none"]] }];
+      return [...list, { key: "connection", title: "Connection", rows: [["Session", "none"]] }];
     }
     const last = session.diagnostics.last_error;
     list.push(
       {
+        key: "backend",
         title: "Backend",
         rows: [
           ["Origin", session.backend.origin],
@@ -35,21 +41,26 @@
           ["Connection state", raw(session.connection)],
         ],
       },
-      { title: "Last error", rows: last ? [["Operation", last.operation], ["At", `${last.at_ms} ms`], ["Error", raw(last.error)]] : [["Error", "none"]] },
-      { title: "Counters", rows: counters.map(([label, value]) => [String(label), String(value)]) },
       {
+        key: "error",
+        title: "Last error",
+        rows: last ? [["Operation", last.operation], ["At", `${last.at_ms} ms`], ["Error", raw(last.error)]] : [["Error", "none"]],
+      },
+      { key: "counters", title: "Counters", rows: counters.map(([label, value]) => [String(label), String(value)]) },
+      {
+        key: "output",
         title: "Output",
         rows: [["Frame rate", String(session.output.frame_rate)], ...session.output.devices.map((output) => [output.device, `${raw(output.owner)} ${raw(output.condition)}`] as [string, string])],
       },
-      { title: "Devices", rows: session.devices.map((device) => [device.descriptor.name, reference(device) ?? raw(device.identity)] as [string, string]) },
-      { title: "Recent events", rows: events.map((event) => [`#${event.sequence} at ${event.at_ms} ms`, eventText(event.kind)] as [string, string]) },
+      { key: "devices", title: "Devices", rows: session.devices.map((device) => [device.descriptor.name, reference(device) ?? raw(device.identity)] as [string, string]) },
+      { key: "events", title: "Recent events", rows: events.map((event) => [`#${event.sequence} at ${event.at_ms} ms`, eventText(event.kind)] as [string, string]) },
     );
     return list;
   }
 
-  async function copy() {
+  async function copy(only?: Section) {
     try {
-      await navigator.clipboard.writeText(reportText(parts()));
+      await navigator.clipboard.writeText(reportText(parts().filter((part) => only === undefined || part.key === only)));
       copied = "done";
     } catch {
       copied = "failed";
@@ -92,18 +103,27 @@
   <header>
     <h2 id="diagnostics-title" tabindex="-1" data-region-focus bind:this={heading}>Diagnostics</h2>
     <div class="tools">
-      <button type="button" class="small" onclick={copy}>Copy as text</button>
+      <button type="button" class="small" data-mirror="diagnostics.copy-all" onclick={() => copy()}>Copy as text</button>
       <button type="button" class="small" onclick={onclose}>Close</button>
     </div>
   </header>
   <p class="intro">What PrismForge knows about this session, for a bug report. Copy as text puts the server address, the device names and references, the counters, the last error and the recent events on the clipboard. The copy leaves out the folder path.</p>
   <p class="copied" role="status">
-    {#if copied === "done"}Copied. Paste it into your report.{:else if copied === "failed"}PrismForge could not reach the clipboard. Select the values below and copy them.{/if}
+    {#if copied === "done"}Copied. Paste it into your report.{:else if copied === "failed"}PrismForge could not reach the clipboard. Select the values below and press {copyShortcut()}.{/if}
   </p>
 
+  {#snippet sectionHead(key: Section, id: string, title: string)}
+    <div class="head">
+      <h3 {id}>{title}</h3>
+      <button type="button" class="small quiet" data-mirror="diagnostics.copy-section" aria-label="Copy the {title} section" onclick={() => copy(key)}>
+        Copy section
+      </button>
+    </div>
+  {/snippet}
+
   {#if store}
-    <section aria-labelledby="store-title">
-      <h3 id="store-title">Profile store</h3>
+    <section aria-labelledby="store-title" use:contextMenu={() => sectionMenu("Profile store", () => copy("store"), () => copy())}>
+      {@render sectionHead("store", "store-title", "Profile store")}
       <dl>
         <dt>Store</dt>
         <dd>{store.kind === "Demo" ? "Demo profiles, kept apart from real ones" : "Profiles for real devices"}</dd>
@@ -116,8 +136,8 @@
   {#if !session}
     <p class="empty">PrismForge has no connection now.</p>
   {:else}
-    <section aria-labelledby="backend-title">
-      <h3 id="backend-title">Backend</h3>
+    <section aria-labelledby="backend-title" use:contextMenu={() => sectionMenu("Backend", () => copy("backend"), () => copy())}>
+      {@render sectionHead("backend", "backend-title", "Backend")}
       <dl>
         <dt>Origin</dt>
         <dd>{session.backend.origin === "Simulated" ? "Simulated (demo mode)" : "OpenRGB SDK server"}</dd>
@@ -134,8 +154,8 @@
       </dl>
     </section>
 
-    <section aria-labelledby="error-title">
-      <h3 id="error-title">Last error</h3>
+    <section aria-labelledby="error-title" use:contextMenu={() => sectionMenu("Last error", () => copy("error"), () => copy())}>
+      {@render sectionHead("error", "error-title", "Last error")}
       {#if session.diagnostics.last_error}
         {@const last = session.diagnostics.last_error}
         <dl>
@@ -155,8 +175,8 @@
       {/if}
     </section>
 
-    <section aria-labelledby="counters-title">
-      <h3 id="counters-title">Counters</h3>
+    <section aria-labelledby="counters-title" use:contextMenu={() => sectionMenu("Counters", () => copy("counters"), () => copy())}>
+      {@render sectionHead("counters", "counters-title", "Counters")}
       <dl>
         {#each counters as [label, value] (label)}
           <dt>{label}</dt>
@@ -165,8 +185,8 @@
       </dl>
     </section>
 
-    <section aria-labelledby="output-title">
-      <h3 id="output-title">Output</h3>
+    <section aria-labelledby="output-title" use:contextMenu={() => sectionMenu("Output", () => copy("output"), () => copy())}>
+      {@render sectionHead("output", "output-title", "Output")}
       <dl>
         <dt>Frame rate</dt>
         <dd class="numeric">{session.output.frame_rate} per second</dd>
@@ -179,8 +199,8 @@
       </dl>
     </section>
 
-    <section aria-labelledby="ids-title">
-      <h3 id="ids-title">Device references</h3>
+    <section aria-labelledby="ids-title" use:contextMenu={() => sectionMenu("Device references", () => copy("devices"), () => copy())}>
+      {@render sectionHead("devices", "ids-title", "Device references")}
       {#if session.devices.length === 0}
         <p class="empty">No devices.</p>
       {:else}
@@ -201,8 +221,8 @@
       {/if}
     </section>
 
-    <section aria-labelledby="events-title">
-      <h3 id="events-title">Recent events, newest first</h3>
+    <section aria-labelledby="events-title" use:contextMenu={() => sectionMenu("Recent events", () => copy("events"), () => copy())}>
+      {@render sectionHead("events", "events-title", "Recent events, newest first")}
       {#if events.length === 0}
         <p class="empty">No events yet.</p>
       {:else}
@@ -281,6 +301,14 @@
   h3 {
     font-size: var(--font-s);
     color: var(--text-dim);
+  }
+
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
   }
 
   dl {

@@ -33,7 +33,7 @@ test("shows_the_last_error_and_real_counters", async () => {
 
   expect(within(drawer).getByText("Unreachable")).toBeTruthy();
   expect(within(drawer).getByText('{"Unreachable":{"detail":"connection refused"}}')).toBeTruthy();
-  const counters = within(drawer).getByRole("heading", { name: "Counters" }).parentElement as HTMLElement;
+  const counters = within(drawer).getByRole("region", { name: "Counters" });
   expect(within(counters).getByText("Failed connects").nextElementSibling?.textContent).toBe("3");
   expect(within(drawer).getAllByText(/RetryScheduled retry \d+ in \d+ ms/).length).toBeGreaterThan(0);
 
@@ -49,7 +49,7 @@ test("shows_output_counters_and_owners_in_diagnostics_only", async () => {
 
   const drawer = await openDiagnostics();
 
-  const counters = within(drawer).getByRole("heading", { name: "Counters" }).parentElement as HTMLElement;
+  const counters = within(drawer).getByRole("region", { name: "Counters" });
   const counter = (label: string) => within(counters).getByText(label).nextElementSibling?.textContent;
   const real = demoEffectsRunning.diagnostics.counters;
   expect(counter("Frames written")).toBe(String(real.frames_written));

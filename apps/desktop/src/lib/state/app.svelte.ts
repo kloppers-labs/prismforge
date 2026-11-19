@@ -14,6 +14,9 @@ export type Screen = "devices" | "effects" | "profiles" | "settings";
 
 export type IdentifyTarget = { device: DeviceRef; zone: number | null };
 
+/** A rename or reset that a context menu asked the device page to start in its name editor. */
+export type NameRequest = { device: DeviceRef; zone: number | null; action: "rename" | "clear" };
+
 export type IdentifyState =
   | { kind: "running"; target: IdentifyTarget }
   | { kind: "finished"; target: IdentifyTarget; outcome: IdentifyOutcome }
@@ -26,6 +29,7 @@ export class AppState {
   identify = $state<IdentifyState | null>(null);
   identifiedOnce = $state(false);
   selected = $state<string | null>(null);
+  naming = $state<NameRequest | null>(null);
   diagnosticsOpen = $state(false);
   /** True when the window is too narrow to dock Diagnostics, so an open drawer covers the page. */
   layoutCovers = $state(false);

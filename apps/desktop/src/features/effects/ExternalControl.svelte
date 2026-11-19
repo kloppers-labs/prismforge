@@ -39,6 +39,7 @@
     <input id="program-name" type="text" maxlength="60" autocomplete="off" bind:value={program} placeholder="another program" />
     <button
       type="submit"
+      data-mirror="target.leave"
       disabled={ref === null || identifying || held !== null}
       aria-describedby={held ? "external-held" : identifying ? "external-blocked" : undefined}
     >

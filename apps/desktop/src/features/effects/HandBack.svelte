@@ -24,6 +24,7 @@
     <button
       type="button"
       class="small"
+      data-mirror="target.hand-back"
       disabled={held !== null}
       aria-describedby={held ? "handback-held" : undefined}
       onclick={() => effects.clearExternal(device)}

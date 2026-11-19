@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import type { Names } from "../../lib/names";
+  import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
   import { distinction, hasDirectMode, isAmbiguous, kindLabel, ledCount } from "./present";
 
   type Entry = { key: string; device: SessionDevice };
@@ -11,7 +12,15 @@
     issues,
     names,
     onselect,
-  }: { entries: Entry[]; selected: string | null; issues: number; names: Names; onselect: (key: string) => void } = $props();
+    menu,
+  }: {
+    entries: Entry[];
+    selected: string | null;
+    issues: number;
+    names: Names;
+    onselect: (key: string) => void;
+    menu: (key: string, device: SessionDevice) => Menu | null;
+  } = $props();
 
   let rows: HTMLButtonElement[] = $state([]);
   let apart = $derived(distinction(entries.map((entry) => entry.device), (device) => names.device(device)));
@@ -44,6 +53,7 @@
           aria-current={key === selected ? "true" : undefined}
           onclick={() => onselect(key)}
           onkeydown={(event) => move(event, index)}
+          use:contextMenu={() => menu(key, device)}
         >
           <span class="pick-name">{names.device(device)}</span>
           {#if apart[index]}<span class="pick-meta">{apart[index]}</span>{/if}
