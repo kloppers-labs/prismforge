@@ -3,6 +3,7 @@
   import ToneIcon from "../ToneIcon.svelte";
   import Popover from "./Popover.svelte";
   import { connectionName, type ConnectionStatus } from "./status";
+  import { busyText, connectionMenu } from "./stripMenus";
 
   let {
     app,
@@ -12,9 +13,6 @@
   }: { app: AppState; status: ConnectionStatus; background: string | null; onconnect: () => void } = $props();
 
   let busy = $derived(app.working !== null);
-  let busyText = $derived(
-    app.working === "refresh" ? "PrismForge is still reading the device list." : "PrismForge is still working on an earlier request.",
-  );
   let endsOnly = $derived(status.step !== "live" && status.step !== "none" && status.step !== "ended");
 
   function act(close: () => void, action: () => unknown) {
@@ -24,7 +22,13 @@
   }
 </script>
 
-<Popover id="connection-panel" label={connectionName(status)} panelLabel="Connection details" focus={endsOnly ? "panel" : "first"}>
+<Popover
+  id="connection-panel"
+  label={connectionName(status)}
+  panelLabel="Connection details"
+  focus={endsOnly ? "panel" : "first"}
+  menu={() => connectionMenu(app, status, onconnect)}
+>
   {#snippet trigger()}
     <ToneIcon tone={status.tone} />
     <span class="label">{status.label}</span>
@@ -41,6 +45,7 @@
       <div class="actions">
         <button
           type="button"
+          data-mirror="connection.rescan"
           aria-disabled={busy ? "true" : undefined}
           aria-describedby={busy ? "rescan-reason" : undefined}
           onclick={() => busy || act(close, () => app.refresh())}
@@ -48,16 +53,16 @@
           Rescan devices
         </button>
       </div>
-      {#if busy}<p id="rescan-reason" class="quiet">{busyText}</p>{/if}
+      {#if busy}<p id="rescan-reason" class="quiet">{busyText(app)}</p>{/if}
     {:else if status.step === "none" || status.step === "ended"}
       <div class="actions">
-        <button type="button" class="primary" onclick={() => act(close, onconnect)}>Connect to OpenRGB</button>
-        <button type="button" disabled={busy} onclick={() => act(close, () => app.startDemo())}>Start demo mode</button>
+        <button type="button" class="primary" data-mirror="connection.connect" onclick={() => act(close, onconnect)}>Connect to OpenRGB</button>
+        <button type="button" data-mirror="connection.demo" disabled={busy} onclick={() => act(close, () => app.startDemo())}>Start demo mode</button>
       </div>
     {/if}
     {#if status.step !== "none" && status.step !== "ended"}
       <div class="end">
-        <button type="button" class="danger" disabled={app.working === "disconnect"} onclick={() => act(close, () => app.disconnect())}>
+        <button type="button" class="danger" data-mirror="connection.end" disabled={app.working === "disconnect"} onclick={() => act(close, () => app.disconnect())}>
           {status.step === "retrying" ? "Stop retrying" : "Disconnect"}
         </button>
         <p class="quiet">Ends the connection and stops every PrismForge effect.</p>

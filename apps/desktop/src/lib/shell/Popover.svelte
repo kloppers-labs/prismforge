@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick, type Snippet } from "svelte";
+  import { overlays } from "../overlays.svelte";
   import Icon from "./Icon.svelte";
+  import { contextMenu, type Menu } from "./menu.svelte";
   import { PANEL_MARGIN, panelOffset } from "./placement";
 
   let {
@@ -10,6 +12,7 @@
     trigger,
     panel,
     focus = "first",
+    menu,
   }: {
     id: string;
     label: string;
@@ -17,6 +20,7 @@
     trigger: Snippet;
     panel: Snippet<[() => void]>;
     focus?: "first" | "panel";
+    menu?: () => Menu | null;
   } = $props();
 
   let open = $state(false);
@@ -31,6 +35,7 @@
   }
 
   async function show(at: "first" | "last" | "panel" = focus) {
+    overlays.popover = id;
     open = true;
     offset = 0;
     room = null;
@@ -52,6 +57,9 @@
 
   function hide(returnFocus: boolean) {
     open = false;
+    if (overlays.popover === id) {
+      overlays.popover = null;
+    }
     if (returnFocus) {
       button?.focus();
     }
@@ -86,6 +94,12 @@
   }
 
   $effect(() => {
+    if (open && overlays.popover !== id) {
+      hide(false);
+    }
+  });
+
+  $effect(() => {
     const panel = body;
     panel?.addEventListener("keydown", onPanelKey);
     return () => panel?.removeEventListener("keydown", onPanelKey);
@@ -117,6 +131,7 @@
     aria-controls={id}
     onclick={() => (open ? close() : show())}
     onkeydown={onTriggerKey}
+    use:contextMenu={menu}
   >
     {@render trigger()}
     <span class="chevron" class:open><Icon name="chevron" /></span>

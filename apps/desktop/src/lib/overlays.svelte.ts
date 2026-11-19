@@ -1,2 +1,2 @@
-/** Counts open modal dialogs, so the shell can close a covering drawer before a dialog would sit under it. */
-export const overlays = $state({ dialogs: 0 });
+/** Counts open modal dialogs, and names the one open popover or menu, so the shell can keep them from overlapping. */
+export const overlays = $state<{ dialogs: number; popover: string | null }>({ dialogs: 0, popover: null });
