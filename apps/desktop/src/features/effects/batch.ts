@@ -106,7 +106,7 @@ export function namesLine(session: SessionSnapshot, names: Names, targets: Outpu
     const zones = targets.filter((target) => target.device === device && target.zone !== null);
     const whole = labelOf(session, names, { device, zone: null });
     if (zones.length === 0) {
-      return `${whole} (whole device)`;
+      return whole.endsWith(")") ? `${whole.slice(0, -1)}, whole device)` : `${whole} (whole device)`;
     }
     return zones.length === 1 ? labelOf(session, names, zones[0]!) : `${zones.length} zones of ${whole}`;
   });

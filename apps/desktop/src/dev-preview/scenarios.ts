@@ -28,6 +28,8 @@ export type Scenario = {
   /** Targets checked on Effects, by their row key `device|zone` or `device|all`. */
   select?: string[];
   group?: string;
+  /** A group whose Members and actions are opened. */
+  groupOpen?: string;
   effect?: string;
   apply?: boolean;
   stage?: "live";
@@ -68,6 +70,16 @@ function longNames(): { session: SessionSnapshot; store: StoreView } {
 }
 
 const long = longNames();
+
+/** The demo batch session with the second memory module at a faster speed, so its settings differ. */
+function mixedValues(): SessionSnapshot {
+  const session = structuredClone(sessions.demoBatchRunning);
+  const memory = session.output.scene.assignments.find((assignment) => assignment.target.device === "demo-memory-2");
+  if (memory) {
+    memory.effect.values = { ...memory.effect.values, speed: { Number: 60 } };
+  }
+  return session;
+}
 
 export const SCENARIOS: Record<string, Scenario> = {
   "first-run": { ...base, label: "First run, not connected", view: view(null), store: storeOffline },
@@ -135,6 +147,23 @@ export const SCENARIOS: Record<string, Scenario> = {
     select: [`${liveKeyboardAndStrip.devices[0]?.device}|all`, `${liveKeyboardAndStrip.devices[1]?.device}|all`],
     stage: "live",
     live: liveKeyboardAndStrip,
+  },
+  "effects-mixed-values": {
+    ...base,
+    label: "Effects, several targets running one effect with different values",
+    view: view(mixedValues()),
+    area: "Effects",
+    select: ["demo-graphics-card|all", "demo-memory-2|all"],
+  },
+  "effects-group-apply": {
+    ...base,
+    label: "Effects, apply the chosen effect to a group",
+    view: view(sessions.demoConnected),
+    area: "Effects",
+    groups: groupsDemo,
+    select: ["demo-memory-1|all"],
+    effect: "Rainbow wave",
+    groupOpen: "Desk",
   },
   "effects-draft": {
     ...base,

@@ -19,9 +19,6 @@
   let kind = $derived(control.kind);
 </script>
 
-{#if mixed}
-  <p id="mixed-{control.id}" class="mixed">Mixed. The targets have different values for {control.label.toLowerCase()}; the value shown is the first target's. Apply sends it to all of them.</p>
-{/if}
 {#if field.kind === "color"}
   <div class="described">
     <ColorField {id} label={control.label} text={field.text} {problem} describedBy={also ? `${also} ${id}-hint` : `${id}-hint`} onchange={(text) => onchange({ kind: "color", text })} />
@@ -52,6 +49,10 @@
     {also}
     onchange={(text) => onchange({ kind: "number", text })}
   />
+{/if}
+
+{#if mixed}
+  <p id="mixed-{control.id}" class="mixed">Mixed. The targets have different values for {control.label.toLowerCase()}; the value shown is the first target's. Apply sends it to all of them.</p>
 {/if}
 
 <style>

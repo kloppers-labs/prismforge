@@ -69,13 +69,19 @@ async function effects() {
     radio?.click();
   }
   await wait(100);
+  if (scenario.groupOpen) {
+    const row = [...document.querySelectorAll<HTMLElement>(".groups li")].find((item) => item.querySelector(".name")?.textContent === scenario.groupOpen);
+    row?.querySelector<HTMLElement>("summary")?.click();
+    await wait(50);
+    row?.scrollIntoView({ block: "center" });
+  }
   if (scenario.apply) {
     [...document.querySelectorAll<HTMLButtonElement>("button.primary")].find((candidate) => candidate.textContent?.startsWith("Apply"))?.click();
   }
   if (scenario.stage === "live") {
     button(document, "Live output")?.click();
   }
-  if (scenario.select && !scenario.apply) {
+  if (scenario.select && !scenario.apply && !scenario.groupOpen) {
     await wait(100);
     document.getElementById("preview-title")?.scrollIntoView({ block: "start" });
   }
