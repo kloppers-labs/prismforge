@@ -295,6 +295,10 @@
     max-width: 68ch;
   }
 
+  p.help {
+    display: block;
+  }
+
   .group {
     display: grid;
     gap: var(--space-3);
@@ -394,6 +398,23 @@
   [role="radio"][aria-checked="true"] .dot {
     border-color: var(--ok);
     background: radial-gradient(circle, var(--ok) 0 40%, transparent 45%);
+  }
+
+  @media (forced-colors: active) {
+    .dot {
+      forced-color-adjust: none;
+      border-color: CanvasText;
+      background: Canvas;
+    }
+
+    [role="radio"][aria-checked="true"] .dot {
+      border-color: Highlight;
+      background: radial-gradient(circle, Highlight 0 40%, Canvas 45%);
+    }
+
+    [role="radio"][aria-checked="true"] {
+      outline: 2px solid Highlight;
+    }
   }
 
   .pending {
