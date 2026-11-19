@@ -254,12 +254,28 @@ export function controlSummary(session: SessionSnapshot, device: SessionDevice, 
 
 export type Mode = { name: "Live" | "Draft" | "Off"; text: string };
 
+export type Nearby = { label: string; where: string | null };
+
+function nearbyText(nearby: Nearby[], chosen: string | null): string {
+  const one = nearby.length === 1 ? nearby[0] : null;
+  if (one && one.where === null) {
+    return `${one.label} runs on the whole device. Apply effect replaces it.`;
+  }
+  const what = one
+    ? `${one.label} runs on ${one.where}.`
+    : `Effects run on ${nearby.length} zones: ${nearby.map((each) => `${each.where} (${each.label})`).join(", ")}.`;
+  const it = one ? "it" : "them";
+  const replace = chosen === null ? "" : ` Apply effect replaces ${it} with one effect on the whole device.`;
+  return `${what}${replace} Stop effect stops ${it}.`;
+}
+
 export function editMode(state: {
   blocked: string | null;
   live: boolean;
   chosen: string | null;
   running: string | null;
   runningLabel: string | null;
+  nearby: Nearby[];
   target: string;
 }): Mode {
   if (state.blocked !== null) {
@@ -267,6 +283,9 @@ export function editMode(state: {
   }
   if (state.live) {
     return { name: "Live", text: `Changes go to ${state.target} as you make them.` };
+  }
+  if (state.running === null && state.nearby.length > 0) {
+    return { name: "Draft", text: nearbyText(state.nearby, state.chosen) };
   }
   if (state.chosen === null) {
     return { name: "Draft", text: "Choose an effect. Your devices stay as they are until you apply it." };
@@ -278,4 +297,9 @@ export function editMode(state: {
     return { name: "Draft", text: `${state.runningLabel} runs now. Apply effect replaces it.` };
   }
   return { name: "Draft", text: "Your devices stay as they are until you press Apply effect." };
+}
+
+/** Effects on the same device that share LEDs with `target` without being on exactly `target`. */
+export function nearbyEffects(session: SessionSnapshot, target: OutputTarget): Assignment[] {
+  return session.output.scene.assignments.filter((assignment) => assignment.target.device === target.device && !sameTarget(assignment.target, target) && (target.zone === null || assignment.target.zone === null));
 }

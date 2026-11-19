@@ -27,8 +27,15 @@
     return selected !== null && ref === selected.device && zone === selected.zone ? "true" : undefined;
   }
 
+  let listed = $derived(
+    selected !== null &&
+      entries.some(
+        (entry) => entry.ref === selected.device && (selected.zone === null || selected.zone < entry.device.descriptor.zones.length),
+      ),
+  );
+
   function stop(ref: string | null, zone: number | null): number {
-    const anchor = selected ?? (firstRef === null ? null : { device: firstRef, zone: null });
+    const anchor = listed ? selected : firstRef === null ? null : { device: firstRef, zone: null };
     return anchor !== null && ref === anchor.device && zone === anchor.zone ? 0 : -1;
   }
 

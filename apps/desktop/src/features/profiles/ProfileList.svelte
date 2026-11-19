@@ -14,6 +14,7 @@
   let summary = $derived(store?.summary ?? null);
   let rows: HTMLButtonElement[] = $state([]);
   let firstId = $derived(summary?.profiles[0]?.id ?? null);
+  let anchor = $derived(summary?.profiles.some((profile) => profile.id === profiles.selected) ? profiles.selected : firstId);
 
   function move(event: KeyboardEvent, index: number) {
     const count = summary?.profiles.length ?? 0;
@@ -51,7 +52,7 @@
             type="button"
             class="pick"
             bind:this={rows[index]}
-            tabindex={(profiles.selected ?? firstId) === profile.id ? 0 : -1}
+            tabindex={anchor === profile.id ? 0 : -1}
             aria-current={profiles.selected === profile.id ? "true" : undefined}
             onclick={() => profiles.select(profile.id)}
             onkeydown={(event) => move(event, index)}

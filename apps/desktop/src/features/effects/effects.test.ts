@@ -263,7 +263,7 @@ test("says_effects_stop_when_prismforge_closes_and_nothing_is_saved_where_the_us
   render(App);
   await chooseTarget("Demo Graphics Card");
 
-  const apply = button("Apply effect").closest("section") as HTMLElement;
+  const apply = screen.getByText("How effects run").closest("details")?.parentElement as HTMLElement;
   expect(within(apply).getByText(/The first time you close the window, PrismForge asks whether to keep running or to quit\. Quitting stops its effects\./)).toBeTruthy();
   expect(within(apply).getByText(/PrismForge saves nothing by itself\./)).toBeTruthy();
   expect(within(apply).getByText(/Profiles are saved on this computer, not on the device\./)).toBeTruthy();
@@ -356,6 +356,6 @@ test.each([
   render(App);
   await chooseTarget("Demo Graphics Card");
 
-  const apply = button("Apply effect").closest("section") as HTMLElement;
+  const apply = screen.getByText("How effects run").closest("details")?.parentElement as HTMLElement;
   await waitFor(() => expect(within(apply).getByText(text)).toBeTruthy());
 });

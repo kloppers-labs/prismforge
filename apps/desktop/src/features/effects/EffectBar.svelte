@@ -1,12 +1,9 @@
 <script lang="ts">
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
-  import Details from "../../lib/Details.svelte";
   import type { Names } from "../../lib/names";
-  import { serverName } from "../connection/wording";
   import { kindLabel, ledCount } from "../devices/present";
-  import FailureNotice from "./FailureNotice.svelte";
-  import { conditionText, editMode, outputOf, stopBlocked, stopText, targetLeds, targetName } from "./present";
+  import { conditionText, editMode, nearbyEffects, outputOf, stopBlocked, targetLeds, targetName } from "./present";
   import type { EffectsState } from "./state.svelte";
 
   let {
@@ -17,7 +14,6 @@
     names,
     blocked,
     held,
-    closing,
   }: {
     effects: EffectsState;
     session: SessionSnapshot;
@@ -26,26 +22,32 @@
     names: Names;
     blocked: string | null;
     held: string | null;
-    closing: string;
   } = $props();
 
   let target = $derived(effects.target);
   let running = $derived(effects.running);
-  let runningLabel = $derived(effects.catalog?.effects.find((effect) => effect.id === running?.effect.effect)?.label ?? null);
+  let label = (id: string) => effects.catalog?.effects.find((effect) => effect.id === id)?.label ?? id;
   let name = $derived(targetName(names, device, zone));
+  let nearby = $derived(
+    target
+      ? nearbyEffects(session, target).map((assignment) => ({
+          label: label(assignment.effect.effect),
+          where: assignment.target.zone === null ? null : names.zone(device, assignment.target.zone),
+        }))
+      : [],
+  );
   let mode = $derived(
     editMode({
       blocked,
       live: effects.canAutoApply,
       chosen: effects.effect,
       running: running?.effect.effect ?? null,
-      runningLabel,
+      runningLabel: running ? label(running.effect.effect) : null,
+      nearby,
       target: name,
     }),
   );
   let stopReason = $derived(held ?? (target ? stopBlocked(session, target) : null));
-  let feedback = $derived(effects.feedback);
-  let server = $derived(serverName(session));
   let output = $derived(target ? outputOf(session, target.device) : null);
   let condition = $derived(conditionText(session, output));
 </script>
@@ -80,44 +82,16 @@
       <span>{mode.text}</span>
     </p>
   </div>
-  {#if stopReason && blocked === null}
-    <p id="stop-blocked" class="note">Stop is off. {stopReason}</p>
-  {/if}
   {#if condition}
-    <dl class="note output"><dt>Output</dt><dd>{condition}</dd></dl>
+    <dl class="output"><dt>Output</dt><dd>{condition}</dd></dl>
   {/if}
-  {#if feedback?.kind === "failed"}
-    <FailureNotice error={feedback.error} />
-  {/if}
-  <div class="result" role="status" aria-label="Effect result">
-    {#if feedback?.kind === "applied"}
-      <p class="outcome">PrismForge accepted {feedback.label} for {feedback.targetLabel}.</p>
-    {:else if feedback?.kind === "stopped"}
-      {@const text = stopText(feedback.outcome, server)}
-      <div class="outcome" class:unsettled={!text.settled}>
-        <p class="headline">{text.headline}</p>
-        {#each text.details as detail (detail)}
-          <p>{detail}</p>
-        {/each}
-      </div>
-    {/if}
-  </div>
-  <div class="how">
-    <p class="note">Runs while PrismForge runs and is connected.</p>
-    <Details summary="How effects run">
-      <p>A PrismForge effect is computed by PrismForge, not by the device. It runs only while PrismForge runs and is connected.</p>
-      <p>{closing} When an effect stops, PrismForge asks {server} to put back the earlier lighting.</p>
-      <p>PrismForge saves nothing by itself. To keep this lighting, save it as a profile on the Profiles screen. Profiles are saved on this computer, not on the device.</p>
-      <p>After PrismForge starts again, no effect runs until you apply one, or until a profile marked to apply on connect is applied.</p>
-    </Details>
-  </div>
 </section>
 
 <style>
   .bar {
     display: grid;
     gap: var(--space-2);
-    padding: var(--space-4) var(--space-6) var(--space-3);
+    padding: var(--space-3) var(--space-6);
     border-bottom: 1px solid var(--line-subtle);
     background: var(--surface-0);
   }
@@ -133,8 +107,7 @@
     gap: 0 var(--space-3);
   }
 
-  .sub,
-  .note {
+  .sub {
     color: var(--text-dim);
     font-size: var(--font-s);
   }
@@ -143,7 +116,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2) var(--space-2);
+    gap: var(--space-2);
   }
 
   .mode {
@@ -174,44 +147,16 @@
     border-style: dashed;
   }
 
-  .result:empty {
-    display: none;
-  }
-
-  .outcome {
-    display: grid;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-3);
-    border-left: 3px solid var(--ok);
-    background: var(--surface-1);
-    border-radius: 0 var(--radius-s) var(--radius-s) 0;
-    color: var(--text-dim);
-  }
-
-  .outcome.unsettled {
-    border-left-color: var(--warning);
-  }
-
-  .headline {
-    color: var(--text);
-    font-weight: var(--weight-strong);
-  }
-
   .output {
     display: flex;
     gap: var(--space-2);
     margin: 0;
+    color: var(--text-dim);
+    font-size: var(--font-s);
   }
 
   .output dd {
     margin: 0;
     color: var(--text);
-  }
-
-  .how {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0 var(--space-3);
   }
 </style>

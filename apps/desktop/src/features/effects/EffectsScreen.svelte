@@ -9,6 +9,8 @@
   import { closeText } from "../settings/wording";
   import EffectBar from "./EffectBar.svelte";
   import EffectEditor from "./EffectEditor.svelte";
+  import EffectResults from "./EffectResults.svelte";
+  import { serverName } from "../connection/wording";
   import ExternalControl from "./ExternalControl.svelte";
   import HandBack from "./HandBack.svelte";
   import HardwareModes from "./HardwareModes.svelte";
@@ -59,15 +61,25 @@
       </div>
     {:else if target && device}
       {#key `${target.device}-${target.zone}`}
-        <EffectBar {effects} {session} {device} zone={target.zone} names={app.names} {blocked} {held} {closing} />
+        <EffectBar {effects} {session} {device} zone={target.zone} names={app.names} {blocked} {held} />
         <div class="scroll">
           <div class="inner">
+            <EffectResults {effects} {session} {blocked} {held} />
             {#if left !== null && ref !== null}
               <HandBack {effects} device={ref} label={left} {held} />
             {:else}
               <TargetStatus {session} {device} zone={target.zone} />
             {/if}
             <EffectEditor {effects} {catalog} {device} zone={target.zone} locked={left !== null} />
+            <div class="how">
+              <p>Runs while PrismForge runs and is connected.</p>
+              <Details summary="How effects run">
+                <p>A PrismForge effect is computed by PrismForge, not by the device. It runs only while PrismForge runs and is connected.</p>
+                <p>{closing} When you stop an effect or quit, PrismForge asks {serverName(session)} to put back the earlier lighting.</p>
+                <p>PrismForge saves nothing by itself. To keep this lighting, save it as a profile on the Profiles screen. Profiles are saved on this computer, not on the device.</p>
+                <p>After PrismForge starts again, no effect runs until you apply one, or until a profile marked to apply on connect is applied.</p>
+              </Details>
+            </div>
             <section class="other" aria-labelledby="other-title">
               <h3 id="other-title">Other ways to light this device</h3>
               <Details summary="Hardware modes, which run on the device itself">
@@ -125,6 +137,12 @@
 
   .empty h2 {
     color: var(--text);
+  }
+
+  .how {
+    display: grid;
+    gap: var(--space-1);
+    color: var(--text-dim);
   }
 
   .other {

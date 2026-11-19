@@ -98,10 +98,57 @@ test("the_effects_lifecycle_text_sits_behind_details_under_one_line", async () =
   fakeShell(demoConnected, effectHandlers());
   render(App);
   await chooseTarget("Demo Graphics Card");
-  const bar = screen.getByRole("region", { name: "Effect actions" });
-
-  await waitFor(() => expect(within(bar).getByText("Runs while PrismForge runs and is connected.")).toBeTruthy());
-  const how = within(bar).getByText("How effects run").closest("details") as HTMLDetailsElement;
+  await waitFor(() => expect(screen.getByText("Runs while PrismForge runs and is connected.")).toBeTruthy());
+  const how = screen.getByText("How effects run").closest("details") as HTMLDetailsElement;
   expect(how.open).toBe(false);
   expect(within(how).getByText(/no effect runs until you apply one, or until a profile marked to apply on connect is applied/)).toBeTruthy();
+});
+
+test("the_bar_holds_only_the_target_the_actions_the_mode_and_the_output", async () => {
+  fakeShell(demoConnected, effectHandlers({ apply_effect: () => null }));
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+  await fireEvent.click(button("Apply effect"));
+  const bar = screen.getByRole("region", { name: "Effect actions" });
+
+  await waitFor(() => expect(screen.getByRole("status", { name: "Effect result" }).textContent).toMatch(/accepted Rainbow wave/));
+  expect(bar.contains(screen.getByRole("status", { name: "Effect result" }))).toBe(false);
+  expect(within(bar).queryByText("How effects run")).toBeNull();
+  expect(screen.getAllByText(/Runs while PrismForge runs and is connected\./)).toHaveLength(1);
+});
+
+test("the_lifecycle_text_says_a_restore_follows_a_stop_or_a_quit_only", async () => {
+  fakeShell(demoConnected, effectHandlers());
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+
+  const how = screen.getByText("How effects run").closest("details") as HTMLElement;
+  expect(how.textContent).toMatch(/When you stop an effect or quit, PrismForge asks the demo backend to put back the earlier lighting\./);
+  expect(how.textContent).not.toMatch(/When an effect stops/);
+});
+
+test("a_whole_device_target_names_the_zone_effect_that_runs_and_what_stop_does", async () => {
+  fakeShell(demoEffectsRunning, effectHandlers());
+  render(App);
+  await chooseTarget("Demo Motherboard");
+  const bar = screen.getByRole("region", { name: "Effect actions" });
+
+  expect(bar.textContent).toMatch(/Moving highlight runs on Addressable Header 1\. Stop effect stops it\./);
+  await fireEvent.click(screen.getByRole("radio", { name: "Gradient" }));
+  expect(bar.textContent).toMatch(/Apply effect replaces it with one effect on the whole device\./);
+});
+
+test("the_target_list_keeps_one_tab_stop_when_the_chosen_target_is_gone", async () => {
+  const shell = fakeShell(demoConnected, effectHandlers());
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+
+  const gone = structuredClone(demoConnected);
+  gone.devices = gone.devices.filter((device) => device.descriptor.name !== "Demo Graphics Card");
+  await shell.push(gone);
+
+  await screen.findByText(/not in the device list any more/);
+  const targets = screen.getByRole("navigation", { name: "Targets" });
+  expect(within(targets).getAllByRole("button").filter((row) => row.tabIndex === 0)).toHaveLength(1);
 });
