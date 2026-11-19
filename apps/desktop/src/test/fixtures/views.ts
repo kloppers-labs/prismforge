@@ -2,7 +2,7 @@
 import type { ShellView } from "../../lib/api/bindings/ShellView";
 
 export const viewApplying: ShellView = {
-  "revision": 19,
+  "revision": 18,
   "session": {
     "connection": "Connected",
     "backend": {
@@ -1050,7 +1050,7 @@ export const viewApplying: ShellView = {
 };
 
 export const viewConnectApplied: ShellView = {
-  "revision": 39,
+  "revision": 38,
   "session": {
     "connection": "Connected",
     "backend": {
