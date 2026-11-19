@@ -132,7 +132,7 @@ async fn applies_one_picture_across_several_devices_with_one_start() {
             .expect("planned");
         assert_eq!(
             colors,
-            &effect.render_across(*at - start, RIGHT, plan.plane, &placed.points),
+            &effect.render_across(*at - start, RIGHT, plan.plane(), &placed.points),
             "{device} at {:?} is not on the shared picture",
             *at - start
         );
@@ -319,7 +319,7 @@ async fn the_same_effect_keeps_its_start_when_the_mode_changes() {
             .expect("planned");
         assert_eq!(
             colors,
-            effect.render_across(at - first, RIGHT, plan.plane, &placed.points),
+            effect.render_across(at - first, RIGHT, plan.plane(), &placed.points),
             "{device} joins the running animation"
         );
     }

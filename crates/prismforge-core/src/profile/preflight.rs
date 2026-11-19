@@ -85,12 +85,15 @@ pub(crate) fn preflight(
                         return None;
                     };
                     let targets = placed.entry(view.clone()).or_insert_with(|| {
-                        plan_across(setup, view, *flow, devices).map_or_else(Vec::new, |plan| {
-                            plan.targets
-                                .into_iter()
-                                .map(|placed| placed.target)
-                                .collect()
-                        })
+                        plan_across(setup, view, *flow, devices).map_or_else(
+                            |_| Vec::new(),
+                            |plan| {
+                                plan.targets
+                                    .into_iter()
+                                    .map(|placed| placed.target)
+                                    .collect()
+                            },
+                        )
                     });
                     let target = OutputTarget {
                         device,

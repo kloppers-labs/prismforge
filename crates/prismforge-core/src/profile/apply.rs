@@ -239,7 +239,7 @@ impl Picture {
         devices: &[SessionDevice],
         outcomes: &mut [Option<ItemOutcome>],
     ) {
-        let plan = plan_across(setup, &self.view, self.flow, devices);
+        let plan = plan_across(setup, &self.view, self.flow, devices).ok();
         let placeable = |target: &OutputTarget| {
             plan.as_ref()
                 .is_some_and(|plan| plan.targets.iter().any(|placed| &placed.target == target))

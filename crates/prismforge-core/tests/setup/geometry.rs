@@ -255,3 +255,26 @@ fn the_spacing_of_leds_comes_from_the_shape_not_the_wire_order() {
     assert!(close(point().spacing(), 0.0));
     assert!(close(line(FirstLed::AtStart).spacing(), 0.5));
 }
+
+#[test]
+fn a_shape_that_is_not_valid_has_no_leds() {
+    let mut flat = perimeter(Turn::Clockwise);
+    if let Geometry::Perimeter(perimeter) = &mut flat {
+        perimeter.width = 0;
+        perimeter.height = 0;
+    }
+    let mut long = line(FirstLed::AtStart);
+    if let Geometry::Line(line) = &mut long {
+        line.leds = 5_000;
+    }
+    let mut wide = matrix(Corner::TopLeft, Runs::AlongRows, false);
+    if let Geometry::Matrix(matrix) = &mut wide {
+        matrix.columns = 100;
+        matrix.rows = 100;
+    }
+
+    for shape in [flat, long, wide] {
+        assert!(shape.leds().is_empty(), "{shape:?}");
+        assert!(shape.spacing().is_finite(), "{shape:?}");
+    }
+}

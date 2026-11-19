@@ -187,3 +187,34 @@ fn rejects_future_profile_version() {
         dir.files()
     );
 }
+
+#[test]
+fn a_flow_outside_its_ranges_is_not_valid() {
+    for flow in [
+        Flow::Along { angle: 360 },
+        Flow::FromCentre { x: 50, y: 101 },
+    ] {
+        let dir = TempDir::new("flow-range");
+        let mut stored = full_profile();
+        stored.assignments[1].mode = ApplyMode::AcrossSetup {
+            view: ViewId::parse("v-pc").expect("view id"),
+            flow,
+        };
+        let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
+
+        assert!(
+            matches!(
+                store.create(stored.clone()),
+                Err(StoreError::InvalidProfile { .. })
+            ),
+            "{flow:?}"
+        );
+        let mut file = serde_json::to_value(&stored).expect("encode");
+        file["format"] = json!("prismforge.profile");
+        file["schema_version"] = json!({ "major": 2, "minor": 0 });
+        file["id"] = json!(GOLDEN_ID);
+        dir.write(GOLDEN_FILE, &serde_json::to_vec(&file).expect("encode"));
+        let reopened = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
+        assert!(reopened.profile(&id(GOLDEN_ID)).is_err(), "{flow:?}");
+    }
+}

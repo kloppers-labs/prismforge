@@ -2,8 +2,8 @@ use std::time::{Duration, Instant};
 
 use prismforge_core::session::SessionDevice;
 use prismforge_core::setup::{
-    AcrossPlan, Corner, Geometry, Matrix, OutputStatus, PlacedTarget, Runs, Setup, SetupProblem,
-    plan_across,
+    AcrossPlan, Corner, Geometry, Matrix, OutputStatus, PlacedTarget, PlanError, Runs, Setup,
+    SetupProblem, plan_across,
 };
 use prismforge_core::store::MemberState;
 use prismforge_core::{DeviceIdentity, DeviceRef, OutputTarget, Rgb};
@@ -29,7 +29,7 @@ fn gradient() -> prismforge_effects::Effect {
 }
 
 fn render(plan: &AcrossPlan, target: &PlacedTarget) -> Vec<Rgb> {
-    gradient().render_across(Duration::ZERO, plan.flow, plan.plane, &target.points)
+    gradient().render_across(Duration::ZERO, plan.flow(), plan.plane(), &target.points)
 }
 
 fn target(plan: &AcrossPlan, zone: usize) -> &PlacedTarget {
@@ -250,7 +250,9 @@ fn the_picture_does_not_change_with_the_scale_of_the_view() {
 fn a_view_that_does_not_exist_has_no_plan() {
     assert_eq!(
         plan_across(&two_strips(), &view_id("v-desk"), RIGHT, &[board()]),
-        None
+        Err(PlanError::UnknownView {
+            view: view_id("v-desk"),
+        })
     );
 }
 
@@ -327,7 +329,7 @@ fn sampling_one_frame_of_a_large_setup_fits_the_frame_budget() {
     for frame in 0..FRAMES {
         let time = Duration::from_millis(u64::from(frame) * 16);
         for placed in &plan.targets {
-            let colors = highlight.render_across(time, plan.flow, plan.plane, &placed.points);
+            let colors = highlight.render_across(time, plan.flow(), plan.plane(), &placed.points);
             assert_eq!(colors.len(), placed.points.len());
         }
     }
@@ -381,7 +383,7 @@ fn lit_range(plan: &AcrossPlan, placed: &PlacedTarget) -> (usize, usize) {
         .map(|step| {
             let time = Duration::from_millis(step * 10);
             effect
-                .render_across(time, plan.flow, plan.plane, &placed.points)
+                .render_across(time, plan.flow(), plan.plane(), &placed.points)
                 .iter()
                 .zip(placed.points.iter())
                 .filter(|(color, point)| point.is_some() && **color != BLACK)
@@ -456,4 +458,38 @@ fn a_sparse_component_does_not_widen_the_band_of_a_dense_one() {
         sparse >= 1,
         "the sparse strip still lights as the band passes"
     );
+}
+
+#[test]
+fn a_plan_refuses_a_setup_that_is_not_valid() {
+    let mut setup = two_strips();
+    setup.components[1].geometry = Geometry::Line(prismforge_core::setup::Line {
+        leds: u32::MAX,
+        points: Vec::new(),
+        first: prismforge_core::setup::FirstLed::AtStart,
+        extra: Map::new(),
+    });
+
+    assert_eq!(
+        plan_across(&setup, &view_id("v-pc"), RIGHT, &[board()]),
+        Err(PlanError::InvalidSetup {
+            problem: SetupProblem::InvalidGeometry {
+                component: component_id("c-right"),
+            },
+        })
+    );
+}
+
+#[test]
+fn a_plan_refuses_a_flow_out_of_range() {
+    for flow in [
+        Flow::Along { angle: 360 },
+        Flow::FromCentre { x: 101, y: 50 },
+        Flow::FromCentre { x: 0, y: 255 },
+    ] {
+        assert_eq!(
+            plan_across(&two_strips(), &view_id("v-pc"), flow, &[board()]),
+            Err(PlanError::InvalidFlow { flow })
+        );
+    }
 }

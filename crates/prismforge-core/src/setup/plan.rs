@@ -7,15 +7,17 @@ use crate::session::SessionDevice;
 use crate::setup::geometry::Location;
 use crate::setup::ids::ViewId;
 use crate::setup::model::{Setup, SetupOutput, View};
+use crate::setup::problem::SetupProblem;
 use crate::setup::resolve::{OutputStatus, resolve_outputs};
 use crate::setup::validate::capacity;
 
 /// One effect across a view: a place for each LED of each target, on one plane for all of them.
+/// Only `plan_across` makes one, so its view, flow and places come from a valid setup.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AcrossPlan {
-    pub view: ViewId,
-    pub flow: Flow,
-    pub plane: Plane,
+    view: ViewId,
+    flow: Flow,
+    plane: Plane,
     pub targets: Vec<PlacedTarget>,
     /// Outputs that get nothing: their zone changed, or their parts no longer fit it.
     pub excluded: Vec<OutputStatus>,
@@ -39,7 +41,30 @@ impl PlacedTarget {
     }
 }
 
+/// Why there is no plan; nothing was placed or allocated for it.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum PlanError {
+    #[error("the setup has no view {view}")]
+    UnknownView { view: ViewId },
+    #[error("the setup is not valid: {problem}")]
+    InvalidSetup { problem: SetupProblem },
+    #[error("the flow {flow:?} is outside its ranges")]
+    InvalidFlow { flow: Flow },
+}
+
 impl AcrossPlan {
+    pub fn view(&self) -> &ViewId {
+        &self.view
+    }
+
+    pub fn flow(&self) -> Flow {
+        self.flow
+    }
+
+    pub fn plane(&self) -> Plane {
+        self.plane
+    }
+
     /// The plan for these targets only; the plane stays the plane of the whole view.
     pub fn only(&self, targets: &[OutputTarget]) -> Self {
         Self {
@@ -55,15 +80,23 @@ impl AcrossPlan {
     }
 }
 
-/// Places every LED of `view` that is wired and placed; `None` when the setup has no such view.
+/// Places every LED of `view` that is wired and placed, after checking the setup and the flow.
 /// The plane is the box round all those LEDs, so a missing device never moves the picture.
 pub fn plan_across(
     setup: &Setup,
     view: &ViewId,
     flow: Flow,
     devices: &[SessionDevice],
-) -> Option<AcrossPlan> {
-    let view = setup.view(view)?;
+) -> Result<AcrossPlan, PlanError> {
+    if !flow.is_valid() {
+        return Err(PlanError::InvalidFlow { flow });
+    }
+    setup
+        .validate()
+        .map_err(|problem| PlanError::InvalidSetup { problem })?;
+    let view = setup
+        .view(view)
+        .ok_or_else(|| PlanError::UnknownView { view: view.clone() })?;
     let placed: Vec<Vec<Option<Located>>> = setup
         .outputs
         .iter()
@@ -124,7 +157,7 @@ pub fn plan_across(
             });
         }
     }
-    Some(plan)
+    Ok(plan)
 }
 
 /// One placed component: each LED's view location, and the gap between neighbouring LEDs in view units.

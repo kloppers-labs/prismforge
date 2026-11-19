@@ -120,11 +120,11 @@ impl Profile {
             if assignment.effect.effect.chars().count() > TEXT_LIMIT {
                 return Err(FileProblem::invalid("an effect id is too long"));
             }
-            if let ApplyMode::AcrossSetup { view, .. } = &assignment.mode
-                && !view.is_valid()
+            if let ApplyMode::AcrossSetup { view, flow } = &assignment.mode
+                && (!view.is_valid() || !flow.is_valid())
             {
                 return Err(FileProblem::invalid(format!(
-                    "an effect runs across the view {view}, which is not a valid id"
+                    "an effect runs across the view {view} with the flow {flow:?}, which is not valid"
                 )));
             }
             targets.push(target);

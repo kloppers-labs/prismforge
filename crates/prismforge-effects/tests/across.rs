@@ -193,3 +193,12 @@ fn the_two_ends_of_the_plane_never_light_together() {
         );
     }
 }
+
+#[test]
+fn a_flow_is_valid_only_inside_its_ranges() {
+    assert!(Flow::Along { angle: 359 }.is_valid());
+    assert!(!Flow::Along { angle: 360 }.is_valid());
+    assert!(Flow::FromCentre { x: 100, y: 0 }.is_valid());
+    assert!(!Flow::FromCentre { x: 101, y: 0 }.is_valid());
+    assert!(!Flow::FromCentre { x: 0, y: 101 }.is_valid());
+}

@@ -26,6 +26,16 @@ pub enum Flow {
     FromCentre { x: u8, y: u8 },
 }
 
+impl Flow {
+    /// An angle below 360 degrees and a centre inside the plane, 0 to 100 percent.
+    pub fn is_valid(self) -> bool {
+        match self {
+            Self::Along { angle } => angle < 360,
+            Self::FromCentre { x, y } => x <= 100 && y <= 100,
+        }
+    }
+}
+
 /// Maps a point to a position from 0.0 to 1.0 across the whole plane, so the same effect code serves a line and a plane.
 pub(crate) struct Projection {
     origin: Offset,
@@ -44,7 +54,7 @@ impl Projection {
         let (half_width, half_height) = (plane.width / 2.0, plane.height / 2.0);
         match flow {
             Flow::Along { angle } => {
-                let (sin, cos) = f64::from(angle % 360).to_radians().sin_cos();
+                let (sin, cos) = f64::from(angle).to_radians().sin_cos();
                 Self {
                     origin: Offset { x: 0.0, y: 0.0 },
                     direction: Some(Offset { x: cos, y: sin }),
@@ -52,7 +62,7 @@ impl Projection {
                 }
             }
             Flow::FromCentre { x, y } => {
-                let share = |percent: u8| f64::from(percent.min(100)) / 100.0;
+                let share = |percent: u8| f64::from(percent) / 100.0;
                 let centre = Offset {
                     x: (share(x) - 0.5) * plane.width,
                     y: (share(y) - 0.5) * plane.height,

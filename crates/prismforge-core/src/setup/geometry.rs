@@ -157,8 +157,11 @@ impl Geometry {
         }
     }
 
-    /// Each LED's place in the component's own space, in LED order.
+    /// Each LED's place in the component's own space, in LED order; none for a shape that is not valid.
     pub fn leds(&self) -> Vec<Location> {
+        if !self.is_valid() {
+            return Vec::new();
+        }
         match self {
             Self::Strip(strip) => strip.leds(),
             Self::Ring(ring) => ring.leds(),
@@ -323,10 +326,6 @@ impl Line {
             FirstLed::AtStart => points,
             FirstLed::AtEnd => points.into_iter().rev().collect(),
         };
-        if path.len() < 2 {
-            let only = path.first().copied().unwrap_or(Location::new(0.0, 0.0));
-            return vec![only; self.leds as usize];
-        }
         let lengths: Vec<f64> = path
             .windows(2)
             .map(|pair| pair[0].distance(pair[1]))

@@ -214,7 +214,7 @@ async fn applying_a_profile_runs_its_effects_across_the_setup_in_one_batch() {
             .expect("planned");
         assert_eq!(
             colors,
-            effect.render_across(at - first, DOWN, plan.plane, &placed.points),
+            effect.render_across(at - first, DOWN, plan.plane(), &placed.points),
             "{device} joins the one picture on the shared start"
         );
     }

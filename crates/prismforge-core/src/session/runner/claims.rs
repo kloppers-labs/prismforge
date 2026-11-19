@@ -66,18 +66,19 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 reply,
             } => {
                 let before = self.held_for(origin);
+                let (view, flow, plane) = (plan.view().clone(), plan.flow(), plan.plane());
                 let mode = ApplyMode::AcrossSetup {
-                    view: plan.view.clone(),
-                    flow: plan.flow,
+                    view: view.clone(),
+                    flow,
                 };
                 let targets = plan
                     .targets
                     .into_iter()
                     .map(|placed| {
                         let across = Across {
-                            view: plan.view.clone(),
-                            flow: plan.flow,
-                            plane: plan.plane,
+                            view: view.clone(),
+                            flow,
+                            plane,
                             points: placed.points,
                         };
                         (placed.target, Layout::Across(Arc::new(across)))
