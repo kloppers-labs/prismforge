@@ -78,7 +78,7 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `79bd237`, the last code commit of Task 8.
+Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `9349b60`, the last code commit of Task 8 fix round 1.
 
 | Command | Result |
 |---|---|
@@ -87,9 +87,9 @@ Task 8 run on macOS (Apple Silicon) on 2026-11-19, at `79bd237`, the last code c
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
 | `cargo test --workspace` | Pass: 330 tests (no Rust change in Task 8) |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 238 interface tests in 16 files (37 new in Task 8) |
-| `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (254 modules, 3 files checked). Tauri now runs it as `beforeBuildCommand`. |
-| `pnpm tauri:build` in `apps/desktop` | Pass at `79bd237`: `PrismForge.app` (15.41 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.47 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (254 modules). |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 247 interface tests in 16 files (46 new in Task 8) |
+| `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (256 modules, 3 files checked). Tauri now runs it as `beforeBuildCommand`. |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `9349b60`: `PrismForge.app` (15.41 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.47 MiB), not signed, built with `CARGO_TARGET_DIR` in a scratch folder. The build ran `pnpm check:build` first (256 modules). |
 
 Screenshots of the interface preview at 1280 × 800, 1200 × 780, 920 × 600, 640 × 400 and 460 × 300, and of Diagnostics at 1200 × 780, 1100 × 700 and 1400 × 900, were looked at. They are design evidence from Chromium on macOS, not a native or Windows test.
 
@@ -196,8 +196,8 @@ Not done:
 
 ## Known issues
 
-- **Task 8 leaves these audit items open.** The preview has no flash cap (A9, needs a change in Rust); there are no zoom keys or interface scale setting (A7: the layout reflows at 200 % but text size follows the system only); there is no per-device Control block on Devices (E10: hardware modes and another program stay on Effects behind Details); no reset per control, no palette redesign, no shaped preview and no preview pause (E12, E14, E16, A10); recovery notices have no short headline (G4); profile actions have no More menu (P5); skip reasons are not reworded (P6).
-- **The Effects command bar is at the top of the page, not the bottom.** The audit drew it at the bottom. At the top it never covers the content and Apply comes right after the target list in the Tab order. Task 9 can move it when the stage arrives.
+- **Task 8 leaves these audit items open.** The preview has no flash cap (A9; the frontend owns preview playback in `features/effects/preview.svelte.ts`, and the cap is bound to the live stage of Task 9); there are no zoom keys or interface scale setting (A7: the layout reflows at 200 % but text size follows the system only); there is no per-device Control block on Devices (E10: hardware modes and another program stay on Effects behind Details); no reset per control, no palette redesign, no shaped preview and no preview pause (E12, E14, E16, A10); recovery notices have no short headline (G4); profile actions have no More menu (P5); skip reasons are not reworded (P6).
+- **The Effects command bar is at the top of the page, not the bottom.** The audit drew it at the bottom. At the top it never covers the content, it stays 152 px high at 920 × 600, and Apply comes right after the target list in the Tab order. Task 9 can move it when the stage arrives.
 - **No real-server evidence.** The fake server and the client come from the same reading of the OpenRGB document and source. A review checked the wire format against the OpenRGB 1.1 source, but a real server can still differ.
 - **A request completes on its acknowledge packet.** If a real server does not send it, each request stops after the timeout (2 seconds by default) and the client closes the connection.
 - **One slow controller fails the whole refresh.** A data request that gets no answer in time closes the connection. The session then reconnects.
