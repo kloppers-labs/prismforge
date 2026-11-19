@@ -129,7 +129,7 @@
   }
 </script>
 
-<svelte:window onpointerdowncapture={onpointerdown} onresize={place} />
+<svelte:window onpointerdowncapture={onpointerdown} onresize={() => requestAnimationFrame(place)} />
 
 {#if opened}
   <div
