@@ -114,3 +114,21 @@ test("an_open_menu_follows_the_state_it_was_built_from_and_keeps_focus_on_its_it
   await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Enter" });
   expect(shell.commands().filter((command) => command === "refresh")).toHaveLength(2);
 });
+
+test("a_rebuild_down_to_stop_retrying_leaves_focus_on_the_menu_not_the_item", async () => {
+  const shell = fakeShell(openRgbConnected, { ...effectHandlers(), disconnect: () => shell.view(null) });
+  render(App);
+  await waitForConnection("Connected");
+  const chip = connectionChip();
+  chip.focus();
+  await fireEvent.keyDown(chip, { key: "F10", shiftKey: true });
+  expect(document.activeElement?.getAttribute("data-item")).toBe("connection.rescan");
+
+  await shell.push(openRgbRefused);
+
+  const menu = await screen.findByRole("menu", { name: "Connection actions" });
+  await waitFor(() => expect(itemLabels(menu)).toEqual(["Stop retrying"]));
+  expect(document.activeElement).toBe(menu);
+  await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Enter" });
+  expect(shell.commands()).not.toContain("disconnect");
+});

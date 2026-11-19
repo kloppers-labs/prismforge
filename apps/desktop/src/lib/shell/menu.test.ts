@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { afterEach, expect, test, vi } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
@@ -9,7 +9,8 @@ import { storeTwo } from "../../test/fixtures/stores";
 import MenuHarness from "../../test/MenuHarness.svelte";
 import { menuItems } from "../../test/menus";
 import { connectionChip, findStrip, go, profileChip, waitForConnection } from "../../test/shell";
-import type { Menu } from "./menu.svelte";
+import { LiveMenu } from "../../test/menuState.svelte";
+import type { Menu, MenuItem } from "./menu.svelte";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -332,4 +333,56 @@ test("rows_and_chips_with_a_menu_announce_shift_f10", async () => {
   const targets = await screen.findByRole("navigation", { name: "Targets" });
   expect(within(targets).getAllByRole("button").every((row) => shortcut(row).includes("Shift+F10"))).toBe(true);
   expect(shortcut(screen.getByRole("button", { name: "Effects" }))).toEqual(["Control+2"]);
+});
+
+function live(items: MenuItem[]) {
+  const state = new LiveMenu(items);
+  render(MenuHarness, { build: state.build });
+  return { state, origin: screen.getByRole("button", { name: "Origin" }) };
+}
+
+async function openLive(origin: HTMLElement) {
+  origin.focus();
+  await fireEvent.keyDown(origin, { key: "F10", shiftKey: true });
+}
+
+const keep: MenuItem = { id: "connection.rescan", label: "Keep", run: () => {} };
+const end: MenuItem = { id: "connection.end", label: "End", danger: true, run: () => {} };
+
+test("focus_never_lands_on_a_destructive_item_by_itself", async () => {
+  const first = live([{ ...keep, reason: "Keep is off." }, end]);
+  await openLive(first.origin);
+  expect(document.activeElement?.textContent).toMatch(/^\s*Keep/);
+  await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
+  cleanup();
+
+  const only = live([end]);
+  await openLive(only.origin);
+  expect(document.activeElement).toBe(screen.getByRole("menu"));
+  cleanup();
+
+  const shrinking = live([keep, end]);
+  await openLive(shrinking.origin);
+  expect(document.activeElement?.textContent).toMatch(/^\s*Keep/);
+  shrinking.state.items = [end];
+  await waitFor(() => expect(within(screen.getByRole("menu")).queryByText("Keep")).toBeNull());
+  expect(document.activeElement).toBe(screen.getByRole("menu"));
+});
+
+test("an_item_that_turns_off_while_focused_is_announced_once", async () => {
+  const { state, origin } = live([keep, { id: "connection.demo", label: "Other", run: () => {} }, end]);
+  await openLive(origin);
+  const status = screen.getByRole("status", { name: "Menu changes" });
+  expect(status.textContent).toBe("");
+  let changes = 0;
+  new MutationObserver(() => (changes += 1)).observe(status, { childList: true, characterData: true, subtree: true });
+
+  state.items = [{ ...keep, reason: "PrismForge is still reading the device list." }, state.items[1]!, end];
+  await waitFor(() => expect(status.textContent).toBe("Keep is now off. PrismForge is still reading the device list."));
+  const after = changes;
+  state.items = [state.items[0]!, { ...state.items[1]!, label: "Other one" }, end];
+  await waitFor(() => expect(within(screen.getByRole("menu")).getByText("Other one")).toBeTruthy());
+
+  expect(status.textContent).toBe("Keep is now off. PrismForge is still reading the device list.");
+  expect(changes).toBe(after);
 });

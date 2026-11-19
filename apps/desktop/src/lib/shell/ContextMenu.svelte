@@ -12,6 +12,8 @@
   let checkable = $derived(menu?.items.some((item) => item.checked !== undefined) ?? false);
   let focusedId: string | null = null;
   let shown: object | null = null;
+  let reasons = new Map<string, string | null>();
+  let announcement = $state("");
 
   function place() {
     const current = opened;
@@ -27,9 +29,26 @@
     box.style.top = `${spot.top}px`;
   }
 
-  function firstEnabled(): HTMLElement | undefined {
-    const list = entries();
-    return list.find((entry) => entry.getAttribute("aria-disabled") !== "true") ?? list[0];
+  function isDanger(entry: HTMLElement): boolean {
+    return entry.classList.contains("danger");
+  }
+
+  /** Where focus goes by itself: never onto a destructive item, so one Enter cannot end anything. */
+  function resting(preferred: string | null): HTMLElement | undefined {
+    if (menu?.focus === "menu") {
+      return box;
+    }
+    const safe = entries().filter((entry) => !isDanger(entry));
+    const same = safe.find((entry) => entry.dataset.item === preferred);
+    return same ?? safe.find((entry) => entry.getAttribute("aria-disabled") !== "true") ?? safe[0] ?? box;
+  }
+
+  function noteTurnedOff(items: MenuItem[]) {
+    const focused = items.find((item) => item.id === focusedId && box?.contains(document.activeElement));
+    if (focused?.reason && !reasons.get(focused.id)) {
+      announcement = `${focused.label} is now off. ${focused.reason}`;
+    }
+    reasons = new Map(items.map((item) => [item.id, item.reason ?? null]));
   }
 
   $effect(() => {
@@ -40,8 +59,10 @@
     untrack(() => {
       shown = current;
       focusedId = null;
+      announcement = "";
+      reasons = new Map((menu?.items ?? []).map((item) => [item.id, item.reason ?? null]));
       place();
-      (menu?.focus === "menu" ? box : (firstEnabled() ?? box))?.focus();
+      resting(null)?.focus();
     });
   });
 
@@ -60,9 +81,9 @@
     }
     place();
     if (!box.contains(document.activeElement)) {
-      const same = entries().find((entry) => entry.dataset.item === focusedId);
-      (same ?? firstEnabled() ?? box).focus();
+      resting(focusedId)?.focus();
     }
+    noteTurnedOff(now.items);
   });
 
   $effect(() => {
@@ -188,6 +209,8 @@
     return `${id}-${index}-${offset}-reason`;
   }
 </script>
+
+<p class="visually-hidden" role="status" aria-label="Menu changes">{announcement}</p>
 
 <svelte:window onpointerdowncapture={onpointerdown} onresize={() => requestAnimationFrame(place)} onscrollcapture={onscroll} />
 
