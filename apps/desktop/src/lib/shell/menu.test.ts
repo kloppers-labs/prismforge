@@ -237,3 +237,14 @@ test("opening_a_menu_closes_an_open_panel_and_opening_a_panel_closes_the_menu", 
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   expect(screen.getByRole("group", { name: "Connection details" })).toBeTruthy();
 });
+
+test("a_resize_or_a_scroll_keeps_the_menu_open", async () => {
+  const { origin } = harness();
+  await openByKeyboard(origin);
+
+  await fireEvent(window, new Event("resize"));
+  await fireEvent.scroll(window);
+
+  expect(menu()).toBeTruthy();
+  expect(focused()).toBe("Bravo");
+});

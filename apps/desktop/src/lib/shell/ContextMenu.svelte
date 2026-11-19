@@ -9,14 +9,23 @@
   let sections = $derived(opened ? groups(opened.menu.items) : []);
   let checkable = $derived(opened?.menu.items.some((item) => item.checked !== undefined) ?? false);
 
+  function place() {
+    const current = opened;
+    if (!current || !box) {
+      return;
+    }
+    const anchor = current.byKeyboard && current.origin.isConnected ? current.origin.getBoundingClientRect() : current.anchor;
+    const spot = menuPlacement(anchor, { width: box.offsetWidth, height: box.offsetHeight }, { width: window.innerWidth, height: window.innerHeight });
+    box.style.left = `${spot.left}px`;
+    box.style.top = `${spot.top}px`;
+  }
+
   $effect(() => {
     const current = opened;
     if (!current || !box) {
       return;
     }
-    const place = menuPlacement(current.anchor, { width: box.offsetWidth, height: box.offsetHeight }, { width: window.innerWidth, height: window.innerHeight });
-    box.style.left = `${place.left}px`;
-    box.style.top = `${place.top}px`;
+    place();
     const list = entries();
     const first = list.find((entry) => entry.getAttribute("aria-disabled") !== "true") ?? list[0];
     (current.menu.focus === "menu" ? box : (first ?? box)).focus();
@@ -115,18 +124,12 @@
     }
   }
 
-  function onscroll(event: Event) {
-    if (opened && !(event.target instanceof Node && box?.contains(event.target))) {
-      menus.close(false);
-    }
-  }
-
   function reasonId(index: number, offset: number): string {
     return `${id}-${index}-${offset}-reason`;
   }
 </script>
 
-<svelte:window onpointerdowncapture={onpointerdown} onresize={() => menus.close(false)} onscrollcapture={onscroll} />
+<svelte:window onpointerdowncapture={onpointerdown} onresize={place} />
 
 {#if opened}
   <div
@@ -158,7 +161,7 @@
           onclick={() => activate(item)}
           onpointermove={(event) => event.currentTarget !== document.activeElement && event.currentTarget.focus()}
         >
-          {#if checkable}<span class="check" aria-hidden="true"></span>{/if}
+          {#if checkable}<span class="check" class:box={item.checked !== undefined} aria-hidden="true"></span>{/if}
           <span class="label" id="{id}-{index}-{offset}-label">{item.label}</span>
           {#if item.reason}<span class="reason" id={reasonId(index, offset)}>{item.reason}</span>{/if}
         </div>
@@ -240,6 +243,9 @@
     width: var(--space-3);
     height: var(--space-3);
     align-self: center;
+  }
+
+  .check.box {
     border: 1px solid var(--line-control);
     border-radius: var(--radius-xs);
   }
@@ -274,7 +280,7 @@
       outline-offset: -2px;
     }
 
-    .check {
+    .check.box {
       border-color: CanvasText;
     }
 
