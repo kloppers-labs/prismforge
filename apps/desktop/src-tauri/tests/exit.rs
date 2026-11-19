@@ -6,7 +6,8 @@ use std::time::Duration;
 use prismforge_core::DeviceRef;
 use prismforge_core::session::{ReconnectPolicy, RestoreOutcome, SessionConfig};
 use prismforge_desktop::{
-    ExitGuard, QUIT_STOP_LIMIT, Shell, ShellConfig, ShellView, stop_then_exit, stop_within,
+    ExitGuard, QUIT_STOP_LIMIT, Shell, ShellConfig, ShellView, quit_then_exit, stop_at_exit,
+    stop_then_exit, stop_within,
 };
 use prismforge_testkit::{DemoBackend, DemoOutput};
 use tokio::time::Instant;
@@ -214,4 +215,45 @@ async fn a_user_quit_exits_after_its_limit_even_when_the_stop_hangs() {
 
     assert_eq!(exits, 1);
     assert!(started.elapsed() <= QUIT_STOP_LIMIT);
+}
+
+#[tokio::test(start_paused = true)]
+async fn after_a_user_quit_the_stop_at_process_end_does_not_wait_again() {
+    let (shell, recorder, _dir) = shell();
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    shell.start(backend).await.expect("start");
+    recorder.wait_for(is_connected).await;
+    shell
+        .apply_effect(
+            prismforge_core::OutputTarget {
+                device: DeviceRef::new("demo-graphics-card"),
+                zone: None,
+            },
+            prismforge_effects::EffectInstance {
+                effect: "rainbow-wave".into(),
+                values: Default::default(),
+            },
+        )
+        .await
+        .expect("effect");
+    controls.set_call_delay(Duration::from_secs(3600));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let guard = ExitGuard::default();
+    let mut waited = None;
+
+    tokio::select! {
+        _ = shell.start(DemoBackend::new()) => panic!("the start finished although the old session hangs"),
+        () = async {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            let started = Instant::now();
+            quit_then_exit(&shell, &guard, || {}).await;
+            let finished = stop_at_exit(&shell, &guard, Duration::from_secs(4)).await;
+            waited = Some((finished, started.elapsed()));
+        } => {}
+    }
+
+    let (finished, elapsed) = waited.expect("the quit ran");
+    assert!(finished);
+    assert!(elapsed <= QUIT_STOP_LIMIT, "waited {elapsed:?}");
 }
