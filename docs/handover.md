@@ -99,7 +99,9 @@ Task 10 run on macOS (Apple Silicon) on 2026-11-20, at the last code commit of T
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 379 interface tests in 31 files (1 new: the text of the skip reason "setup changed") |
 | `pnpm check:build` in `apps/desktop` | Pass: no module from `src/dev-preview` or `src/test` (277 modules, 3 files checked) |
 
-`pnpm tauri:build` was not run: Task 10 changes no interface code beyond the generated types and fixtures, one test helper, one store error mapping and one skip reason text.
+`pnpm tauri:build` was not run: Task 10 changes no interface code beyond the generated types and fixtures, one test helper, one store error mapping and two skip reason texts.
+
+Task 10 fix round 1 adds 12 Rust tests (436) and 1 interface test (380 in 31 files): the band of the moving highlight follows each component's own LED spacing and no longer lights both ends of the plane at once; the planner refuses a setup that is not valid, an unknown view and a flow out of range; a stored flow out of range makes a profile not valid; a setup file that needs a newer PrismForge gives its own skip reason; apply and details give one reason in one order; frames across the setup render without a copy per frame. fmt, both clippy runs, the bindings test, typecheck and the interface tests pass.
 
 Task 9 run on macOS (Apple Silicon) on 2026-11-20, at `1ad8a85`, the last code commit of Task 9.
 
@@ -309,7 +311,7 @@ Not done:
 - **The setup has no interface.** A setup can be built and stored only through the Rust API. The Effects screen does not know the mode "across the setup": a Live edit there applies on each device. Task 11 adds the views, the commands and the mode cues.
 - **Unplaced LEDs are black across the setup.** An ARGB header reports a fixed LED count whatever is connected, so the LEDs past the declared parts get black in the mode "across the setup", and the plan lists them. PrismForge does not resize zones; a user whose fans need more LEDs resizes the zone in OpenRGB first.
 - **An effect across the setup in an export.** An export keeps the view id but not the setup. On another computer those effects are skipped as "setup changed".
-- **Point sampling.** Effects across the setup are sampled at each LED's point, with the moving highlight's band at least one LED gap wide. The research's footprint filter is not built; real hardware decides whether it is needed.
+- **Point sampling.** Effects across the setup are sampled at each LED's point, with the moving highlight's band at least one LED spacing of the LED's own component wide. The research's footprint filter is not built; real hardware decides whether it is needed.
 - **Test gaps:** segments and zone modes have no tests. A partly restored identify is tested only for "previous state unknown", not for a failed second restore step.
 
 ## What only the owner can check (Task 8)

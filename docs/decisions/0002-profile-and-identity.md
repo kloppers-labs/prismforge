@@ -148,7 +148,7 @@ Version 2 is version 1 with one more field per stored effect. Version 1 is the s
 | `name` | 1 to 60 characters, trimmed, no control characters. Names are unique in the store. |
 | `frame_rate` | 1 to 60 |
 | `devices` | Every device the profile uses: `reference`, `label`, `kind`, `vendor`, `model`, `serial`, `location`, `zones` (name, kind, LED minimum, LED maximum) |
-| `assignments` | `device`, `zone` (index or `null` for the whole device), `effect`, `mode`: `"EachDevice"` or `{ "AcrossSetup": { "view": "v-…", "flow": { "Along": { "angle": 90 } } } }` (or `{ "FromCentre": { "x": 50, "y": 50 } }`) |
+| `assignments` | `device`, `zone` (index or `null` for the whole device), `effect`, `mode`: `"EachDevice"` or `{ "AcrossSetup": { "view": "v-…", "flow": { "Along": { "angle": 90 } } } }` (or `{ "FromCentre": { "x": 50, "y": 50 } }`); an angle of 360 or more or a centre above 100 makes the profile not valid |
 | `modes` | Hardware modes selected through PrismForge: `device`, `index`, `name` |
 | `external` | The user's statements that another program controls a device: `device`, `label` |
 
@@ -188,8 +188,8 @@ A test checks the exported bytes for the serial, the location, the user's device
 
 ## Apply
 
-1. **Order:** frame rate, external statements, hardware modes, effects on each device, then effects across the setup. The effects across one view with one flow and one effect run as one batch, so they share one start time.
-2. **Each setting gets a result:** applied, or skipped with a reason: missing, ambiguous, unavailable, declared external, no Direct Mode, mode list changed, not available in this version, setup changed (Task 10), or refused by the session.
+1. **Order:** frame rate, external statements, hardware modes, effects on each device, then effects across the setup. The effects across one view with one flow and one effect run as one batch, so they share one start time. For an effect, apply and the profile details check the reasons to skip in one order: the device, the effect, the setup (`NewerSetup`, then `SetupChanged`), then the session's reasons (declared external, no Direct Mode).
+2. **Each setting gets a result:** applied, or skipped with a reason: missing, ambiguous, unavailable, declared external, no Direct Mode, mode list changed, not available in this version, setup changed or setup needs a newer PrismForge (Task 10), or refused by the session.
 3. **Partial application is normal.** Nothing is rolled back. Output changes are not transactional.
 4. **A device the user declared external gets nothing.** The session refuses with its conflict, and the report says "declared external" with the program name.
 5. **Apply changes only what the profile names.** Other devices keep their owner.
@@ -242,7 +242,7 @@ A batch (Task 9) records like one command: every target it applied or stopped ge
 
 ## The setup
 
-The setup (Task 10) is one file per store, `setup.json`, written durably like every store file, with the same recovery, the same refusal of a newer major version and unknown fields kept at every level. `ProfileStore` holds it beside the profiles, because applying a profile needs it, and `Profiles::setup` and `Profiles::save_setup` reach it at the store's place in the lock order. It stays on this computer: it is not part of a profile, an export or a diagnostics copy. Its outputs are matched to devices by stored reference only, with the groups' states. See `0006-setup-model.md`.
+The setup (Task 10) is one file per store, `setup.json`, written durably like every store file, with the same recovery, the same refusal of a newer major version and unknown fields kept at every level. `ProfileStore` holds it beside the profiles, because applying a profile needs it, and `Profiles::setup` and `Profiles::save_setup` reach it at the store's place in the lock order. It stays on this computer: it is not part of a profile, an export or a diagnostics copy. Its outputs are matched to devices by stored reference only, with the groups' states. While the file needs a newer PrismForge, `Profiles::setup` refuses with `NewerFile`, and effects across the setup in a profile are skipped with `NewerSetup`, not "setup changed". See `0006-setup-model.md`.
 
 ## Groups
 
