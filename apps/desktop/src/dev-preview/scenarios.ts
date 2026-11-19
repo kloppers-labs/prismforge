@@ -2,6 +2,7 @@ import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import type { StoreView } from "../lib/api/bindings/StoreView";
+import { isLive } from "../features/devices/present";
 import { lifecycleChosen, lifecycleFresh, lifecycleStartPath, lifecycleTrayStopped } from "../test/fixtures/lifecycles";
 import * as sessions from "../test/fixtures/sessions";
 import { storeEmpty, storeOffline, storeRecovered, storeSaved, storeTwo, storeUnsaved } from "../test/fixtures/stores";
@@ -21,8 +22,15 @@ export type Scenario = {
   rescan?: boolean;
 };
 
+function onConnect(session: SessionSnapshot | null): ShellView["on_connect"] {
+  if (session === null) {
+    return "NotApplicable";
+  }
+  return isLive(session) ? { Fired: { ran: null, next: null } } : "NotArmed";
+}
+
 function view(session: SessionSnapshot | null, extra: Partial<ShellView> = {}): ShellView {
-  return { revision: 1, session, applying: null, connect_apply: null, on_connect: "NotApplicable", ...extra };
+  return { revision: 1, session, applying: null, connect_apply: null, on_connect: onConnect(session), ...extra };
 }
 
 const base = { store: storeEmpty, lifecycle: lifecycleFresh };
