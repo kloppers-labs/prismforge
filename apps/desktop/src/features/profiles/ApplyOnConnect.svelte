@@ -34,7 +34,7 @@
     width: 34px;
     height: 20px;
     border-radius: var(--radius-pill);
-    border: 1px solid var(--line-subtle);
+    border: 1px solid var(--line-control);
     background: var(--surface-0);
     position: relative;
     flex: none;

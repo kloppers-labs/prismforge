@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { RestoreOutcome } from "../../lib/api/bindings/RestoreOutcome";
@@ -14,6 +14,7 @@ import {
   openRgbDegraded,
 } from "../../test/fixtures/sessions";
 import * as stops from "../../test/fixtures/stops";
+import { lifecycleChosen, lifecycleNoTray, lifecycleQuitChosen } from "../../test/fixtures/lifecycles";
 
 function commandsNamed(shell: ReturnType<typeof fakeShell>, name: string) {
   return shell.calls.filter((call) => call.command === name);
@@ -262,7 +263,7 @@ test("says_effects_stop_when_prismforge_closes_and_nothing_is_saved_where_the_us
   await chooseTarget("Demo Graphics Card");
 
   const apply = button("Apply effect").closest("section") as HTMLElement;
-  expect(within(apply).getByText(/Closing the window quits PrismForge and stops its effects\./)).toBeTruthy();
+  expect(within(apply).getByText(/The first time you close the window, PrismForge asks whether to keep running or to quit\. Quitting stops its effects\./)).toBeTruthy();
   expect(within(apply).getByText(/PrismForge saves nothing by itself\./)).toBeTruthy();
   expect(within(apply).getByText(/Profiles are saved on this computer, not on the device\./)).toBeTruthy();
   expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
@@ -342,4 +343,17 @@ test("sets_the_frame_rate_within_the_range_from_rust", async () => {
 
   expect(commandsNamed(shell, "set_frame_rate")[0]?.args).toEqual({ frameRate: 75 });
   expect(await screen.findByText(/^You asked for 75 frames per second\. PrismForge set the nearest allowed rate, 60\./)).toBeTruthy();
+});
+
+test.each([
+  ["background", lifecycleChosen, /Closing the window keeps PrismForge and its effects running in the background\. Quitting stops its effects\./],
+  ["quit", lifecycleQuitChosen, /Closing the window quits PrismForge and stops its effects\./],
+  ["no tray", lifecycleNoTray, /Closing the window quits PrismForge and stops its effects\./],
+] as const)("the_effects_lifecycle_line_follows_the_close_choice_%s", async (_name, lifecycle, text) => {
+  fakeShell(demoConnected, effectHandlers({ lifecycle: () => lifecycle }));
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+
+  const apply = button("Apply effect").closest("section") as HTMLElement;
+  await waitFor(() => expect(within(apply).getByText(text)).toBeTruthy());
 });

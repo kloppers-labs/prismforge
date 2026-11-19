@@ -17,6 +17,7 @@
     device,
     zone,
     held,
+    closing,
   }: {
     effects: EffectsState;
     catalog: EffectCatalog;
@@ -24,6 +25,7 @@
     device: SessionDevice;
     zone: number | null;
     held: string | null;
+    closing: string;
   } = $props();
 
   let target = $derived(effects.target);
@@ -63,7 +65,7 @@
     <h4 id="run-title">Run on this target</h4>
     <p class="lifecycle">
       A PrismForge effect is computed by PrismForge, not by the device. It runs only while PrismForge runs and is
-      connected. Closing the window quits PrismForge and stops its effects. PrismForge then asks {server} to put back the
+      connected. {closing} PrismForge then asks {server} to put back the
       earlier lighting. PrismForge saves nothing by itself. To keep this lighting, save it as a profile on the Profiles screen.
       Profiles are saved on this computer, not on the device. After PrismForge starts again, no effect runs until you apply
       it or a profile again.

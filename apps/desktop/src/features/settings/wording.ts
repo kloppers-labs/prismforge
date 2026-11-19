@@ -49,6 +49,21 @@ export function settingsNoticeText(notice: StoreNotice): string[] {
   return [`PrismForge could not save ${failure.file}: ${failure.detail}.`, "The previous version is still in place."];
 }
 
+export type CloseKnown = { loaded: boolean; tray: boolean; onClose: "Background" | "Quit" | null };
+
+export function closeText({ loaded, tray, onClose }: CloseKnown): string {
+  if (!loaded) {
+    return "Quitting PrismForge stops its effects.";
+  }
+  if (!tray || onClose === "Quit") {
+    return "Closing the window quits PrismForge and stops its effects.";
+  }
+  if (onClose === "Background") {
+    return "Closing the window keeps PrismForge and its effects running in the background. Quitting stops its effects.";
+  }
+  return "The first time you close the window, PrismForge asks whether to keep running or to quit. Quitting stops its effects.";
+}
+
 export function trayStopTitle(report: StopReport): string {
   if (report.stops.length === 0) {
     return "Stop all PrismForge effects, from the tray: no PrismForge effect was running.";
