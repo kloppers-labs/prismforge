@@ -1,0 +1,16 @@
+mod control;
+mod geometry;
+mod ids;
+mod model;
+mod problem;
+mod validate;
+
+pub use control::{Control, Part};
+pub use geometry::{
+    COMPONENT_LED_LIMIT, Corner, FirstLed, Geometry, GridPoint, LINE_POINT_LIMIT, Line, Location,
+    Matrix, Perimeter, Ring, Runs, Single, Strip, Turn,
+};
+pub use ids::{ComponentId, OutputId, ViewId};
+pub use model::{Component, Placement, Setup, SetupOutput, View};
+pub use problem::{SetupPart, SetupProblem};
+pub use validate::{BRANCH_LIMIT, COMPONENT_LIMIT, OUTPUT_LIMIT, VIEW_LIMIT};

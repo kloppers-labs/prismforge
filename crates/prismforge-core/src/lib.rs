@@ -9,6 +9,7 @@ mod ownership;
 pub mod profile;
 mod scene;
 pub mod session;
+pub mod setup;
 pub mod store;
 
 pub use backend::{BackendEvent, BackendInfo, RgbBackend};

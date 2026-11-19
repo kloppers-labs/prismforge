@@ -36,6 +36,7 @@ pub use envelope::{
     SchemaVersion,
 };
 pub use files::{FileOps, StdFileOps};
+pub(crate) use groups::target_state;
 pub use groups::{
     GROUP_LIMIT, GROUPS_FORMAT, Group, GroupId, GroupMember, GroupsFile, MEMBER_LIMIT, MemberState,
     MemberStatus, resolve_members,

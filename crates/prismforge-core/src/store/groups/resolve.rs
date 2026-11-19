@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::device::DeviceRef;
 use crate::inventory::DeviceIdentity;
 use crate::scene::OutputTarget;
 use crate::session::SessionDevice;
@@ -42,25 +43,40 @@ pub fn resolve_members(members: &[GroupMember], devices: &[SessionDevice]) -> Ve
 }
 
 fn state(member: &GroupMember, devices: &[SessionDevice]) -> MemberState {
-    let ambiguous = devices.iter().any(|device| {
-        matches!(&device.identity, DeviceIdentity::Ambiguous { candidates } if candidates.contains(&member.device))
+    target_state(
+        &member.device,
+        member.zone,
+        member.zone_name.as_ref(),
+        devices,
+    )
+}
+
+/// How a stored device or zone relates to the devices of today; `zone_name` is the name the zone had when it was stored.
+pub(crate) fn target_state(
+    device: &DeviceRef,
+    zone: Option<usize>,
+    zone_name: Option<&String>,
+    devices: &[SessionDevice],
+) -> MemberState {
+    let ambiguous = devices.iter().any(|candidate| {
+        matches!(&candidate.identity, DeviceIdentity::Ambiguous { candidates } if candidates.contains(device))
     });
     if ambiguous {
         return MemberState::Ambiguous;
     }
-    let Some(device) = devices
+    let Some(found) = devices
         .iter()
-        .find(|device| device.identity.reference() == Some(&member.device))
+        .find(|candidate| candidate.identity.reference() == Some(device))
     else {
         return MemberState::Missing;
     };
-    if let Some(zone) = member.zone {
-        let now = device.descriptor.zones.get(zone).map(|zone| &zone.name);
-        if now != member.zone_name.as_ref() {
+    if let Some(zone) = zone {
+        let now = found.descriptor.zones.get(zone).map(|zone| &zone.name);
+        if now != zone_name {
             return MemberState::Changed;
         }
     }
-    if device.available {
+    if found.available {
         MemberState::Resolved
     } else {
         MemberState::Unavailable
