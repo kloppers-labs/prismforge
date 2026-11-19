@@ -11,7 +11,8 @@ use prismforge_effects::{
 };
 use prismforge_testkit::{DemoBackend, DemoControls};
 
-use support::{Recorder, is_connected};
+use support::temp::TempDir;
+use support::{Recorder, is_connected, stores};
 
 const GPU: &str = "demo-graphics-card";
 
@@ -32,17 +33,18 @@ fn whole(device: &str) -> OutputTarget {
     }
 }
 
-async fn demo_shell(config: ShellConfig) -> (Shell<Recorder>, Recorder, DemoControls) {
+async fn demo_shell(config: ShellConfig) -> (Shell<Recorder>, Recorder, DemoControls, TempDir) {
     let recorder = Recorder::default();
-    let shell = Shell::new(recorder.clone(), config);
+    let (stores, dir) = stores("effects");
+    let shell = Shell::new(recorder.clone(), config, stores);
     let backend = DemoBackend::new();
     let controls = backend.controls();
     shell.start(backend).await.expect("start");
     recorder.wait_for(is_connected).await;
-    (shell, recorder, controls)
+    (shell, recorder, controls, dir)
 }
 
-async fn demo() -> (Shell<Recorder>, Recorder, DemoControls) {
+async fn demo() -> (Shell<Recorder>, Recorder, DemoControls, TempDir) {
     demo_shell(ShellConfig::default()).await
 }
 
@@ -63,10 +65,11 @@ async fn owner(shell: &Shell<Recorder>, device: &str) -> Option<OutputOwner> {
 #[tokio::test(start_paused = true)]
 async fn the_catalog_lists_every_effect_with_the_frame_rate_and_preview_limits() {
     let recorder = Recorder::default();
-    let idle = Shell::new(recorder, ShellConfig::default());
+    let (stores, _idle_dir) = stores("idle");
+    let idle = Shell::new(recorder, ShellConfig::default(), stores);
     assert_eq!(idle.catalog().await, Err(CommandError::NoSession));
 
-    let (shell, _, _) = demo().await;
+    let (shell, _, _, _dir) = demo().await;
     let catalog = shell.catalog().await.expect("catalog");
 
     let ids: Vec<&str> = catalog
@@ -91,7 +94,7 @@ async fn the_catalog_lists_every_effect_with_the_frame_rate_and_preview_limits()
 
 #[tokio::test(start_paused = true)]
 async fn apply_and_stop_reach_the_session() {
-    let (shell, recorder, _) = demo().await;
+    let (shell, recorder, _, _dir) = demo().await;
 
     shell
         .apply_effect(whole(GPU), instance("rainbow-wave", &[]))
@@ -113,7 +116,7 @@ async fn apply_and_stop_reach_the_session() {
 
 #[tokio::test(start_paused = true)]
 async fn invalid_values_come_back_as_structured_errors() {
-    let (shell, _, _) = demo().await;
+    let (shell, _, _, _dir) = demo().await;
 
     let applied = shell
         .apply_effect(
@@ -135,7 +138,7 @@ async fn invalid_values_come_back_as_structured_errors() {
 
 #[tokio::test(start_paused = true)]
 async fn stopping_a_target_without_an_effect_names_the_target() {
-    let (shell, _, _) = demo().await;
+    let (shell, _, _, _dir) = demo().await;
 
     assert_eq!(
         shell.stop_effect(whole(GPU)).await,
@@ -145,7 +148,7 @@ async fn stopping_a_target_without_an_effect_names_the_target() {
 
 #[tokio::test(start_paused = true)]
 async fn a_declared_device_refuses_effects_until_it_is_handed_back() {
-    let (shell, _, controls) = demo().await;
+    let (shell, _, controls, _dir) = demo().await;
     let gpu = DeviceRef::new(GPU);
 
     shell
@@ -178,7 +181,7 @@ async fn a_declared_device_refuses_effects_until_it_is_handed_back() {
 
 #[tokio::test(start_paused = true)]
 async fn the_program_name_is_trimmed_bounded_and_never_empty() {
-    let (shell, _, _) = demo().await;
+    let (shell, _, _, _dir) = demo().await;
     let gpu = DeviceRef::new(GPU);
     let memory = DeviceRef::new("demo-memory-1");
 
@@ -207,7 +210,7 @@ async fn the_program_name_is_trimmed_bounded_and_never_empty() {
 
 #[tokio::test(start_paused = true)]
 async fn hardware_mode_and_frame_rate_reach_the_session() {
-    let (shell, _, _) = demo().await;
+    let (shell, _, _, _dir) = demo().await;
 
     shell
         .select_mode(DeviceRef::new(GPU), 1)
@@ -224,7 +227,7 @@ async fn hardware_mode_and_frame_rate_reach_the_session() {
 
 #[tokio::test(start_paused = true)]
 async fn a_full_queue_answers_busy_for_effect_commands() {
-    let (shell, _, controls) = demo_shell(ShellConfig {
+    let (shell, _, controls, _dir) = demo_shell(ShellConfig {
         session: SessionConfig {
             command_capacity: 1,
             ..SessionConfig::default()
@@ -245,7 +248,7 @@ async fn a_full_queue_answers_busy_for_effect_commands() {
 
 #[tokio::test(start_paused = true)]
 async fn preview_needs_no_session_and_sends_nothing_to_a_backend() {
-    let (shell, _, controls) = demo().await;
+    let (shell, _, controls, _dir) = demo().await;
     let before = shell.view().session.expect("session");
     let request = PreviewRequest {
         instance: instance("moving-highlight", &[]),

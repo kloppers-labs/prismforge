@@ -10,7 +10,8 @@ use prismforge_testkit::{DemoBackend, DemoOutput};
 use tokio::time::Instant;
 
 use support::logged::{Log, LoggedBackend};
-use support::{Recorder, is_connected};
+use support::temp::TempDir;
+use support::{Recorder, is_connected, stores};
 
 struct AtExit {
     log: Vec<String>,
@@ -18,7 +19,7 @@ struct AtExit {
     view: ShellView,
 }
 
-fn shell() -> (Shell<Recorder>, Recorder) {
+fn shell() -> (Shell<Recorder>, Recorder, TempDir) {
     let recorder = Recorder::default();
     let config = ShellConfig {
         session: SessionConfig {
@@ -31,7 +32,8 @@ fn shell() -> (Shell<Recorder>, Recorder) {
         view_spacing: Duration::from_millis(50),
         identify_duration: Duration::from_secs(30),
     };
-    (Shell::new(recorder.clone(), config), recorder)
+    let (stores, dir) = stores("exit");
+    (Shell::new(recorder.clone(), config, stores), recorder, dir)
 }
 
 #[test]
@@ -46,7 +48,7 @@ fn only_the_first_exit_request_is_held() {
 
 #[tokio::test(start_paused = true)]
 async fn exit_waits_until_a_running_identify_is_restored_and_the_backend_is_disconnected() {
-    let (shell, recorder) = shell();
+    let (shell, recorder, _dir) = shell();
     let log = Log::default();
     let demo = DemoBackend::new();
     let controls = demo.controls();
@@ -95,7 +97,7 @@ async fn exit_waits_until_a_running_identify_is_restored_and_the_backend_is_disc
 
 #[tokio::test(start_paused = true)]
 async fn exit_does_not_wait_when_the_session_is_already_gone() {
-    let (shell, recorder) = shell();
+    let (shell, recorder, _dir) = shell();
     shell.start(DemoBackend::new()).await.expect("start");
     recorder.wait_for(is_connected).await;
     shell.stop().await;
@@ -107,7 +109,7 @@ async fn exit_does_not_wait_when_the_session_is_already_gone() {
     )
     .await
     .expect("exit did not hang");
-    let (fresh, _) = self::shell();
+    let (fresh, _, _fresh_dir) = self::shell();
     tokio::time::timeout(
         Duration::from_secs(1),
         stop_then_exit(&fresh, || exits += 1),

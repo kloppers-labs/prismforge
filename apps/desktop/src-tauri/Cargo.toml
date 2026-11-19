@@ -24,6 +24,7 @@ prismforge-openrgb.workspace = true
 prismforge-testkit.workspace = true
 serde.workspace = true
 tauri = { version = "=2.12.6", features = [] }
+tauri-plugin-dialog = "=2.8.4"
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 ts-rs = { workspace = true, optional = true }
 

@@ -1,5 +1,7 @@
 mod effect_fixtures;
 mod generated;
+mod profile_fixtures;
+mod support;
 
 use std::io;
 use std::time::Duration;
@@ -340,6 +342,8 @@ async fn committed_fixtures_match_real_sessions() {
     effect_fixtures::stops(&mut stops).await;
     effect_fixtures::errors(&mut errors).await;
     effect_fixtures::previews(&mut previews);
+    let mut profiles = profile_fixtures::ProfileModules::new();
+    profile_fixtures::generate(&mut profiles, &mut errors).await;
 
     generated.write("sessions.ts", &sessions.render());
     generated.write("outcomes.ts", &outcomes.render());
@@ -347,5 +351,11 @@ async fn committed_fixtures_match_real_sessions() {
     generated.write("stops.ts", &stops.render());
     generated.write("errors.ts", &errors.render());
     generated.write("previews.ts", &previews.render());
+    generated.write("stores.ts", &profiles.stores.render());
+    generated.write("profileDetails.ts", &profiles.details.render());
+    generated.write("saves.ts", &profiles.saves.render());
+    generated.write("applies.ts", &profiles.applies.render());
+    generated.write("imports.ts", &profiles.imports.render());
+    generated.write("views.ts", &profiles.views.render());
     generated.compare_or_update();
 }

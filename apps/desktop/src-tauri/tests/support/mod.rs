@@ -1,14 +1,17 @@
 #![allow(dead_code)]
 
 pub mod logged;
+pub mod temp;
 
 use std::time::Duration;
 
 use prismforge_core::ConnectionState;
 use prismforge_core::session::SessionSnapshot;
-use prismforge_desktop::{ShellView, ViewSink};
+use prismforge_desktop::{ShellView, Stores, ViewSink};
 use tokio::sync::watch;
 use tokio::time::Instant;
+
+use temp::TempDir;
 
 const PATIENCE: Duration = Duration::from_secs(3600);
 
@@ -59,10 +62,30 @@ impl Recorder {
     }
 }
 
+impl Recorder {
+    pub async fn wait_view(&self, mut condition: impl FnMut(&ShellView) -> bool) -> ShellView {
+        let mut views = self.views.subscribe();
+        let reached = views.wait_for(|views| views.last().is_some_and(|(_, view)| condition(view)));
+        tokio::time::timeout(PATIENCE, reached)
+            .await
+            .expect("condition never reached")
+            .expect("recorder dropped")
+            .last()
+            .map(|(_, view)| view.clone())
+            .expect("a view")
+    }
+}
+
 pub fn is_connected(snapshot: &SessionSnapshot) -> bool {
     snapshot.connection == ConnectionState::Connected
 }
 
 pub fn is_retrying(snapshot: &SessionSnapshot) -> bool {
     matches!(snapshot.connection, ConnectionState::Retrying { .. })
+}
+
+/// A store folder that lives as long as the returned [`TempDir`].
+pub fn stores(label: &str) -> (Stores, TempDir) {
+    let dir = TempDir::new(label);
+    (Stores::new(dir.path().to_path_buf()), dir)
 }

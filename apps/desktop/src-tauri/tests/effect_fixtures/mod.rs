@@ -116,7 +116,8 @@ pub async fn sessions(sessions: &mut Module) {
 }
 
 pub async fn catalog(catalog: &mut Module) {
-    let shell = Shell::new(Silent, ShellConfig::default());
+    let (stores, _dir) = crate::support::stores("catalog");
+    let shell = Shell::new(Silent, ShellConfig::default(), stores);
     shell.start(DemoBackend::new()).await.expect("start");
     catalog.add("catalog", &shell.catalog().await.expect("catalog"));
     shell.stop().await;
