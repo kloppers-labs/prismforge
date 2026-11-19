@@ -36,6 +36,7 @@ fn ring(id: &str, name: &str) -> Component {
             turn: Turn::Clockwise,
             extra: Map::new(),
         }),
+        frame: None,
         extra: Map::new(),
     }
 }
@@ -70,6 +71,7 @@ fn fans() -> Setup {
             id: ViewId::parse("v-pc").expect("view id"),
             name: "PC".into(),
             placements: vec![placed("c-front", 0), placed("c-rear", 60)],
+            outlines: Vec::new(),
             extra: Map::new(),
         }],
         extra: Map::new(),
@@ -353,4 +355,50 @@ async fn the_async_store_saves_the_setup_against_the_session_devices() {
             },
         })
     );
+}
+
+/// Written by the first setup format, before frames and unlit outlines existed.
+const BEFORE_OUTLINES: &str = r#"{
+  "format": "prismforge.setup",
+  "schema_version": { "major": 1, "minor": 0 },
+  "components": [
+    { "id": "c-front", "name": "Front fan", "geometry": { "Ring": { "leds": 12, "first_angle": 0, "turn": "Clockwise" } } },
+    { "id": "c-rear", "name": "Rear fan", "geometry": { "Ring": { "leds": 12, "first_angle": 0, "turn": "Clockwise" } } }
+  ],
+  "outputs": [
+    {
+      "id": "o-header", "device": "demo-motherboard", "zone": 1, "label": "Demo Motherboard",
+      "zone_name": "Addressable Header 1", "first_led": 0, "branches": [["c-front", "c-rear"]]
+    }
+  ],
+  "views": [
+    {
+      "id": "v-pc", "name": "PC",
+      "placements": [
+        { "component": "c-front", "x": 0, "y": 0, "size": 40, "rotation": 0, "flipped": false },
+        { "component": "c-rear", "x": 60, "y": 0, "size": 40, "rotation": 0, "flipped": false }
+      ]
+    }
+  ]
+}"#;
+
+#[tokio::test(start_paused = true)]
+async fn a_setup_file_from_before_frames_and_outlines_loads_unchanged() {
+    let dir = TempDir::new("setup-before-outlines");
+    dir.write(FILE, BEFORE_OUTLINES.as_bytes());
+
+    let store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
+
+    let setup = store.setup().expect("setup");
+    assert_eq!(setup, &fans());
+    assert!(store.notices().is_empty(), "{:?}", store.notices());
+    assert!(
+        setup
+            .components
+            .iter()
+            .all(|component| component.frame.is_none())
+    );
+    assert!(setup.views[0].outlines.is_empty());
+    assert_eq!(setup.validate(), Ok(()));
+    assert_eq!(dir.read(FILE), BEFORE_OUTLINES.as_bytes());
 }

@@ -10,7 +10,8 @@ use prismforge_core::setup::{
 use prismforge_core::store::{ApplyOutcome, MemberState, StoreError};
 use prismforge_core::{ApplyMode, DeviceRef, OutputTarget};
 use prismforge_desktop::{
-    AcrossPreviewRequest, CommandError, Shell, ShellConfig, Stores, preview_across,
+    AcrossPreviewRequest, CommandError, PREVIEW_COLOUR_LIMIT, Shell, ShellConfig, Stores,
+    preview_across,
 };
 use prismforge_effects::{EffectInstance, Flow};
 use prismforge_testkit::DemoBackend;
@@ -425,4 +426,37 @@ async fn a_profile_applied_after_its_view_changed_applies_without_a_warning() {
     );
     let scene = shell.snapshot().await.expect("session").output.scene;
     assert_eq!(scene.assignments.len(), 3);
+}
+
+#[test]
+fn the_draft_preview_caps_the_leds_times_the_frames_of_one_answer() {
+    let mut setup = tower();
+    setup.components = vec![strip("c-long", "Long", 4096)];
+    setup.outputs = vec![output(
+        "o-long",
+        &DeviceRef::new(BOARD),
+        HUB,
+        BOARD,
+        &[&["c-long"]],
+    )];
+    setup.views = vec![pc_view(vec![place("c-long", 500, 300, 900, 0)])];
+
+    let preview = preview_across(AcrossPreviewRequest {
+        setup,
+        view: pc(),
+        flow: ALONG,
+        instance: rainbow(),
+        start_ms: 0,
+        frame_count: 90,
+        interval_ms: 40,
+    })
+    .expect("preview");
+
+    let frames = preview.targets[0].frames.len();
+    assert!(frames >= 1);
+    assert!(
+        frames * 4096 <= PREVIEW_COLOUR_LIMIT,
+        "{frames} frames of 4096 LEDs"
+    );
+    assert_eq!(frames, PREVIEW_COLOUR_LIMIT / 4096);
 }

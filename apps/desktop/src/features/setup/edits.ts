@@ -29,7 +29,7 @@ export function withViews(setup: Setup): Setup {
   if (missing.length === 0) {
     return setup;
   }
-  return { ...setup, views: [...setup.views, ...missing.map((id) => ({ id, name: VIEW_NAMES[id]!, placements: [] }))] };
+  return { ...setup, views: [...setup.views, ...missing.map((id) => ({ id, name: VIEW_NAMES[id]!, placements: [], outlines: [] }))] };
 }
 
 function clamp(value: number, low: number, high: number): number {

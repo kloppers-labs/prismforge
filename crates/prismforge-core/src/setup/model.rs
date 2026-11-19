@@ -4,7 +4,7 @@ use crate::device::DeviceRef;
 use crate::profile::Extra;
 use crate::scene::OutputTarget;
 use crate::setup::geometry::{Geometry, Location};
-use crate::setup::ids::{ComponentId, OutputId, ViewId};
+use crate::setup::ids::{ComponentId, OutlineId, OutputId, ViewId};
 
 /// Where each LED of the user's devices is: components with a shape, the outputs they are wired to, and views that place them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,6 +27,9 @@ pub struct Component {
     pub id: ComponentId,
     pub name: String,
     pub geometry: Geometry,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub frame: Option<Frame>,
     #[serde(flatten)]
     #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
@@ -56,9 +59,49 @@ pub struct View {
     pub id: ViewId,
     pub name: String,
     pub placements: Vec<Placement>,
+    #[serde(default)]
+    pub outlines: Vec<Outline>,
     #[serde(flatten)]
     #[cfg_attr(feature = "ts", ts(skip))]
     pub extra: Extra,
+}
+
+/// A rectangle drawn round a component's LEDs, such as a graphics card or a cooler plate; it holds no LEDs.
+/// Width and height are percent of the LEDs' longer side, in the component's own space.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct Frame {
+    pub width: u16,
+    pub height: u16,
+    #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
+    pub extra: Extra,
+}
+
+/// A drawing without LEDs, such as a case or a desk, to place lit components by; nothing is wired to it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct Outline {
+    pub id: OutlineId,
+    pub name: String,
+    pub kind: OutlineKind,
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub rotation: u16,
+    #[serde(flatten)]
+    #[cfg_attr(feature = "ts", ts(skip))]
+    pub extra: Extra,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub enum OutlineKind {
+    Case,
+    Desk,
+    Monitor,
+    Pc,
 }
 
 /// The centre (`x`, `y`) in view units, the length of the longer side, degrees clockwise, and a left-right flip before the turn.

@@ -31,7 +31,10 @@ pub async fn apply_across(
     shell.apply_across(view, flow, effect, targets).await
 }
 
+/// Renders on a blocking thread, so a large drawing never holds the window's main thread.
 #[tauri::command]
-pub fn preview_across(request: AcrossPreviewRequest) -> Result<AcrossPreview, CommandError> {
-    crate::preview_across(request)
+pub async fn preview_across(request: AcrossPreviewRequest) -> Result<AcrossPreview, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || crate::preview_across(request))
+        .await
+        .expect("rendering a preview does not panic")
 }

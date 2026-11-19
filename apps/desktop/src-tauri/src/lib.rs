@@ -43,8 +43,8 @@ pub use lifecycle::{
 pub use publisher::{Publisher, ViewSink};
 pub use settings::SettingsStore;
 pub use setup::{
-    AcrossPreview, AcrossPreviewRequest, AcrossReport, NotPlaced, PREVIEW_LED_LIMIT, PreviewTarget,
-    SetupLimits, SetupStoreView, preview_across,
+    AcrossPreview, AcrossPreviewRequest, AcrossReport, NotPlaced, PREVIEW_COLOUR_LIMIT,
+    PREVIEW_LED_LIMIT, PreviewTarget, SetupLimits, SetupStoreView, preview_across,
 };
 pub use shell::{Shell, ShellConfig};
 pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};

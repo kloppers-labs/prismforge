@@ -715,7 +715,8 @@ export const demoTower: Setup = {
           "rotation": 0,
           "flipped": false
         }
-      ]
+      ],
+      "outlines": []
     },
     {
       "id": "v-desk",
@@ -737,7 +738,8 @@ export const demoTower: Setup = {
           "rotation": 0,
           "flipped": false
         }
-      ]
+      ],
+      "outlines": []
     }
   ]
 };

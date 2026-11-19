@@ -93,6 +93,9 @@ impl SetupFile {
         }
         for view in &mut setup.views {
             trim(&mut view.name);
+            for outline in &mut view.outlines {
+                trim(&mut outline.name);
+            }
         }
         setup
             .validate()

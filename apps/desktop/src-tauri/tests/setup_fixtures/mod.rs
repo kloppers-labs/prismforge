@@ -402,6 +402,10 @@ async fn demo_skips(modules: &mut SetupModules, sessions: &mut Module) {
     );
     let shell = Shell::new(Recorder::default(), ShellConfig::default(), stores());
     started(&shell, DemoBackend::new()).await;
+    modules.setups.add(
+        "setupDemoZoneChanged",
+        &shell.setup_view().await.expect("changed setup"),
+    );
     let (_, report) = tokio::join!(shell.identify(DeviceRef::new(GPU), None), async {
         loop {
             if shell

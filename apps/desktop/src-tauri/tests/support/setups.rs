@@ -10,6 +10,7 @@ pub fn component(id: &str, name: &str, geometry: Geometry) -> Component {
         id: ComponentId::parse(id).expect("component id"),
         name: name.into(),
         geometry,
+        frame: None,
         extra: Extra::new(),
     }
 }
@@ -106,6 +107,7 @@ pub fn view(id: ViewId, name: &str, placements: Vec<Placement>) -> View {
         id,
         name: name.into(),
         placements,
+        outlines: Vec::new(),
         extra: Extra::new(),
     }
 }

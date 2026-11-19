@@ -4,8 +4,9 @@ use prismforge_core::OutputTarget;
 use prismforge_core::profile::NAME_LIMIT;
 use prismforge_core::session::BatchReport;
 use prismforge_core::setup::{
-    BRANCH_LIMIT, COMPONENT_LED_LIMIT, COMPONENT_LIMIT, LINE_POINT_LIMIT, OUTPUT_LIMIT,
-    OutputStatus, Setup, VIEW_LIMIT, ViewId, plan_across, resolve_outputs,
+    BRANCH_LIMIT, COMPONENT_LED_LIMIT, COMPONENT_LIMIT, FRAME_LIMITS, LINE_POINT_LIMIT,
+    OUTLINE_SIZE_LIMIT, OUTPUT_LIMIT, OutputStatus, Setup, VIEW_LIMIT, ViewId, plan_across,
+    resolve_outputs,
 };
 use prismforge_effects::{EffectInstance, Flow, PREVIEW_LIMITS, Rgb, prepare};
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,8 @@ use crate::view::CommandError;
 
 /// Most LEDs one draft preview draws; a real PC or desk has a few hundred.
 pub const PREVIEW_LED_LIMIT: usize = 16_384;
+/// Most colours, LEDs times frames, in one draft preview answer.
+pub const PREVIEW_COLOUR_LIMIT: usize = 60_000;
 
 /// The stored setup of the store in use, each output matched against the session's devices of now.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -38,6 +41,9 @@ pub struct SetupLimits {
     pub component_leds: u32,
     pub line_points: usize,
     pub name: usize,
+    pub frame_min: u16,
+    pub frame_max: u16,
+    pub outline_size: u32,
 }
 
 const LIMITS: SetupLimits = SetupLimits {
@@ -48,6 +54,9 @@ const LIMITS: SetupLimits = SetupLimits {
     component_leds: COMPONENT_LED_LIMIT,
     line_points: LINE_POINT_LIMIT,
     name: NAME_LIMIT,
+    frame_min: FRAME_LIMITS.0,
+    frame_max: FRAME_LIMITS.1,
+    outline_size: OUTLINE_SIZE_LIMIT,
 };
 
 /// What one apply across a view did: the batch report, the outputs that got nothing, and LEDs left dark.
@@ -117,9 +126,11 @@ pub fn preview_across(request: AcrossPreviewRequest) -> Result<AcrossPreview, Co
     let frame_count = if is_static {
         1
     } else {
+        let room = u32::try_from(PREVIEW_COLOUR_LIMIT / leds.max(1)).unwrap_or(u32::MAX);
         request
             .frame_count
             .clamp(limits.frames.min, limits.frames.max)
+            .min(room.max(1))
     };
     let times: Vec<Duration> = (0..u64::from(frame_count))
         .map(|index| {

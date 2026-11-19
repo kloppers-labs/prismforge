@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::profile::NameProblem;
-use crate::setup::ids::{ComponentId, OutputId, ViewId};
+use crate::setup::ids::{ComponentId, OutlineId, OutputId, ViewId};
 
 /// Why a setup was not stored; the stored setup stays as it was.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
@@ -35,6 +35,8 @@ pub enum SetupProblem {
         view: ViewId,
         component: ComponentId,
     },
+    #[error("outline {outline} has no size in view {view}, or a turn of 360 degrees or more")]
+    InvalidOutline { view: ViewId, outline: OutlineId },
     #[error("component {component} has {leds} LEDs; its output takes {min} to {max}")]
     LedCountOutsideBounds {
         component: ComponentId,
@@ -61,4 +63,5 @@ pub enum SetupPart {
     Views,
     Placements,
     Branches,
+    Outlines,
 }
