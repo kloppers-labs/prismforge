@@ -38,7 +38,7 @@ This is the first test against a real server. It confirms the handshake, the con
 2. **The keyboard has no Direct Mode.** Its only per-LED mode is named `Custom`, and every mode on this keyboard reports `AutomaticSave` persistence. This means each change goes to the keyboard's own memory. PrismForge does not send effects to this keyboard, because frequent writes to device memory can wear it out. This agrees with the rule in [decision 0001](decisions/0001-openrgb-integration.md): a colour frame goes only to a mode named `Direct`.
 3. **Speed ranges are reversed on two devices.** The memory modules report speed from 4 to 0, and the motherboard reports speed from 9 to 0. A lower number is a faster speed on these devices. PrismForge does not set hardware mode speeds yet. Any later work that does must accept a minimum that is larger than the maximum.
 4. **Resizable zones report their maximum.** `D_LED1` and `D_LED2` report 36 LEDs with a permitted size of 0 to 1024. The real number of LEDs on the connected strips or fans is not known yet.
-5. **One accessory is not identified.** OpenRGB reports a "Microsoft HID VHF Driver" accessory with 36 LEDs in an 18 × 12 matrix. VHF is the Windows virtual HID framework, so this is probably a virtual device that another program creates. We have not checked what it is.
+5. **One accessory is not identified.** OpenRGB reports a "Microsoft HID VHF Driver" accessory with 36 LEDs in an 18 × 12 matrix. VHF is the Windows virtual HID framework, so this is probably a virtual device that another program creates. The owner does not know what it is. A colour change on it lights nothing, in OpenRGB and in PrismForge. Treat it as a device without real LEDs.
 6. **Some devices have no serial or no location.** The memory modules and the GPU have an empty serial. The GPU also has an empty location. Identity depends on the other fields for these devices.
 
 ### Not tested in this run
@@ -46,4 +46,37 @@ This is the first test against a real server. It confirms the handshake, the con
 - Colour writes to any device.
 - "Device list updated" notifications and update packets.
 - Reconnect after an OpenRGB restart, and whether controller IDs stay the same.
-- The PrismForge desktop app.
+- The PrismForge desktop app. See the next entry.
+
+## 2026-11-19: first desktop app test, OpenRGB 1.1, Windows 11
+
+The owner ran the desktop app from `main` with `pnpm tauri:dev` on the same PC as the first probe. Task 8b (context menus) was the last merged task. Task 9 (several targets, groups) was not merged yet.
+
+### Result
+
+The app connected to OpenRGB and controlled the hardware as expected. The owner found no errors.
+
+| Check | Result |
+|---|---|
+| Connect to the OpenRGB SDK server | Passed |
+| Effect on the memory modules | Passed |
+| Effect on the motherboard as a whole device | Passed |
+| Effect on single motherboard zones (`D_LED1`, `D_LED2`) | Passed |
+| Effect on the GPU | Passed |
+| Effects on different devices at the same time, each on its own | Passed |
+| Colour changes in effects | Passed |
+| Save a profile, change effects, and see the changes in the profile | Passed |
+| "Microsoft HID VHF Driver" accessory | No visible change, in PrismForge and in OpenRGB |
+
+### What is on the headers
+
+- `D_LED1` drives the ARGB case fans through a hub.
+- `D_LED2` drives the ARGB plate of the CPU cooler.
+
+OpenRGB reports 36 LEDs for each header. The real LED counts are not known yet.
+
+### Not tested in this run
+
+- Reconnect after an OpenRGB restart.
+- Start with the system and the start profile.
+- A screen reader, high contrast themes and 200 % scaling.
