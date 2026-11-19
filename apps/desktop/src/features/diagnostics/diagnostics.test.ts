@@ -27,7 +27,7 @@ test("keeps_runtime_details_in_diagnostics", async () => {
 test("shows_the_last_error_and_real_counters", async () => {
   fakeShell(openRgbRefused);
   render(App);
-  await screen.findByText("Retrying, retry 3 next");
+  await screen.findByText("Retrying");
 
   const drawer = await openDiagnostics();
 

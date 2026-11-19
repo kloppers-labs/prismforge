@@ -174,7 +174,7 @@
       {:else if !session || stopped}
         <ConnectionScreen {app} stopped={session} />
       {:else if session.devices.length === 0}
-        <WaitingPanel {session} />
+        <WaitingPanel {app} {session} />
       {:else}
         <Inventory {app} {session} />
       {/if}

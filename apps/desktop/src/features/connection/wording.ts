@@ -41,10 +41,10 @@ export function summarise(session: SessionSnapshot): ConnectionSummary {
     const { attempt, reason } = connection.Retrying;
     return {
       tone: "waiting",
-      label: `Retrying, retry ${attempt} next`,
+      label: "Retrying",
       reasons: [
         explain(reason, where, session),
-        `PrismForge tries again on its own. Retry ${attempt} comes next, with a longer wait before each retry (at most 30 seconds).`,
+        `PrismForge tries again by itself, with a longer wait each time, at most 30 seconds. Try ${attempt} is next.`,
       ],
       retrying: true,
     };
