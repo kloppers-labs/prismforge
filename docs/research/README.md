@@ -8,6 +8,7 @@ These files are research reports for `docs/plans/prismforge-plan-2-experience.md
 | `ux-audit.md` | Audit of the PrismForge screens at commit `0397d7b`, with three navigation designs and a priority list | The interface was rendered in a browser with test data, and its code was read. |
 | `openrgb-behaviour.md` | How OpenRGB 1.1, its Effects plugin and its Visual Map plugin handle events, previews and layouts | Read of their source code at pinned commits. |
 | `setup-views-research.md` | Geometry models, sampling of effects in two dimensions, and layout editors | Read of public documents of open lighting projects. |
+| `os-events-research.md` | Power and session events on Windows, macOS and Linux, and what Tauri gives an application | Read of Microsoft, Apple and systemd documents, and of the Tauri and tao source code. |
 
 ## How to read these files
 
