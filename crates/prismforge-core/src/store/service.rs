@@ -395,6 +395,11 @@ pub struct ConnectTrigger {
 }
 
 impl ConnectTrigger {
+    /// True once it came due in this connect; it is armed again only after a disconnect.
+    pub fn fired(&self) -> bool {
+        self.applied
+    }
+
     pub fn due(&mut self, snapshot: &SessionSnapshot) -> bool {
         let disconnected = snapshot
             .diagnostics

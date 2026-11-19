@@ -17,6 +17,25 @@ pub struct ShellView {
     pub applying: Option<ApplyingProfile>,
     /// What the last apply-on-connect of this session did.
     pub connect_apply: Option<ConnectApply>,
+    /// Whether this session will still apply a marked profile when it connects.
+    pub on_connect: OnConnect,
+}
+
+/// The apply-on-connect state of the session, taken from its trigger and the store's mark.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub enum OnConnect {
+    /// No session, or its store is not available: nothing is applied on connect.
+    NotApplicable,
+    /// Not live yet and no profile is marked; a profile marked before the devices are read applies then.
+    NotArmed,
+    /// Not live yet; this profile is applied as soon as the devices are read.
+    Armed { id: ProfileId, name: String },
+    /// It came due in this session; nothing more is applied until the user connects again.
+    Fired {
+        applied: Option<String>,
+        next: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

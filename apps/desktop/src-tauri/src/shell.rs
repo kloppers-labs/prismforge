@@ -11,10 +11,10 @@ use tokio::task::JoinHandle;
 
 use crate::apply_lock::{ApplyLock, Permit};
 use crate::forward::forward;
-use crate::on_connect::apply_on_connect;
+use crate::on_connect::{Report, apply_on_connect};
 use crate::publisher::{Publisher, ViewSink};
 use crate::stores::{StoreKind, Stores};
-use crate::view::{CommandError, ShellView};
+use crate::view::{CommandError, OnConnect, ShellView};
 
 #[derive(Debug, Clone)]
 pub struct ShellConfig {
@@ -37,15 +37,16 @@ impl Default for ShellConfig {
 pub struct Shell<S: ViewSink> {
     config: ShellConfig,
     publisher: Arc<Publisher<S>>,
-    // Lock order: active, apply slot, output gate, store; a holder of a session handle never waits for active.
-    active: Mutex<Option<Active>>,
+    // Lock order: active, apply slot, output gate, on-connect report, store; a session handle holder never waits for active.
+    active: Mutex<Option<Active<S>>>,
     pub(crate) stores: Stores,
     pub(crate) lock: Arc<ApplyLock<S>>,
 }
 
-struct Active {
+struct Active<S> {
     handle: SessionHandle,
     kind: StoreKind,
+    report: Option<Arc<Report<S>>>,
     session: JoinHandle<()>,
     forwarder: JoinHandle<()>,
     keeper: Option<JoinHandle<()>>,
@@ -76,6 +77,7 @@ impl<S: ViewSink> Shell<S> {
         let mut active = self.active.lock().await;
         end(active.take()).await;
         self.publisher.set_connect_apply(None);
+        self.publisher.set_on_connect(OnConnect::NotApplicable);
         let kind = StoreKind::of(backend.info().origin);
         let profiles = self.stores.profiles(kind).await.ok();
         if let Some(profiles) = &profiles {
@@ -87,9 +89,14 @@ impl<S: ViewSink> Shell<S> {
             let known = handle.known_devices();
             tokio::spawn(async move { profiles.keep_registry(known).await })
         });
-        let watcher = profiles.map(|profiles| {
+        let report =
+            profiles.map(|profiles| Arc::new(Report::new(profiles, self.publisher.clone())));
+        if let Some(report) = &report {
+            report.publish().await;
+        }
+        let watcher = report.clone().map(|report| {
             tokio::spawn(apply_on_connect(
-                profiles,
+                report,
                 handle.clone(),
                 self.lock.clone(),
                 self.publisher.clone(),
@@ -118,6 +125,7 @@ impl<S: ViewSink> Shell<S> {
         *active = Some(Active {
             handle,
             kind,
+            report,
             session,
             forwarder,
             keeper,
@@ -130,7 +138,21 @@ impl<S: ViewSink> Shell<S> {
         let mut active = self.active.lock().await;
         end(active.take()).await;
         self.publisher.set_connect_apply(None);
+        self.publisher.set_on_connect(OnConnect::NotApplicable);
         self.publisher.publish(None)
+    }
+
+    /// Publishes the apply-on-connect state again after the mark or a profile name changed.
+    pub(crate) async fn report_on_connect(&self) {
+        let report = self
+            .active
+            .lock()
+            .await
+            .as_ref()
+            .and_then(|active| active.report.clone());
+        if let Some(report) = report {
+            report.publish().await;
+        }
     }
 
     pub async fn refresh(&self) -> Result<(), CommandError> {
@@ -187,14 +209,14 @@ impl<S: ViewSink> Shell<S> {
     }
 }
 
-fn parts(active: Option<&Active>) -> (Option<SessionHandle>, StoreKind) {
+fn parts<S>(active: Option<&Active<S>>) -> (Option<SessionHandle>, StoreKind) {
     active.map_or((None, StoreKind::Real), |active| {
         (Some(active.handle.clone()), active.kind)
     })
 }
 
 /// The watcher holds a handle, so it stops first; the keeper writes the last registry after the session.
-async fn end(active: Option<Active>) {
+async fn end<S>(active: Option<Active<S>>) {
     let Some(Active {
         handle,
         session,

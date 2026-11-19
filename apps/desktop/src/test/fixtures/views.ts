@@ -2,7 +2,7 @@
 import type { ShellView } from "../../lib/api/bindings/ShellView";
 
 export const viewApplying: ShellView = {
-  "revision": 14,
+  "revision": 17,
   "session": {
     "connection": "Connected",
     "backend": {
@@ -1040,11 +1040,17 @@ export const viewApplying: ShellView = {
     "name": "Evening",
     "automatic": false
   },
-  "connect_apply": null
+  "connect_apply": null,
+  "on_connect": {
+    "Fired": {
+      "applied": null,
+      "next": null
+    }
+  }
 };
 
 export const viewConnectApplied: ShellView = {
-  "revision": 30,
+  "revision": 37,
   "session": {
     "connection": "Connected",
     "backend": {
@@ -2130,6 +2136,541 @@ export const viewConnectApplied: ShellView = {
           ]
         }
       }
+    }
+  },
+  "on_connect": {
+    "Fired": {
+      "applied": "Evening",
+      "next": "Evening"
+    }
+  }
+};
+
+export const viewArmedRetrying: ShellView = {
+  "revision": 15,
+  "session": {
+    "connection": {
+      "Retrying": {
+        "attempt": 1,
+        "reason": {
+          "ConnectionLost": {
+            "cause": "Timeout"
+          }
+        }
+      }
+    },
+    "backend": {
+      "origin": "OpenRgb",
+      "address": null,
+      "protocol_version": null,
+      "server_name": null
+    },
+    "devices": [],
+    "issues": [],
+    "identify": null,
+    "output": {
+      "frame_rate": 30,
+      "scene": {
+        "assignments": []
+      },
+      "devices": []
+    },
+    "diagnostics": {
+      "last_error": {
+        "at_ms": 2000,
+        "operation": "Refresh",
+        "error": {
+          "Timeout": {
+            "operation": "controller data request",
+            "timeout_ms": 2000
+          }
+        },
+        "ended_connection": {
+          "ConnectionLost": {
+            "cause": "Timeout"
+          }
+        }
+      },
+      "counters": {
+        "connect_attempts": 1,
+        "connect_failures": 0,
+        "inventory_refreshes": 0,
+        "refresh_failures": 1,
+        "commands_refused_busy": 0,
+        "frames_written": 0,
+        "ticks_skipped": 0,
+        "output_writes_refused": 0,
+        "output_writes_failed": 0,
+        "output_wakeups": 0
+      },
+      "events": [
+        {
+          "sequence": 0,
+          "at_ms": 0,
+          "kind": "ConnectAttempt"
+        },
+        {
+          "sequence": 1,
+          "at_ms": 0,
+          "kind": "Connected"
+        },
+        {
+          "sequence": 2,
+          "at_ms": 2000,
+          "kind": {
+            "RefreshFailed": {
+              "error": {
+                "Timeout": {
+                  "operation": "controller data request",
+                  "timeout_ms": 2000
+                }
+              }
+            }
+          }
+        },
+        {
+          "sequence": 3,
+          "at_ms": 2000,
+          "kind": {
+            "ConnectionLost": {
+              "reason": {
+                "ConnectionLost": {
+                  "cause": "Timeout"
+                }
+              }
+            }
+          }
+        },
+        {
+          "sequence": 4,
+          "at_ms": 2000,
+          "kind": {
+            "RetryScheduled": {
+              "attempt": 1,
+              "delay_ms": 500
+            }
+          }
+        }
+      ]
+    }
+  },
+  "applying": null,
+  "connect_apply": null,
+  "on_connect": {
+    "Armed": {
+      "id": "p-0000000000000003",
+      "name": "Desk"
+    }
+  }
+};
+
+export const viewFiredRetrying: ShellView = {
+  "revision": 22,
+  "session": {
+    "connection": {
+      "Retrying": {
+        "attempt": 1,
+        "reason": {
+          "ConnectionLost": {
+            "cause": "ServerClosed"
+          }
+        }
+      }
+    },
+    "backend": {
+      "origin": "OpenRgb",
+      "address": null,
+      "protocol_version": null,
+      "server_name": null
+    },
+    "devices": [
+      {
+        "identity": {
+          "Matched": "dev-5ae0445e22cbba19"
+        },
+        "descriptor": {
+          "origin": "OpenRgb",
+          "name": "Fixture Strip",
+          "vendor": "Fixture Vendor",
+          "description": "Fixture device",
+          "version": "1.0",
+          "serial": "SN-desk",
+          "location": "usb:desk",
+          "kind": "LedStrip",
+          "zones": [
+            {
+              "name": "Ring",
+              "kind": "Linear",
+              "led_count": 8,
+              "leds_min": 8,
+              "leds_max": 8,
+              "matrix": null
+            }
+          ],
+          "led_count": 8,
+          "colors": [
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            },
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            },
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            },
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            },
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            },
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            },
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            },
+            {
+              "r": 0,
+              "g": 0,
+              "b": 0
+            }
+          ],
+          "capabilities": {
+            "direct_mode": 0,
+            "active_mode": 0,
+            "modes": [
+              {
+                "name": "Direct",
+                "speed": null,
+                "brightness": null,
+                "directions": [],
+                "per_led_color": true,
+                "mode_colors": null,
+                "random_color": false,
+                "applies_to_entire_device": false,
+                "persistence": "None"
+              },
+              {
+                "name": "Static",
+                "speed": null,
+                "brightness": null,
+                "directions": [],
+                "per_led_color": false,
+                "mode_colors": {
+                  "min": 1,
+                  "max": 1
+                },
+                "random_color": false,
+                "applies_to_entire_device": false,
+                "persistence": "ManualSave"
+              }
+            ],
+            "resizable_zones": [],
+            "saves_to_device_memory": true
+          }
+        },
+        "available": false
+      }
+    ],
+    "issues": [],
+    "identify": null,
+    "output": {
+      "frame_rate": 30,
+      "scene": {
+        "assignments": [
+          {
+            "target": {
+              "device": "dev-5ae0445e22cbba19",
+              "zone": null
+            },
+            "effect": {
+              "effect": "rainbow-wave",
+              "values": {
+                "brightness": {
+                  "Number": 100
+                },
+                "direction": {
+                  "Direction": "Forward"
+                },
+                "speed": {
+                  "Number": 20
+                },
+                "waves": {
+                  "Number": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "devices": [
+        {
+          "device": "dev-5ae0445e22cbba19",
+          "owner": "Effect",
+          "condition": {
+            "Paused": {
+              "reason": "NotConnected"
+            }
+          }
+        }
+      ]
+    },
+    "diagnostics": {
+      "last_error": {
+        "at_ms": 2000,
+        "operation": "Refresh",
+        "error": {
+          "Timeout": {
+            "operation": "controller data request",
+            "timeout_ms": 2000
+          }
+        },
+        "ended_connection": {
+          "ConnectionLost": {
+            "cause": "Timeout"
+          }
+        }
+      },
+      "counters": {
+        "connect_attempts": 2,
+        "connect_failures": 0,
+        "inventory_refreshes": 1,
+        "refresh_failures": 1,
+        "commands_refused_busy": 0,
+        "frames_written": 2,
+        "ticks_skipped": 0,
+        "output_writes_refused": 0,
+        "output_writes_failed": 0,
+        "output_wakeups": 2
+      },
+      "events": [
+        {
+          "sequence": 0,
+          "at_ms": 0,
+          "kind": "ConnectAttempt"
+        },
+        {
+          "sequence": 1,
+          "at_ms": 0,
+          "kind": "Connected"
+        },
+        {
+          "sequence": 2,
+          "at_ms": 2000,
+          "kind": {
+            "RefreshFailed": {
+              "error": {
+                "Timeout": {
+                  "operation": "controller data request",
+                  "timeout_ms": 2000
+                }
+              }
+            }
+          }
+        },
+        {
+          "sequence": 3,
+          "at_ms": 2000,
+          "kind": {
+            "ConnectionLost": {
+              "reason": {
+                "ConnectionLost": {
+                  "cause": "Timeout"
+                }
+              }
+            }
+          }
+        },
+        {
+          "sequence": 4,
+          "at_ms": 2000,
+          "kind": {
+            "RetryScheduled": {
+              "attempt": 1,
+              "delay_ms": 500
+            }
+          }
+        },
+        {
+          "sequence": 5,
+          "at_ms": 2500,
+          "kind": "ConnectAttempt"
+        },
+        {
+          "sequence": 6,
+          "at_ms": 2500,
+          "kind": "Connected"
+        },
+        {
+          "sequence": 7,
+          "at_ms": 2500,
+          "kind": {
+            "InventoryRefreshed": {
+              "generation": 1,
+              "devices": 1
+            }
+          }
+        },
+        {
+          "sequence": 8,
+          "at_ms": 2550,
+          "kind": {
+            "ConnectionLost": {
+              "reason": {
+                "ConnectionLost": {
+                  "cause": "ServerClosed"
+                }
+              }
+            }
+          }
+        },
+        {
+          "sequence": 9,
+          "at_ms": 2550,
+          "kind": {
+            "RetryScheduled": {
+              "attempt": 1,
+              "delay_ms": 500
+            }
+          }
+        }
+      ]
+    }
+  },
+  "applying": null,
+  "connect_apply": {
+    "id": "p-0000000000000003",
+    "name": "Desk",
+    "outcome": {
+      "Applied": {
+        "report": {
+          "frame_rate": {
+            "Applied": {
+              "in_use": 30
+            }
+          },
+          "items": [
+            {
+              "device": "dev-5ae0445e22cbba19",
+              "label": "Fixture Strip",
+              "target": "dev-5ae0445e22cbba19",
+              "item": {
+                "Effect": {
+                  "zone": null,
+                  "effect": "rainbow-wave"
+                }
+              },
+              "outcome": "Applied"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "on_connect": {
+    "Fired": {
+      "applied": "Desk",
+      "next": "Desk"
+    }
+  }
+};
+
+export const viewStoppedArmed: ShellView = {
+  "revision": 29,
+  "session": {
+    "connection": {
+      "Disconnected": {
+        "reason": {
+          "UnsupportedProtocol": {
+            "server_version": 5
+          }
+        }
+      }
+    },
+    "backend": {
+      "origin": "OpenRgb",
+      "address": null,
+      "protocol_version": null,
+      "server_name": null
+    },
+    "devices": [],
+    "issues": [],
+    "identify": null,
+    "output": {
+      "frame_rate": 30,
+      "scene": {
+        "assignments": []
+      },
+      "devices": []
+    },
+    "diagnostics": {
+      "last_error": {
+        "at_ms": 0,
+        "operation": "Connect",
+        "error": {
+          "UnsupportedProtocol": {
+            "server_version": 5,
+            "required": 6
+          }
+        },
+        "ended_connection": null
+      },
+      "counters": {
+        "connect_attempts": 1,
+        "connect_failures": 1,
+        "inventory_refreshes": 0,
+        "refresh_failures": 0,
+        "commands_refused_busy": 0,
+        "frames_written": 0,
+        "ticks_skipped": 0,
+        "output_writes_refused": 0,
+        "output_writes_failed": 0,
+        "output_wakeups": 0
+      },
+      "events": [
+        {
+          "sequence": 0,
+          "at_ms": 0,
+          "kind": "ConnectAttempt"
+        },
+        {
+          "sequence": 1,
+          "at_ms": 0,
+          "kind": {
+            "ConnectFailed": {
+              "error": {
+                "UnsupportedProtocol": {
+                  "server_version": 5,
+                  "required": 6
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "applying": null,
+  "connect_apply": null,
+  "on_connect": {
+    "Armed": {
+      "id": "p-0000000000000003",
+      "name": "Desk"
     }
   }
 };

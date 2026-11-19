@@ -57,7 +57,9 @@ impl<S: ViewSink> Shell<S> {
 
     pub async fn rename_profile(&self, id: &ProfileId, name: &str) -> Result<(), CommandError> {
         let (_, profiles) = self.store().await?;
-        Ok(profiles.rename(id, name).await?)
+        profiles.rename(id, name).await?;
+        self.report_on_connect().await;
+        Ok(())
     }
 
     pub async fn duplicate_profile(&self, id: &ProfileId) -> Result<ProfileId, CommandError> {
@@ -66,9 +68,12 @@ impl<S: ViewSink> Shell<S> {
     }
 
     pub async fn delete_profile(&self, id: &ProfileId) -> Result<(), CommandError> {
-        let (_permit, _, kind) = self.permitted().await?;
+        let (permit, _, kind) = self.permitted().await?;
         let profiles = self.stores.profiles(kind).await?;
-        Ok(profiles.delete(id).await?)
+        profiles.delete(id).await?;
+        drop(permit);
+        self.report_on_connect().await;
+        Ok(())
     }
 
     /// Holds the apply lock for the whole apply, so no other output command interleaves with it.
@@ -88,7 +93,9 @@ impl<S: ViewSink> Shell<S> {
 
     pub async fn set_apply_on_connect(&self, id: Option<ProfileId>) -> Result<(), CommandError> {
         let (_, profiles) = self.store().await?;
-        Ok(profiles.set_apply_on_connect(id).await?)
+        profiles.set_apply_on_connect(id).await?;
+        self.report_on_connect().await;
+        Ok(())
     }
 
     pub async fn export_file_name(&self, id: &ProfileId) -> Result<String, CommandError> {

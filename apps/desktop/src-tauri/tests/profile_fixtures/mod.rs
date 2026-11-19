@@ -8,7 +8,7 @@ use prismforge_desktop::{
     CommandError, Shell, ShellConfig, ShellView, StoreView, Stores, ViewSink,
 };
 use prismforge_effects::{ControlValue, EffectInstance};
-use prismforge_testkit::{DemoBackend, DemoControls, FakeServer, FixtureDevice};
+use prismforge_testkit::{DemoBackend, DemoControls, FakeServer, FixtureDevice, wire};
 use serde::Serialize;
 use serde_json::Value;
 use tokio::time::sleep;
@@ -340,6 +340,71 @@ async fn offline_store(modules: &mut ProfileModules) {
     modules.store("storeOffline", shell.store_view().await.expect("store"));
     let details = shell.profile_details(&desk).await.expect("details");
     modules.add(|modules| &mut modules.details, "detailsOffline", &details);
+    on_connect_views(modules, &shell, &server).await;
+}
+
+fn retrying(shell: &Shell<Silent>) -> bool {
+    shell.view().session.is_some_and(|session| {
+        matches!(
+            session.connection,
+            prismforge_core::ConnectionState::Retrying { .. }
+        )
+    })
+}
+
+/// The apply-on-connect states the window shows while a session is not live.
+async fn on_connect_views(
+    modules: &mut ProfileModules,
+    shell: &Shell<Silent>,
+    server: &FakeServer,
+) {
+    let openrgb = || {
+        prismforge_openrgb::OpenRgbBackend::new(
+            server.connector(),
+            prismforge_openrgb::ClientConfig::default(),
+        )
+    };
+    server.silence(wire::REQUEST_CONTROLLER_DATA);
+    shell.start(openrgb()).await.expect("start");
+    while !retrying(shell) {
+        sleep(Duration::from_millis(50)).await;
+    }
+    modules.add(
+        |modules| &mut modules.views,
+        "viewArmedRetrying",
+        &shell.view(),
+    );
+    server.unsilence(wire::REQUEST_CONTROLLER_DATA);
+    while shell.view().connect_apply.is_none() {
+        sleep(Duration::from_millis(50)).await;
+    }
+    server.silence(wire::REQUEST_PROTOCOL_VERSION);
+    server.disconnect_all();
+    settle().await;
+    modules.add(
+        |modules| &mut modules.views,
+        "viewFiredRetrying",
+        &shell.view(),
+    );
+    server.unsilence(wire::REQUEST_PROTOCOL_VERSION);
+    shell.stop().await;
+
+    let old = FakeServer::new();
+    old.set_protocol_version(Some(5));
+    shell
+        .start(prismforge_openrgb::OpenRgbBackend::new(
+            old.connector(),
+            prismforge_openrgb::ClientConfig::default(),
+        ))
+        .await
+        .expect("start");
+    settle().await;
+    modules.add(
+        |modules| &mut modules.views,
+        "viewStoppedArmed",
+        &shell.view(),
+    );
+    shell.stop().await;
 }
 
 async fn recovered_store(modules: &mut ProfileModules) {

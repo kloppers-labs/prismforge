@@ -19,7 +19,9 @@ pub use forward::forward;
 pub use publisher::{Publisher, ViewSink};
 pub use shell::{Shell, ShellConfig};
 pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};
-pub use view::{ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, ShellView};
+pub use view::{
+    ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, OnConnect, ShellView,
+};
 
 pub const VIEW_EVENT: &str = "session-view";
 
