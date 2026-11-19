@@ -70,8 +70,9 @@ export class PreviewPlayer {
   }
 
   frameFor(leds: number): Rgb[] | null {
+    const frames = this.frames;
     const index = this.pattern?.leds.indexOf(clamp(leds, this.limits().leds)) ?? -1;
-    return index < 0 ? null : (this.frames?.[index] ?? null);
+    return index < 0 ? null : (frames?.[index] ?? null);
   }
 
   show(instance: EffectInstance | null, leds: number | number[]) {

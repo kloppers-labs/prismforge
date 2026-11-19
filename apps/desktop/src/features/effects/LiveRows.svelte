@@ -67,7 +67,8 @@
 
   .leds.grid {
     display: grid;
-    grid-template-columns: repeat(var(--columns), minmax(3px, 1fr));
+    grid-template-columns: repeat(var(--columns), minmax(3px, var(--space-5)));
+    justify-content: start;
   }
 
   .led {

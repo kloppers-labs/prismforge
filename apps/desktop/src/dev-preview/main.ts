@@ -41,9 +41,43 @@ async function arrange() {
     await wait(50);
     button(document, "Rescan devices")?.click();
   }
+  if (rail && scenario.area === "Effects") {
+    await effects();
+  }
   if (params.has("open")) {
     await wait(100);
     document.querySelector<HTMLButtonElement>(`button[aria-controls='${params.get("open")}-panel']`)?.click();
+  }
+}
+
+/** Checks targets, picks a group and an effect, applies or opens the live view, as the scenario asks. */
+async function effects() {
+  await wait(150);
+  for (const key of scenario.select ?? []) {
+    document.querySelector<HTMLElement>(`[data-target="${key}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
+    await tick();
+  }
+  if (scenario.group) {
+    const row = [...document.querySelectorAll<HTMLElement>(".groups li")].find((item) => item.querySelector(".name")?.textContent === scenario.group);
+    if (row) {
+      button(row, "Select")?.click();
+    }
+  }
+  await wait(50);
+  if (scenario.effect) {
+    const radio = [...document.querySelectorAll<HTMLInputElement>("input[type='radio']")].find((input) => input.closest("label")?.textContent?.includes(scenario.effect ?? ""));
+    radio?.click();
+  }
+  await wait(100);
+  if (scenario.apply) {
+    [...document.querySelectorAll<HTMLButtonElement>("button.primary")].find((candidate) => candidate.textContent?.startsWith("Apply"))?.click();
+  }
+  if (scenario.stage === "live") {
+    button(document, "Live output")?.click();
+  }
+  if (scenario.select && !scenario.apply) {
+    await wait(100);
+    document.getElementById("preview-title")?.scrollIntoView({ block: "start" });
   }
 }
 

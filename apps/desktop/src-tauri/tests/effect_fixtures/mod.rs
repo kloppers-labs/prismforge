@@ -270,6 +270,26 @@ pub async fn batches(batches: &mut Module, sessions: &mut Module) {
     batches.add("batchStopped", &stopped);
     let all = handle.stop_all_effects().await.expect("stop all");
     batches.add("stopAllReport", &all);
+
+    let (handle, _) = demo_connected().await;
+    let identify = tokio::spawn(handle.identify(DeviceRef::new(GPU), None, BLINK));
+    let before = wait_until(&handle, |snapshot| snapshot.identify.is_some()).await;
+    sessions.add("demoIdentifyingGpu", &before);
+    let report = handle
+        .apply_batch(
+            vec![
+                whole(MEMORY_1),
+                whole(MEMORY_2),
+                whole(MOTHERBOARD),
+                whole(GPU),
+            ],
+            rainbow(),
+        )
+        .await
+        .expect("batch during identify");
+    batches.add("batchDuringIdentify", &report);
+    sessions.add("demoBatchDuringIdentify", &handle.snapshot());
+    identify.await.expect("identify task").expect("identify");
 }
 
 /// Live output of a real OpenRGB session with a keyboard matrix and a strip, and the session beside it.

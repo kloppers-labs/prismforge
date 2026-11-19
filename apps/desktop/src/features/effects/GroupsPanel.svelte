@@ -51,10 +51,14 @@
     return here !== member.target.device ? here : storedLabel(member);
   }
 
+  function plural(count: number): string {
+    return count === 1 ? "1 target" : `${count} targets`;
+  }
+
   function summary(group: GroupView): string {
     const total = group.members.length;
     const here = group.members.filter((member) => member.state === "Resolved").length;
-    const count = total === 1 ? "1 target" : `${total} targets`;
+    const count = plural(total);
     return here === total ? count : `${count}, ${total - here} not here today`;
   }
 
@@ -99,7 +103,7 @@
     <li class="group" use:contextMenu={() => menu(EVERYTHING)} aria-keyshortcuts="Shift+F10">
       <div class="line">
         <span class="name">Everything</span>
-        <span class="meta">{selectAll(session).length} targets that can take an effect</span>
+        <span class="meta">{plural(selectAll(session).length)}</span>
       </div>
       <button type="button" class="small" data-mirror="group.select" onclick={() => groups.select(EVERYTHING, session, effects)}>Select</button>
     </li>
@@ -203,8 +207,8 @@
   .groups {
     display: grid;
     gap: var(--space-2);
-    padding-bottom: var(--space-3);
-    border-bottom: 1px solid var(--line-subtle);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line-subtle);
   }
 
   .head {

@@ -40,6 +40,7 @@
   />
 
   {#if effects.definition && checked}
+    <Stage instance={checked.instance} {rows} {session} limits={catalog.preview} />
     <div class="controls">
       <h3>Settings for {effects.definition.label}</h3>
       {#each effects.definition.controls as control (control.id)}
@@ -54,7 +55,6 @@
         {/if}
       {/each}
     </div>
-    <Stage instance={checked.instance} {rows} {session} limits={catalog.preview} />
   {/if}
 </section>
 

@@ -4,6 +4,7 @@ import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { TargetResult } from "../../lib/api/bindings/TargetResult";
 import { failureText } from "../../lib/errors";
 import type { Names } from "../../lib/names";
+import { distinction } from "../devices/present";
 import { deviceOf, runningOn, stopText, targetName } from "./present";
 import type { BatchFeedback } from "./state.svelte";
 
@@ -42,7 +43,9 @@ export function labelOf(session: SessionSnapshot, names: Names, target: OutputTa
   if (!device) {
     return target.device;
   }
-  return target.zone === null ? names.device(device) : `${names.device(device)}, ${targetName(names, device, target.zone)}`;
+  const where = distinction(session.devices, (each) => names.device(each))[session.devices.indexOf(device)];
+  const name = where ? `${names.device(device)} (${where})` : names.device(device);
+  return target.zone === null ? name : `${targetName(names, device, target.zone)} on ${name}`;
 }
 
 function row(session: SessionSnapshot, names: Names, result: TargetResult, server: string): BatchRow {

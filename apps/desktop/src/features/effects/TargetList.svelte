@@ -5,7 +5,7 @@
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import type { Names } from "../../lib/names";
   import { contextMenu, type Menu } from "../../lib/shell/menu.svelte";
-  import { deviceKey, hasDirectMode, ledCount, reference } from "../devices/present";
+  import { deviceKey, distinction, hasDirectMode, ledCount, reference } from "../devices/present";
   import { sameTarget, targetMark } from "./present";
   import { choiceBlocked, countText, isMixed, isSelected, options, type TargetOption } from "./selection";
 
@@ -39,8 +39,15 @@
 
   let list: HTMLElement | undefined = $state();
   let focused = $state<OutputTarget | null>(null);
+  let twins = $derived(distinction(session.devices, (device) => names.device(device)));
   let entries = $derived(
-    session.devices.map((device, index) => ({ key: deviceKey(device, index), ref: reference(device), device, mark: targetMark(session, device) })),
+    session.devices.map((device, index) => ({
+      key: deviceKey(device, index),
+      ref: reference(device),
+      device,
+      mark: targetMark(session, device),
+      where: twins[index] ?? null,
+    })),
   );
   let rows = $derived(options(session));
   let count = $derived(selection.length);
@@ -146,7 +153,6 @@
 {/snippet}
 
 <nav class="targets" aria-labelledby="targets-title">
-  {@render groups?.()}
   <div class="head">
     <h2 id="targets-title" class="title">Targets</h2>
     <div class="tools">
@@ -156,10 +162,11 @@
   </div>
   <p id="targets-count" class="count" role="status">{countText(count)}</p>
   <div class="list" role="listbox" aria-multiselectable="true" aria-labelledby="targets-title" aria-describedby="targets-count targets-keys" bind:this={list}>
-    {#each entries as { key: entryKey, ref, device, mark } (entryKey)}
+    {#each entries as { key: entryKey, ref, device, mark, where } (entryKey)}
       {@const reason = choiceBlocked(session, device, null)}
-      <div class="device" role="group" aria-labelledby="target-{entryKey}">
+      <div class="device" role="group" aria-labelledby="target-{entryKey}" aria-describedby={where ? `where-${entryKey}` : undefined}>
         <p id="target-{entryKey}" class="name">{names.device(device)}</p>
+        {#if where}<p id="where-{entryKey}" class="reason">{where}</p>{/if}
         {#if mark || !device.available || !hasDirectMode(device)}
           <p class="tags">
             {#if mark}<span class="tag {mark.tone}">{mark.text}</span>{/if}
@@ -188,6 +195,7 @@
   <p id="targets-keys" class="keys">
     Click a target to light it alone. Space or Ctrl-click adds or removes it; Shift selects a range.
   </p>
+  {@render groups?.()}
   {@render foot?.()}
 </nav>
 

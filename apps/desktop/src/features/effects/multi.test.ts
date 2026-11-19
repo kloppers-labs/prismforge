@@ -123,7 +123,7 @@ test("apply_sends_one_batch_and_lists_each_target_with_retry_for_the_failed_ones
   expect(within(results).getByText(/^Rainbow wave: 3 of 5 targets accepted\.$/)).toBeTruthy();
   expect(within(results).getAllByRole("listitem")).toHaveLength(6);
   expect(within(results).getByText(/Demo Light Bar: skipped\./)).toBeTruthy();
-  expect(within(results).getByText(/Demo Motherboard, Addressable Header 1: sent once, because the whole device is also selected\./)).toBeTruthy();
+  expect(within(results).getByText(/Addressable Header 1 on Demo Motherboard: sent once, because the whole device is also selected\./)).toBeTruthy();
   expect(results.querySelector(".report")?.classList.contains("unsettled")).toBe(true);
 
   await fireEvent.click(within(results).getByRole("button", { name: "Retry failed (2)" }));

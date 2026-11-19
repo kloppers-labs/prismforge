@@ -1,6 +1,7 @@
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { LIFECYCLE_EVENT, VIEW_EVENT } from "../lib/api/client";
+import { LIFECYCLE_EVENT, LIVE_EVENT, VIEW_EVENT } from "../lib/api/client";
+import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import type { PreviewBatch } from "../lib/api/bindings/PreviewBatch";
 import type { PreviewRequest } from "../lib/api/bindings/PreviewRequest";
@@ -34,6 +35,30 @@ function preview(args: Record<string, unknown>): PreviewBatch {
   return { led_count: request.led_count, start_ms: request.start_ms, interval_ms: request.interval_ms, is_static: false, frames };
 }
 
+/** Moves each zone's colours on by one LED per frame, so the live view animates as a real feed would. */
+function liveFeed(live: LiveOutput | undefined) {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  return (args: Record<string, unknown>) => {
+    clearInterval(timer);
+    const targets = args.targets as unknown[];
+    if (!live || targets.length === 0) {
+      return null;
+    }
+    let step = 0;
+    timer = setInterval(() => {
+      step += 1;
+      const frame: LiveOutput = {
+        devices: live.devices.map((device) => ({
+          ...device,
+          zones: device.zones.map((zone) => ({ ...zone, colors: zone.colors.map((_, index) => zone.colors[(index + step) % zone.colors.length]!) })),
+        })),
+      };
+      void emit(LIVE_EVENT, frame);
+    }, 40);
+    return null;
+  };
+}
+
 /** Stands in for the Tauri transport so the real App runs in a browser; nothing reaches Rust or hardware. */
 export function installTransport(scenario: Scenario) {
   let revision = scenario.view.revision;
@@ -49,7 +74,7 @@ export function installTransport(scenario: Scenario) {
     profile_details: (args) => details[String(args.id)] ?? Promise.reject({ Profile: "NotFound" }),
     effect_catalog: () => catalog,
     groups: () => scenario.groups ?? { ...groupsEmpty, kind: scenario.store.kind },
-    watch_live_output: () => null,
+    watch_live_output: liveFeed(scenario.live),
     preview_effect: preview,
     refresh: () => null,
     connect_openrgb: () => push(view(openRgbConnecting)),

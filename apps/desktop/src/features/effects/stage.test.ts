@@ -143,3 +143,24 @@ test("a_flashing_draft_preview_is_shown_slowed_on_the_screen", async () => {
 
   expect(await screen.findByText("Fast flashing is shown slowed on the screen. The devices get every frame.", {}, { timeout: 2_000 })).toBeTruthy();
 });
+
+test("the_draft_preview_draws_a_row_for_every_target_at_its_own_led_count", async () => {
+  const sized = (args: Record<string, unknown>) => {
+    const request = args.request as { led_count: number; start_ms: number; frame_count: number; interval_ms: number };
+    return {
+      led_count: request.led_count,
+      start_ms: request.start_ms,
+      interval_ms: request.interval_ms,
+      is_static: true,
+      frames: [Array.from({ length: request.led_count }, (_, index) => ({ r: index * 8, g: 64, b: 128 }))],
+    };
+  };
+  fakeShell(demoConnected, effectHandlers({ preview_effect: sized }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+  await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
+
+  await waitFor(() => expect(document.querySelectorAll(".stage .led:not(.off)")).toHaveLength(8 + 8 + 52 + 12));
+  expect(document.querySelectorAll(".stage .led.off")).toHaveLength(0);
+});

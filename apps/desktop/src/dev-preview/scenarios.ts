@@ -1,5 +1,9 @@
 import type { GroupsView } from "../lib/api/bindings/GroupsView";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
+import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
+import { batchDuringIdentify } from "../test/fixtures/batches";
+import { groupsDemo, groupsRealMissing } from "../test/fixtures/groups";
+import { liveKeyboardAndStrip } from "../test/fixtures/live";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import type { StoreView } from "../lib/api/bindings/StoreView";
@@ -21,6 +25,13 @@ export type Scenario = {
   diagnostics?: boolean;
   handlers?: Record<string, Handler>;
   groups?: GroupsView;
+  /** Targets checked on Effects, by their row key `device|zone` or `device|all`. */
+  select?: string[];
+  group?: string;
+  effect?: string;
+  apply?: boolean;
+  stage?: "live";
+  live?: LiveOutput;
   rescan?: boolean;
 };
 
@@ -88,6 +99,51 @@ export const SCENARIOS: Record<string, Scenario> = {
   "settings-background": { ...base, label: "Settings, keep running chosen", view: view(sessions.demoConnected), lifecycle: lifecycleChosen, area: "Settings" },
   diagnostics: { ...openRgb, label: "Diagnostics drawer", view: view(sessions.openRgbDegraded), diagnostics: true },
   "long-names": { ...base, label: "Long server address and profile name", view: view(long.session), store: long.store },
+  "effects-several-mixed": {
+    ...base,
+    label: "Effects, several targets with a mixed device",
+    view: view(sessions.demoConnected),
+    area: "Effects",
+    groups: groupsDemo,
+    select: ["demo-graphics-card|all", "demo-motherboard|0", "demo-motherboard|2", "demo-memory-2|all"],
+    effect: "Rainbow wave",
+  },
+  "effects-group-missing": {
+    ...openRgb,
+    label: "Effects, a group with a member not found today",
+    view: view(sessions.openRgbShelfGone),
+    area: "Effects",
+    groups: groupsRealMissing,
+    group: "Shelf and desk",
+  },
+  "effects-batch-skips": {
+    ...base,
+    label: "Effects, a batch result with a skipped target",
+    view: view(sessions.demoIdentifyingGpu),
+    area: "Effects",
+    groups: groupsDemo,
+    select: ["demo-memory-1|all", "demo-memory-2|all", "demo-motherboard|all", "demo-graphics-card|all"],
+    effect: "Rainbow wave",
+    apply: true,
+    handlers: { apply_effect_batch: () => batchDuringIdentify },
+  },
+  "effects-live": {
+    ...openRgb,
+    label: "Effects, the live output running",
+    view: view(sessions.openRgbKeyboardRunning),
+    area: "Effects",
+    select: [`${liveKeyboardAndStrip.devices[0]?.device}|all`, `${liveKeyboardAndStrip.devices[1]?.device}|all`],
+    stage: "live",
+    live: liveKeyboardAndStrip,
+  },
+  "effects-draft": {
+    ...base,
+    label: "Effects, the draft preview",
+    view: view(sessions.demoConnected),
+    area: "Effects",
+    select: ["demo-graphics-card|all", "demo-motherboard|1"],
+    effect: "Gradient",
+  },
 };
 
 export const DEFAULT_SCENARIO = "demo";

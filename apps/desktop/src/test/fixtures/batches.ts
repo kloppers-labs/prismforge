@@ -142,3 +142,46 @@ export const stopAllReport: BatchReport = {
     }
   ]
 };
+
+export const batchDuringIdentify: BatchReport = {
+  "results": [
+    {
+      "target": {
+        "device": "demo-memory-1",
+        "zone": null
+      },
+      "outcome": "Applied"
+    },
+    {
+      "target": {
+        "device": "demo-memory-2",
+        "zone": null
+      },
+      "outcome": "Applied"
+    },
+    {
+      "target": {
+        "device": "demo-motherboard",
+        "zone": null
+      },
+      "outcome": "Applied"
+    },
+    {
+      "target": {
+        "device": "demo-graphics-card",
+        "zone": null
+      },
+      "outcome": {
+        "Skipped": {
+          "error": {
+            "Session": {
+              "IdentifyInProgress": {
+                "device": "demo-graphics-card"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+};
