@@ -43,7 +43,7 @@ All tests pass on macOS. The Task 3b commits have no Windows CI result yet. Wind
 | The real store is `store` and demo mode's is `demo-store` below the per-user configuration folder. The shell picks the store from the backend origin. | `docs/decisions/0002-profile-and-identity.md` |
 | A store opens on first use, after the shell holds `instance.lock` with the standard file lock. A second PrismForge does not touch the store and says so. | same |
 | While a profile applies, the shell refuses every other output command and profile save, update and delete. The lock is released on every exit path. | same |
-| The shell takes its locks in one order: session slot, apply slot, output gate, store. A permit is taken while the session slot is held; a holder of a session handle never waits for that slot. | same |
+| The shell takes its locks in one order: session slot, apply slot, output gate, on-connect report, store. A permit is taken while the session slot is held; a holder of a session handle never waits for that slot. A test joins every registered command with a disconnect, a mode switch and the window close, and fails when a registered command is missing from it. | same |
 | Every profile result, dialog and draft on screen belongs to one session and one store. It goes when the session ends or the store changes between demo and real. Disconnect clears the apply-on-connect result. | `apps/desktop/README.md` |
 | Apply on connect applies once per user connect. A reconnect after a loss does not apply again. The shell publishes, per session, whether it is not applicable, not armed, armed (with the profile), blocked by an unreadable marked profile, or fired (with its result); every interface sentence about apply on connect comes from that state. | same |
 | Export and import take no path from the window. A path inside the configuration folder is refused; an import above 1 MiB is refused before it is read. | same |
@@ -67,18 +67,19 @@ Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `afdc5ea`, the last code commit of Task 3b fix round 3, including `pnpm tauri:build`.
+Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `7219955`, the last code commit of Task 3b fix round 4, including `pnpm tauri:build`.
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 266 tests (265 on Windows, where the failed-delete test is Unix only). 36 in `prismforge-effects`, 128 in `prismforge-core` (50 for profiles and the store), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 44 in `prismforge-desktop` (6 shell, 9 effect commands, 7 profile wiring, 5 lock order, 9 apply-on-connect state, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test --workspace` | Pass: 279 tests, the same set on Windows. 36 in `prismforge-effects`, 128 in `prismforge-core` (50 for profiles and the store), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 57 in `prismforge-desktop` (2 closed-report unit tests, 6 shell, 9 effect commands, 7 profile wiring, 8 lock order, 7 command lock table, 10 apply-on-connect state, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
+| `cargo test -p prismforge-desktop --test command_locks` | Pass five runs in a row, about 10 seconds each. 48 cases cover all 29 registered commands; each case runs in 6 joins |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
 | `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
 | `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 115 interface tests (36 for the Profiles screen, 4 for names, 4 for output during an apply and the apply-on-connect notice) |
-| `pnpm tauri:build` in `apps/desktop` | Pass at `afdc5ea`: `PrismForge.app` (14.38 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.16 MiB), not signed |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `7219955`: `PrismForge.app` (14.39 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.16 MiB), not signed |
 
 The scheduler and ownership tests use simulated time and the demo backend or the fake server. They check recorded writes and snapshot counters: late ticks are skipped and counted and every frame is the frame for its own moment; a refused device makes 7 tries in a minute while another device gets about 1,800 frames; a static scene gets one frame and one more only after a scene change, a reconnect or an inventory change; a declared device gets nothing until the hand-over; after an OpenRGB restart with reused IDs every frame still reaches the same fixture device.
 
@@ -161,7 +162,8 @@ Not done:
 - **An export cannot tell identical devices apart.** It has no serial numbers or locations. On the importing computer, two devices of the same model with the same zones stay unresolved.
 - **One rare command sequence removes a saved zone effect that never ran.** The profile holds a zone effect that this build cannot run, a whole-device effect from before the profile apply still runs on the same device, and the user applies an effect to a different zone. The change list of the update shows the removal.
 - **Apply on connect does not apply again after a lost connection.** When the session reconnects by itself, the effects in the session resume, and the marked profile is not applied a second time. It applies again on the next connect by the user.
-- **Disconnect during a profile apply waits for the apply.** The apply holds a session handle, so the session ends after the apply's last command. Each command is short, so this is at most a moment, but a hung backend call makes it last until the client timeout. It cannot hang: other commands still wait for the session slot that the disconnect holds, but nothing the disconnect waits for (the apply, a save, a command waiting for its answer) waits for that slot.
+- **Disconnect during a profile apply waits for the apply.** The apply holds a session handle, so the session ends after the apply's last command. Each command is short, so this is at most a moment, but a hung backend call makes it last until the client timeout. It cannot hang: other commands still wait for the session slot that the disconnect holds, but nothing the disconnect waits for (the apply, a save, a command waiting for its answer) waits for that slot. `tests/command_locks.rs` checks this for every registered command.
+- **An unreadable marked profile holds the apply lock for a moment.** When PrismForge connects with a marked profile that it cannot read, apply on connect takes the apply lock while the read fails. The view names no profile as being applied. An output command sent in that moment is refused with "PrismForge is applying a profile".
 - **A second PrismForge cannot use profiles.** It sees "Another PrismForge window is using the profile folder" and runs its sessions without the stored device list.
 - **Names need a resolved device.** A device that looks identical to another one cannot be named.
 - **The hand check left demo data on the build machine.** The folder `~/Library/Application Support/io.github.kloppers-labs.prismforge` holds the demo store and the lock file from the Task 3b hand check. It is safe to delete while PrismForge is closed.

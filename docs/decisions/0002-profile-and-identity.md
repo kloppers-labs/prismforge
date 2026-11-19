@@ -69,7 +69,7 @@ Before a store opens, the shell takes an exclusive lock on `instance.lock` with 
 
 ### Each session
 
-The shell seeds the backend with `Profiles::known_devices`, creates the session, starts `keep_registry` with the session's registry, starts the apply-on-connect watcher, then asks the session to connect. Disconnect aborts the watcher first (it holds a session handle), then ends the session, then waits for `keep_registry` to write the last registry.
+The shell seeds the backend with `Profiles::known_devices`, creates the session, starts `keep_registry` with the session's registry, starts the apply-on-connect watcher, then asks the session to connect. Disconnect aborts the watcher first (it holds a session handle), then closes the session's on-connect report, then ends the session, then waits for `keep_registry` to write the last registry.
 
 ### Apply on connect
 
@@ -82,14 +82,22 @@ The shell publishes the session's state in the view (`on_connect`), taken from t
 | `NotApplicable` | No session, or its store is not available. Nothing is applied on connect. |
 | `NotArmed` | The trigger has not come due and no profile is marked. A profile marked before the devices are read is applied then. |
 | `Armed` | The trigger has not come due; this profile is applied as soon as the devices are read. This holds also while the session retries after a connect whose first device scan failed. |
-| `Unreadable` | The trigger has not come due, and the marked profile needs a newer PrismForge or is no longer in the store. When the trigger comes due, the apply fails at reading the profile and sends nothing; the result is a failure. |
+| `Unreadable` | The trigger has not come due, and the marked profile needs a newer PrismForge or is no longer in the store. When the trigger comes due, the apply fails at reading the profile and sends nothing; the result is a failure. The view never shows this profile as being applied, and the result carries no name. |
 | `Fired` | The trigger came due in this session. `ran` is its result: the same report or failure as the apply-on-connect notice, or nothing when no profile was marked then. Nothing more is applied by itself in this session, also not after a lost connection; the user can still apply a profile. `next` is the profile the next user connect applies, or why it cannot be read. |
 
-The trigger reads the mark when it comes due, so marking or unmarking a profile before then changes what is applied; after it, a change of mark affects only the next connect. The shell publishes the state again after every command that can change the mark or the marked profile (mark, rename, delete, import), also when the command fails, and when a store opens after a recovery. The interface derives the sentence for a fired apply on connect from its result with the same rule as a manual apply, in one function that the notice and the status line share, so a partial, skipped or failed result is never shown as complete. A session that stopped by itself (for example an unsupported protocol) re-arms the trigger, but it does not retry; the next connect is a new session with a fresh trigger. The interface picks every sentence about a pending apply on connect from this state, and drops a command result that arrives after its session or store changed. PrismForge never starts or connects by itself, so the user must start PrismForge and connect for the profile to apply. The window shows the result of each automatic apply with a line per setting.
+The trigger reads the mark when it comes due, so marking or unmarking a profile before then changes what is applied; after it, a change of mark affects only the next connect. The shell publishes the state again after every command that can change the mark or the marked profile (mark, rename, delete), also when the command fails, and when a store opens after a recovery. An import stores a new profile under a new id, so it cannot change the mark and does not publish again. Each session has its own report. Ending the session closes the report, and a closed report publishes nothing. So a publish that started before a disconnect or a mode switch cannot overwrite the state that follows. The interface derives the sentence for a fired apply on connect from its result with the same rule as a manual apply, in one function that the notice and the status line share, so a partial, skipped or failed result is never shown as complete. A session that stopped by itself (for example an unsupported protocol) re-arms the trigger, but it does not retry; the next connect is a new session with a fresh trigger. The interface picks every sentence about a pending apply on connect from this state, and drops a command result that arrives after its session or store changed. PrismForge never starts or connects by itself, so the user must start PrismForge and connect for the profile to apply. The window shows the result of each automatic apply with a line per setting.
 
 ### Lock order
 
-The shell has four kinds of lock: the session slot (`active`), the apply slot, the output gate (permits and the apply's write side), and the store mutexes. Every command takes them in that order and never waits for an earlier one while it holds a later one. A command that needs a permit takes it while it holds the session slot, then releases the slot before it waits for the session's answer. A task that holds a session handle (an apply, a save) never waits for the session slot, because disconnect, a mode switch and exit hold that slot while they wait for every handle to go. Tests join an apply, a disconnect or the window close, and one more command (frame rate, save, identify, a second apply, an effect), under a bounded simulated time.
+The shell has five locks, taken in this order: the session slot (`active`), the apply slot, the output gate (permits and the apply's write side), the on-connect report, and the store (the `Stores` slots, the folder lock and the mutexes inside `Profiles`). The comment above `Shell::active` names the same five in the same order.
+
+- No task waits for an earlier lock while it holds a later one.
+- A task that holds a session handle never waits for the session slot. Disconnect, a mode switch and exit hold that slot while they wait for every handle to go.
+- A command takes its permit while it holds the session slot, and releases the slot with no await in between.
+- Publishing the on-connect state takes the report lock only after the session slot is released. The one exception is `start`, which publishes the new session's state while it holds the slot.
+- Ending a session closes its report under the report lock, while it holds the session slot.
+
+A test enforces the rule for every command. `tests/command_locks.rs` drives each command registered in `generate_handler!` through its shell method. It joins each one with a disconnect, a switch from demo to OpenRGB and the window close, each with and without a running profile apply, under bounded simulated time. A hang fails the test and names the command. Export and import open a native dialog, so the table drives the shell methods behind the dialog. A guard test fails when a command in `generate_handler!` or a permission in `capabilities/main.json` has no entry in the table, so a new command cannot skip the lock test. `tests/lock_order.rs` keeps the earlier joins of an apply, a disconnect or the window close with one more command.
 
 ### The apply lock
 
@@ -99,7 +107,7 @@ A user command sent while a profile applies would get a sequence number before t
 2. While it holds the lock, the shell answers `ProfileApplying` to every output command (apply or stop an effect, hardware mode, declare, hand back, frame rate, identify) and to saving, updating and deleting a profile.
 3. An output command already sent holds a permit until the session answers it. The apply waits for those permits before it sends anything.
 4. The lock is a guard value, released when it is dropped: after success, a partial result, an error, a cancelled command and the end of the session. Tests cover each path.
-5. The view carries the profile being applied, so the interface turns its output controls off with the reason.
+5. The view carries the profile being applied, so the interface turns its output controls off with the reason. A marked profile that cannot be read is not shown as being applied, because nothing from it is applied.
 6. Disconnect clears the result of the last apply on connect from the view. The interface also drops every profile result, open dialog and draft when the session ends or the store changes between demo and real.
 
 ### Export and import paths
