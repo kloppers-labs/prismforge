@@ -72,3 +72,25 @@ test("an_app_menu_replaces_the_webview_menu_in_development_too", async () => {
   expect(screen.getByRole("menu", { name: "Connection actions" })).toBeTruthy();
   expect(await fireEvent.contextMenu(screen.getByRole("main"))).toBe(true);
 });
+
+test("production_suppresses_the_webview_menu_on_disabled_controls_and_where_a_handler_stops_the_event", () => {
+  release = guardNativeMenu(window, "production");
+  const disabled = place("<button disabled>Identify device</button>");
+  const sealed = place("<div><span>Busy</span></div>");
+  sealed.addEventListener("contextmenu", (event) => event.stopPropagation());
+
+  expect(rightClick(disabled)).toBe(false);
+  expect(rightClick(sealed.querySelector("span")!)).toBe(false);
+});
+
+test("an_app_menu_still_opens_in_production", async () => {
+  fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo });
+  render(App);
+  await waitForConnection("Connected");
+  release = guardNativeMenu(window, "production");
+
+  const shown = await fireEvent.contextMenu(connectionChip());
+
+  expect(shown).toBe(false);
+  expect(screen.getByRole("menu", { name: "Connection actions" })).toBeTruthy();
+});

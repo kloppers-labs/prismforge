@@ -9,12 +9,12 @@ export function nativeMenu(target: EventTarget | null, build: Build): "allow" | 
 
 export function guardNativeMenu(scope: Window, build: Build): () => void {
   const listener = (event: MouseEvent) => {
-    if (!event.defaultPrevented && nativeMenu(event.target, build) === "suppress") {
+    if (nativeMenu(event.target, build) === "suppress") {
       event.preventDefault();
     }
   };
-  scope.addEventListener("contextmenu", listener);
-  return () => scope.removeEventListener("contextmenu", listener);
+  scope.addEventListener("contextmenu", listener, { capture: true });
+  return () => scope.removeEventListener("contextmenu", listener, { capture: true });
 }
 
 export function currentBuild(): Build {

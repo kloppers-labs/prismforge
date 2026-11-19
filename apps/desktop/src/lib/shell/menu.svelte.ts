@@ -140,6 +140,7 @@ function originFor(node: HTMLElement, target: EventTarget | null): HTMLElement {
   return node.querySelector<HTMLElement>(FOCUSABLE) ?? node;
 }
 
+const claimed = new WeakSet<Event>();
 let pointerAt = Number.NEGATIVE_INFINITY;
 let watching = false;
 
@@ -161,16 +162,18 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
       return;
     }
     event.preventDefault();
+    claimed.add(event);
     menus.open(() => current?.() ?? null, node, origin, anchor, byKeyboard);
   }
 
   function oncontextmenu(event: MouseEvent) {
-    if (event.defaultPrevented || isTextField(event.target)) {
+    if (claimed.has(event) || isTextField(event.target)) {
       return;
     }
     const origin = originFor(node, event.target);
     if (menus.echoOf(origin)) {
       event.preventDefault();
+      claimed.add(event);
       return;
     }
     const pointer = performance.now() - pointerAt < POINTER_WINDOW_MS;
@@ -179,7 +182,7 @@ export function contextMenu(node: HTMLElement, build: (() => Menu | null) | null
   }
 
   function onkeydown(event: KeyboardEvent) {
-    if (event.defaultPrevented || !isMenuKey(event) || isTextField(event.target)) {
+    if (claimed.has(event) || !isMenuKey(event) || isTextField(event.target)) {
       return;
     }
     const active = document.activeElement;
