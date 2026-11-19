@@ -82,7 +82,7 @@ export function storeErrorText(error: StoreError): string {
   if ("UnknownZone" in error) {
     return "This zone is not on the device.";
   }
-  if ("InvalidProfile" in error || "InvalidRegistry" in error) {
+  if ("InvalidProfile" in error || "InvalidRegistry" in error || "InvalidSettings" in error) {
     return "PrismForge did not write the file, because the result would not be valid. The previous version is still in place.";
   }
   if ("NotActive" in error) {

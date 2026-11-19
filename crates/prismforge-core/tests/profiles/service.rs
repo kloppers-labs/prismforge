@@ -400,3 +400,25 @@ async fn friendly_names_are_kept_and_label_captured_devices() {
         "Big card"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn the_active_profile_name_belongs_to_its_session_and_follows_a_rename() {
+    let dir = TempDir::new("active-name");
+    let profiles = open(&dir).await;
+    let (handle, _) = demo().await;
+    assert_eq!(profiles.active_name(&handle).await, None);
+
+    let id = profiles
+        .create_from_session(&handle, "Desk")
+        .await
+        .expect("save")
+        .id;
+    let saved = profiles.active_name(&handle).await;
+    profiles.rename(&id, "Evening").await.expect("rename");
+    let renamed = profiles.active_name(&handle).await;
+    let (other, _) = demo().await;
+
+    assert_eq!(saved.as_deref(), Some("Desk"));
+    assert_eq!(renamed.as_deref(), Some("Evening"));
+    assert_eq!(profiles.active_name(&other).await, None);
+}

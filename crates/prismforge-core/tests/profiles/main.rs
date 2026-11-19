@@ -1,3 +1,4 @@
+mod app_settings;
 mod apply;
 mod displaced;
 mod durability;
