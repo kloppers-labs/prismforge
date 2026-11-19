@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
   import { serverName } from "../connection/wording";
   import FailureNotice from "./FailureNotice.svelte";
@@ -13,8 +14,8 @@
   let box: HTMLDivElement | undefined = $state();
 
   $effect(() => {
-    if (feedback) {
-      box?.scrollIntoView?.({ block: "nearest" });
+    if (effects.pressed > 0) {
+      untrack(() => box)?.scrollIntoView?.({ block: "nearest" });
     }
   });
 </script>

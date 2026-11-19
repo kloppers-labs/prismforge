@@ -74,7 +74,7 @@
             <div class="how">
               <p>Runs while PrismForge runs and is connected.</p>
               <Details summary="How effects run">
-                <p>A PrismForge effect is computed by PrismForge, not by the device. It runs only while PrismForge runs and is connected.</p>
+                <p>A PrismForge effect is computed by PrismForge, not by the device.</p>
                 <p>{closing} When you stop an effect or quit, PrismForge asks {serverName(session)} to put back the earlier lighting.</p>
                 <p>PrismForge saves nothing by itself. To keep this lighting, save it as a profile on the Profiles screen. Profiles are saved on this computer, not on the device.</p>
                 <p>After PrismForge starts again, no effect runs until you apply one, or until a profile marked to apply on connect is applied.</p>

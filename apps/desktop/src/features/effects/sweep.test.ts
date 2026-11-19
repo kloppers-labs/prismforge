@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
 import { button, chooseTarget, effectHandlers } from "../../test/effects";
@@ -151,4 +151,31 @@ test("the_target_list_keeps_one_tab_stop_when_the_chosen_target_is_gone", async 
   await screen.findByText(/not in the device list any more/);
   const targets = screen.getByRole("navigation", { name: "Targets" });
   expect(within(targets).getAllByRole("button").filter((row) => row.tabIndex === 0)).toHaveLength(1);
+});
+
+test("while_an_effect_runs_the_page_says_once_that_it_runs_while_prismforge_runs", async () => {
+  fakeShell(demoEffectsRunning, effectHandlers());
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+
+  expect(screen.getAllByText(/runs (only )?while prismforge runs and is connected/i)).toHaveLength(1);
+});
+
+test("a_live_edit_never_scrolls_the_page_but_an_apply_press_shows_its_result", async () => {
+  Element.prototype.scrollIntoView ??= () => {};
+  const scrolled = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
+  fakeShell(demoEffectsRunning, effectHandlers({ apply_effect: () => null }));
+  render(App);
+  await chooseTarget("Demo Graphics Card");
+  scrolled.mockClear();
+
+  await fireEvent.input(screen.getByRole("spinbutton", { name: "Brightness" }), { target: { value: "40" } });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  await fireEvent.input(screen.getByRole("spinbutton", { name: "Brightness" }), { target: { value: "45" } });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  expect(scrolled).not.toHaveBeenCalled();
+
+  await fireEvent.click(button("Apply effect"));
+  await waitFor(() => expect(scrolled).toHaveBeenCalled());
+  scrolled.mockRestore();
 });

@@ -249,7 +249,8 @@ test("tells_software_effects_and_hardware_modes_apart", async () => {
   render(App);
 
   await chooseTarget("Demo Graphics Card");
-  expect(screen.getByText(/^A PrismForge effect\. It runs only while PrismForge runs and is connected\./)).toBeTruthy();
+  expect(screen.getByText(/^A PrismForge effect, computed by PrismForge and sent to the device\./)).toBeTruthy();
+  expect(screen.getByText("Runs while PrismForge runs and is connected.")).toBeTruthy();
   expect(screen.getByText(/A hardware mode runs on the device itself/)).toBeTruthy();
   expect(screen.getByText(/Selecting one stops the PrismForge effect on this device/)).toBeTruthy();
 

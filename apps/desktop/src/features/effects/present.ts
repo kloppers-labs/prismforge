@@ -155,7 +155,7 @@ export function ownerText(device: SessionDevice, output: DeviceOutput | null): s
   }
   const owner = output.owner;
   if (owner === "Effect") {
-    return "A PrismForge effect. It runs only while PrismForge runs and is connected.";
+    return "A PrismForge effect, computed by PrismForge and sent to the device.";
   }
   if ("HardwareMode" in owner) {
     return `Hardware mode ${modeName(device, owner.HardwareMode.mode)}, selected in PrismForge. It runs on the device itself. PrismForge writes nothing to this device.`;
