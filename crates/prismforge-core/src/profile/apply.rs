@@ -8,7 +8,7 @@ use crate::profile::effects::EffectProblem;
 use crate::profile::model::{Profile, ProfileDevice};
 use crate::profile::resolve::{DeviceResolution, DeviceStatus, resolve};
 use crate::scene::OutputTarget;
-use crate::session::{Origin, OutputError, SessionError, SessionHandle, SessionSnapshot};
+use crate::session::{Origin, OutputError, SessionDevice, SessionError, SessionHandle};
 
 /// What happened to each stored setting; partial application is normal and nothing is rolled back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,7 +127,7 @@ pub async fn apply(handle: &SessionHandle, profile: &Profile) -> Result<ApplyRep
             name: mode.name.clone(),
         };
         let outcome = match target_of(&resolutions, &mode.device) {
-            Ok(device) => match mode_now(&snapshot, &device, mode.index) {
+            Ok(device) => match mode_now(&snapshot.devices, &device, mode.index) {
                 Some(found) if found == mode.name => done(
                     handle
                         .select_mode_as(Origin::Profile, device, mode.index)
@@ -180,7 +180,7 @@ pub(crate) fn is_live(connection: &ConnectionState) -> bool {
     )
 }
 
-fn target_of(
+pub(crate) fn target_of(
     resolutions: &[DeviceResolution],
     device: &DeviceRef,
 ) -> Result<DeviceRef, SkipReason> {
@@ -196,9 +196,12 @@ fn target_of(
     }
 }
 
-fn mode_now(snapshot: &SessionSnapshot, device: &DeviceRef, index: usize) -> Option<String> {
-    snapshot
-        .devices
+pub(crate) fn mode_now(
+    devices: &[SessionDevice],
+    device: &DeviceRef,
+    index: usize,
+) -> Option<String> {
+    devices
         .iter()
         .find(|candidate| candidate.identity.reference() == Some(device))?
         .descriptor

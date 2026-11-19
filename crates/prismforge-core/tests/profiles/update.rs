@@ -884,7 +884,7 @@ fn import_refuses_a_file_that_would_grow_past_the_store_limit() {
     assert!(compact.len() < 1024 * 1024);
     let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
 
-    let refused = store.import(&compact, &[]);
+    let refused = store.import(&compact, None);
 
     assert!(
         matches!(

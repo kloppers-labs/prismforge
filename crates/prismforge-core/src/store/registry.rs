@@ -34,7 +34,42 @@ pub struct ZoneName {
     pub extra: Extra,
 }
 
+/// The user's names for one device and its zones, for display.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DeviceNames {
+    pub device: DeviceRef,
+    pub name: Option<String>,
+    pub zones: Vec<ZoneLabel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ZoneLabel {
+    pub zone: usize,
+    pub name: String,
+}
+
 impl Registry {
+    pub fn names(&self) -> Vec<DeviceNames> {
+        self.devices
+            .iter()
+            .filter(|device| device.name.is_some() || !device.zone_names.is_empty())
+            .map(|device| DeviceNames {
+                device: device.reference.clone(),
+                name: device.name.clone(),
+                zones: device
+                    .zone_names
+                    .iter()
+                    .map(|zone| ZoneLabel {
+                        zone: zone.zone,
+                        name: zone.name.clone(),
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
     pub fn known_devices(&self) -> Vec<KnownDevice> {
         self.devices
             .iter()

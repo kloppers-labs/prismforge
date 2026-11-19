@@ -5,7 +5,8 @@ use std::time::Duration;
 
 use prismforge_core::{
     BackendError, BackendEvent, BackendInfo, BackendOrigin, ConnectionState, DeviceCapabilities,
-    DeviceIdentity, DeviceRef, Inventory, InventoryDevice, LossCause, Rgb, RgbBackend, StateReason,
+    DeviceIdentity, DeviceRef, Inventory, InventoryDevice, KnownDevice, LossCause, Rgb, RgbBackend,
+    StateReason,
 };
 use tokio::sync::Notify;
 use tokio::time::Instant;
@@ -108,6 +109,7 @@ pub struct DemoBackend {
     connected: bool,
     stale: bool,
     inventory: Option<Inventory>,
+    known: Vec<KnownDevice>,
 }
 
 impl Default for DemoBackend {
@@ -125,6 +127,7 @@ impl DemoBackend {
             connected: false,
             stale: true,
             inventory: None,
+            known: Vec::new(),
         }
     }
 
@@ -298,6 +301,14 @@ impl RgbBackend for DemoBackend {
                 }
             })
             .collect();
+        self.known = self
+            .devices
+            .iter()
+            .map(|device| KnownDevice {
+                reference: device.reference.clone(),
+                fingerprint: device.descriptor.fingerprint(),
+            })
+            .collect();
         self.stale = false;
         self.state = ConnectionState::Connected;
         Ok(self.inventory.insert(Inventory {
@@ -310,6 +321,10 @@ impl RgbBackend for DemoBackend {
 
     fn inventory(&self) -> Option<&Inventory> {
         self.inventory.as_ref()
+    }
+
+    fn known_devices(&self) -> &[KnownDevice] {
+        &self.known
     }
 
     fn capabilities(&self, device: &DeviceRef) -> Result<&DeviceCapabilities, BackendError> {

@@ -183,8 +183,8 @@ fn import_keeps_and_reports_what_this_version_cannot_run_and_never_overwrites() 
     let target = TempDir::new("import-target");
     let mut store = ProfileStore::open(target.path(), StdFileOps).expect("open");
 
-    let first = store.import(&exported, &[]).expect("first import");
-    let second = store.import(&exported, &[]).expect("second import");
+    let first = store.import(&exported, None).expect("first import");
+    let second = store.import(&exported, None).expect("second import");
 
     assert_eq!(first.renamed_from, None);
     assert_eq!(first.details.name, "Evening");
@@ -284,7 +284,7 @@ fn import_refuses_damaged_foreign_oversized_and_future_files_before_storing_anyt
 
     for (bytes, problem) in cases {
         assert_eq!(
-            store.import(bytes, &[]),
+            store.import(bytes, None),
             Err(ImportError::Unreadable { problem })
         );
     }

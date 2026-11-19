@@ -4,6 +4,7 @@ mod changes;
 mod codec;
 mod effects;
 mod model;
+mod preflight;
 mod resolve;
 mod update;
 mod validate;
@@ -20,6 +21,7 @@ pub use model::{
     ExternalControl, Extra, ModeSelection, Profile, ProfileAssignment, ProfileDevice, ProfileId,
     StoredEffect, StoredIdentity, StoredZone,
 };
+pub(crate) use preflight::{Checked, preflight};
 pub use resolve::{DeviceResolution, DeviceStatus, resolve};
 pub(crate) use update::{Updated, all_added, update};
 pub use validate::{NAME_LIMIT, NameProblem, clean_name};
