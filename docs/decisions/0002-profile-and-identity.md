@@ -6,7 +6,7 @@
 
 ## Current state
 
-The Rust core has a durable local store, profile schema version 1, capture, apply, export and import (Task 3a). The desktop app does not use it yet: it has no profile screen and no profile command (Task 3b). **Nothing here has run against a real OpenRGB server or real hardware.** The evidence comes from tests on real files in temporary folders, the demo backend and the scripted fake server.
+The Rust core has a durable local store, profile schema version 1, capture, apply, export and import (Task 3a). The desktop app uses it through fifteen profile commands and a Profiles screen (Task 3b). **Nothing here has run against a real OpenRGB server or real hardware.** The evidence comes from tests on real files in temporary folders, the demo backend, the scripted fake server, and a hand check of the built macOS app in demo mode.
 
 The code is in `crates/prismforge-core/src/profile` (the model, capture, matching and apply) and `crates/prismforge-core/src/store` (files, recovery, registry, export and import, and `Profiles` for async callers).
 
@@ -20,7 +20,7 @@ The code is in `crates/prismforge-core/src/profile` (the model, capture, matchin
 
 ## Files
 
-The caller gives the store one folder. The desktop app will pass its per-user configuration folder.
+The caller gives the store one folder. The desktop app uses two folders below its per-user configuration folder, as the next section says.
 
 | File | Holds |
 |---|---|
@@ -31,6 +31,63 @@ The caller gives the store one folder. The desktop app will pass its per-user co
 Each file has a backup next to it with `.bak` added to the name. A write uses a temporary file with `.tmp` added to the name.
 
 **One file per profile.** A damaged profile cannot take the others down. Each write touches one small file. Delete is the removal of one file and its backup.
+
+## The desktop app
+
+### Where the store lives
+
+Tauri resolves the per-user configuration folder for the identifier `io.github.kloppers-labs.prismforge`:
+
+| System | Folder |
+|---|---|
+| Windows | `%APPDATA%\io.github.kloppers-labs.prismforge` |
+| macOS | `~/Library/Application Support/io.github.kloppers-labs.prismforge` |
+| Linux | `~/.config/io.github.kloppers-labs.prismforge` |
+
+| Below it | Holds |
+|---|---|
+| `store` | The profiles, devices and settings for real hardware |
+| `demo-store` | The same files for demo mode |
+| `instance.lock` | The lock that keeps a second PrismForge out |
+
+Diagnostics shows the folder in use. A store opens on first use: when a session starts or when the user opens Profiles. Starting the app reads and writes neither store.
+
+### Demo profiles are kept apart
+
+A session against the demo backend uses `demo-store`. Any other session, and no session, uses `store`. The shell picks the store from the backend's origin, which the session cannot change.
+
+- **Why a second folder.** A profile captured from simulated devices names models such as "Demo Graphics Card". Kept in the real store, it would be listed next to real profiles with its devices "not found", and the user could mark it to apply on connect for real hardware. A separate folder means it is never listed, matched or applied while PrismForge talks to OpenRGB. The demo device list and its names also stay out of the real registry.
+- **What still crosses.** An export from demo mode can be imported while connected to OpenRGB. Its devices are then unresolved, as for any import of unknown models, and the report says so.
+
+### One PrismForge per folder
+
+Before a store opens, the shell takes an exclusive lock on `instance.lock` with the standard library's `File::try_lock`. It holds the lock until the process ends; the operating system then releases it, also after a crash.
+
+- A second PrismForge that finds the lock taken opens neither store. Every profile command answers `StoreUnavailable::InUse`, and the Profiles screen says another PrismForge window uses the folder. Its sessions still run, without the stored device list, and it writes nothing to the folder.
+- It tries again on the next profile command, so it works once the first PrismForge has closed.
+- Not covered: a copy of PrismForge that predates the lock, and a folder on a network share whose server ignores file locks.
+
+### Each session
+
+The shell seeds the backend with `Profiles::known_devices`, creates the session, starts `keep_registry` with the session's registry, starts the apply-on-connect watcher, then asks the session to connect. Disconnect aborts the watcher first (it holds a session handle), then ends the session, then waits for `keep_registry` to write the last registry.
+
+### Apply on connect
+
+The watcher feeds every snapshot to `ConnectTrigger` and calls `apply_marked` when it is due. The profile applies once each time the session becomes live after the user connects. A connection that the session restores by itself after a loss is the same connect: the profile is not applied again, and the effects in the session resume. PrismForge never starts or connects by itself, so the user must start PrismForge and connect for the profile to apply. The window shows the result of each automatic apply with a line per setting.
+
+### The apply lock
+
+A user command sent while a profile applies would get a sequence number before the apply's baseline and never count as a pending change. So the shell, not only the interface, refuses it:
+
+1. A profile apply, by the user or on connect, takes the lock. A second apply by the user is refused; the watcher waits for a user's apply to end.
+2. While it holds the lock, the shell answers `ProfileApplying` to every output command (apply or stop an effect, hardware mode, declare, hand back, frame rate, identify) and to saving, updating and deleting a profile.
+3. An output command already sent holds a permit until the session answers it. The apply waits for those permits before it sends anything.
+4. The lock is a guard value, released when it is dropped: after success, a partial result, an error, a cancelled command and the end of the session. Tests cover each path.
+5. The view carries the profile being applied, so the interface turns its output controls off with the reason.
+
+### Export and import paths
+
+The export and import commands take no path from the window. Rust opens the native save or open dialog of `tauri-plugin-dialog` and uses only the path it returns. The window has no dialog or file permission. A path inside PrismForge's configuration folder is refused, so an export can never replace a store file. An import whose size is above 1 MiB is refused before it is read.
 
 ## Schema and versioning
 
@@ -178,7 +235,7 @@ The session task does no file I/O. `Profiles` runs every store operation with `t
 
 ## Recovery instructions for users
 
-The files are in the PrismForge folder of your user configuration folder. On Windows this is under `%APPDATA%`. On macOS it is under `~/Library/Application Support`. On Linux it is under `~/.config`. The exact folder name comes with Task 3b.
+The files are in the folder `io.github.kloppers-labs.prismforge` of your user configuration folder: under `%APPDATA%` on Windows, `~/Library/Application Support` on macOS and `~/.config` on Linux. Your profiles are in its `store` folder. Demo mode keeps its own in `demo-store`. Diagnostics in PrismForge shows the folder in use. PrismForge shows each repair below on the Profiles screen until you dismiss it.
 
 - **`devices.json`** remembers your devices and the names you gave them. **`settings.json`** remembers the profile to apply on connect. **`profiles`** holds one file per profile.
 - **A `.bak` file** is the version before the last change. PrismForge uses it by itself when the main file is missing or damaged.
@@ -187,6 +244,7 @@ The files are in the PrismForge folder of your user configuration folder. On Win
 - **After a "needs a newer PrismForge" notice:** a newer version of PrismForge wrote that file. This version does not change it. Install the newer version, or keep using this version without that profile.
 - **To move a profile to another computer,** use export and import, not a copy of the local file. The export has no serial numbers or locations. On the other computer, two devices of the same model cannot be told apart from an export; they stay unresolved.
 - **A `.tmp` file** is the rest of a write that stopped. It is safe to delete when PrismForge is closed.
+- **`instance.lock`** keeps a second PrismForge out of the folder while one runs. It holds nothing. Do not delete it while PrismForge runs.
 
 ## Not verified
 
@@ -194,4 +252,6 @@ The files are in the PrismForge folder of your user configuration folder. On Win
 - Behaviour after a real power loss. The tests fail single steps through a file-operations seam; they cannot cut power between the sync and the rename.
 - The Windows file system. CI runs the same tests on `windows-latest`. Replace-over-existing uses `std::fs::rename`, which replaces the target on Windows. A file that another program holds open without delete sharing (for example an antivirus scan) makes a write fail with an error; the old file stays.
 - Whether a real device name from OpenRGB can contain private data. The export keeps the model name as OpenRGB reports it.
-- The desktop flow: the profile screen, the config folder, the apply-on-connect watcher in the shell (Task 3b).
+- The desktop app on Windows: the configuration folder, the folder lock and the native dialogs. CI builds and tests on `windows-latest`, but nobody has run the app there.
+- The native save and open dialogs. Rust tests call the export and import code with paths; no test and no hand check opened a dialog.
+- Two PrismForge processes on one real folder. A test opens two stores on one folder in one process; the lock works per open file on macOS and Windows, but two real processes were not started.

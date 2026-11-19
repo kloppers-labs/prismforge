@@ -18,7 +18,7 @@
   <h3 id="save-title">Save the current lighting</h3>
   <p class="hint">
     {#if active}
-      The new profile holds {active} and the changes you made since you applied it. Effects that already ran before you applied {active}, on devices it does not name, are not included.
+      The new profile holds {active} and the changes you made since you applied or saved it. Effects that already ran before that, on devices {active} does not name, are not included.
     {:else}
       The new profile holds the effects, hardware modes, program statements and frame rate in use now.
     {/if}

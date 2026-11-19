@@ -333,7 +333,7 @@ test("save_as_new_with_an_active_profile_says_what_it_holds", async () => {
 
   expect(
     screen.getByText(
-      "The new profile holds Evening and the changes you made since you applied it. Effects that already ran before you applied Evening, on devices it does not name, are not included.",
+      "The new profile holds Evening and the changes you made since you applied or saved it. Effects that already ran before that, on devices Evening does not name, are not included.",
     ),
   ).toBeTruthy();
 });

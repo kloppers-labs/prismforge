@@ -6,7 +6,7 @@ PrismForge has no subscription, no account, no advertisements and no telemetry.
 
 ## Status
 
-PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone. Profiles exist in the Rust core but not yet in the app, so the app saves nothing yet. It has no layout yet.
+PrismForge is at an early stage. The desktop app shows the connection, the devices that OpenRGB reports, and an identify action. Its effects screen runs the six built-in effects on a device or zone. Its profiles screen saves the lighting as profiles on this computer, applies them, and exports and imports them. Devices and zones can have your own names. It has no layout yet.
 
 | Part | Status |
 |---|---|
@@ -20,8 +20,8 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | Effect engine: six original effects, output scheduler at 30 FPS, output ownership | Built in Rust. Tested with the demo backend and the fake server in simulated time only. |
 | Effects screen: targets, generated parameter controls, preview, apply and stop, hardware modes, another program's control, frame rate | Built. Run by hand in demo mode on macOS (Apple Silicon) through the accessibility tree only. |
 | Effects plugin provider, performance measurements | Not started |
-| Profiles in the Rust core: versioned files, backups and recovery, device registry on disk, capture, apply with a result per setting, export and import without private data | Built. Tested on real files in temporary folders with the demo backend and the fake server only. Not in the app yet. |
-| Profile screen in the app | Not started |
+| Profiles in the Rust core: versioned files, backups and recovery, device registry on disk, capture, apply with a result per setting, export and import without private data | Built. Tested on real files in temporary folders with the demo backend and the fake server only. |
+| Profiles screen in the app: save, update with a change list, apply with a result per setting, rename, duplicate, delete, export, import, apply on connect, repaired-file notices; device and zone names | Built. Tested through the shell and the interface tests only. Native dialogs not run by hand. |
 | Layout, tray, autostart | Not started |
 
 ## Requirements
@@ -60,7 +60,18 @@ After a connection, **Devices** shows the device list and identify. **Effects** 
 
 1. Choose a device or one of its zones. Each device shows its owner: none, a PrismForge effect, a hardware mode selected in PrismForge, or another program that you named.
 2. Choose an effect and set its values. The controls come from the effect's definition. A preview shows the pattern, not the device.
-3. Choose **Apply effect**. A PrismForge effect runs only while PrismForge runs and is connected. Closing the window quits PrismForge, stops its effects and asks OpenRGB to put back the earlier lighting. Nothing is saved yet.
+3. Choose **Apply effect**. A PrismForge effect runs only while PrismForge runs and is connected. Closing the window quits PrismForge, stops its effects and asks OpenRGB to put back the earlier lighting.
+
+**Profiles** keeps lighting for later:
+
+- **Save as new profile** stores the effects, hardware modes, program statements and frame rate in use. Profiles are files on this computer. Nothing is saved to the devices.
+- **Apply profile** sends the stored settings and lists each one as applied or skipped, with the reason. A device that is missing, identical to another one or changed is skipped and stays in the profile. PrismForge never moves a setting to a similar device.
+- **Save changes** adds what you changed since you applied the profile. It shows the change list first. PrismForge links your changes to a profile only until it closes; after a restart, apply the profile first.
+- **Apply this profile when PrismForge connects** is off by default. When it is on, PrismForge applies the profile once each time you connect. It does not start PrismForge or connect by itself.
+- **Export** writes a file without serial numbers or locations. **Import** adds a new profile and never replaces one.
+- Demo mode has its own profiles. They never apply to real hardware.
+
+On **Devices**, **Rename device** and **Rename zone** give your own names. They appear on every screen. Diagnostics keeps the reported names.
 
 PrismForge cannot see other programs, such as the OpenRGB Effects plugin, and cannot stop them. If another program controls a device, say so on the effects screen. PrismForge then sends nothing to that device until you hand it back.
 
