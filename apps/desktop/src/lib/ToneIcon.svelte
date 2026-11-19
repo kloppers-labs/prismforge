@@ -11,6 +11,9 @@
   {:else if tone === "idle"}
     <circle cx="8" cy="8" r="6.5" />
     <path d="M5.5 8 L10.5 8" />
+  {:else if tone === "waiting"}
+    <circle cx="8" cy="8" r="6.5" />
+    <path d="M8 4.6 L8 8 L10.4 9.6" />
   {:else if tone === "working"}
     <circle cx="8" cy="8" r="6.5" stroke-dasharray="3 2.2" />
   {:else if tone === "warning"}
@@ -38,6 +41,10 @@
   }
 
   .working {
+    stroke: var(--working);
+  }
+
+  .waiting {
     stroke: var(--working);
   }
 

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
+import { summarise } from "./wording";
 import { connectionChip, findDemoMarker, openConnection, waitForConnection } from "../../test/shell";
 import {
   demoConnected,
@@ -32,7 +33,7 @@ test("shows_connection_failure_without_fake_devices", async () => {
   expect(screen.getByText("Nothing answered at the OpenRGB server at 127.0.0.1:6742.")).toBeTruthy();
   expect(screen.queryByRole("navigation", { name: /Devices/ })).toBeNull();
   expect(screen.queryByRole("button", { name: /Identify/ })).toBeNull();
-  expect(screen.queryByRole("complementary", { name: "Demo mode" })).toBeNull();
+  expect(document.querySelector("[data-demo]")).toBeNull();
   expect(screen.queryByText(/Demo/)).toBeNull();
 });
 
@@ -41,7 +42,9 @@ test("labels_demo_mode", async () => {
   render(App);
 
   const marker = await findDemoMarker();
-  expect(marker.textContent).toContain("simulated devices. Nothing is sent to hardware.");
+  expect(within(marker).getByText("simulated devices")).toBeTruthy();
+  const panel = await openConnection();
+  expect(within(panel).getByText("Demo mode: these devices are simulated. Nothing is sent to hardware.")).toBeTruthy();
   expect(screen.getByText("Simulated device. There is no hardware behind it.")).toBeTruthy();
   expect(within(connectionChip()).getByText("Demo backend")).toBeTruthy();
 
@@ -137,4 +140,10 @@ test("the_connection_screen_says_a_marked_profile_is_applied_on_connect", async 
       "PrismForge does not download, install or change OpenRGB. It writes nothing to your devices until you choose an action such as Identify, Apply effect or Apply profile, or until it connects while a profile is set to “Apply this profile when PrismForge connects”: that profile is applied as soon as the connection is made.",
     ),
   ).toBeTruthy();
+});
+
+test("retrying_reads_as_waiting_not_as_a_failure", () => {
+  expect(summarise(openRgbRefused).tone).toBe("waiting");
+  expect(summarise(openRgbLostWhileConnected).tone).toBe("waiting");
+  expect(summarise(openRgbOldServer).tone).toBe("problem");
 });

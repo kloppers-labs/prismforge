@@ -2,7 +2,7 @@ import type { LossCause } from "../../lib/api/bindings/LossCause";
 import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { StateReason } from "../../lib/api/bindings/StateReason";
 
-export type Tone = "ok" | "working" | "warning" | "problem";
+export type Tone = "ok" | "working" | "waiting" | "warning" | "problem";
 
 export type ConnectionSummary = {
   tone: Tone;
@@ -38,7 +38,7 @@ export function summarise(session: SessionSnapshot): ConnectionSummary {
   if ("Retrying" in connection) {
     const { attempt, reason } = connection.Retrying;
     return {
-      tone: "problem",
+      tone: "waiting",
       label: `Retrying, retry ${attempt} next`,
       reasons: [
         explain(reason, where, session),

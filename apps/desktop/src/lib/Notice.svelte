@@ -73,6 +73,10 @@
     --tone: var(--working);
   }
 
+  .waiting {
+    --tone: var(--working);
+  }
+
   .warning {
     --tone: var(--warning);
     --tone-surface: var(--warning-surface);
@@ -92,6 +96,10 @@
   .title {
     font-weight: var(--weight-strong);
     overflow-wrap: anywhere;
+  }
+
+  .notice:focus-visible {
+    outline-offset: -2px;
   }
 
   .details {

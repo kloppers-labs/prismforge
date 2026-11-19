@@ -8,7 +8,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    margin-left: auto;
     white-space: nowrap;
   }
 

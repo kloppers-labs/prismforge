@@ -11,7 +11,7 @@
   let profile = $derived(profileStatus(app.view, app.profiles.store));
   let background = $derived(
     app.lifecycle.settings?.on_close === "Background" && app.lifecycle.trayAvailable
-      ? "Closing the window keeps PrismForge running in the background, connected."
+      ? "Closing the window keeps PrismForge running in the background."
       : null,
   );
   let announcement = $derived(
@@ -21,12 +21,12 @@
 
 <section class="strip" class:demo={connection.demo} aria-label="Status" bind:this={region}>
   <ConnectionChip {app} status={connection} {background} {onconnect} />
+  {#if connection.demo}
+    <DemoMarker />
+  {/if}
   {#if profile}
     <span class="divider" aria-hidden="true"></span>
     <ProfileChip {app} status={profile} />
-  {/if}
-  {#if connection.demo}
-    <DemoMarker />
   {/if}
   <p class="visually-hidden" role="status" aria-label="Status summary">{announcement}</p>
 </section>

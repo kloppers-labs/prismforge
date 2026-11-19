@@ -39,20 +39,21 @@ export function connectionStatus(session: SessionSnapshot | null): ConnectionSta
   const demo = isSimulated(session);
   const where = demo ? "Demo backend" : session.backend.address ? `OpenRGB ${session.backend.address}` : "OpenRGB";
   const base = { tone: summary.tone, label: summary.label, where, demo };
+  const note = demo ? ["Demo mode: these devices are simulated. Nothing is sent to hardware."] : [];
   if (ended(session)) {
-    return { ...base, step: "ended", lines: ["The connection stopped. PrismForge does not try again by itself.", ...summary.reasons] };
+    return { ...base, step: "ended", lines: ["The connection stopped. PrismForge does not try again by itself.", ...summary.reasons, ...note] };
   }
   if (isLive(session)) {
     const lead = summary.reasons.length > 0 ? `Connected to ${place(session)}, with problems.` : `Connected to ${place(session)}.`;
-    return { ...base, step: "live", lines: [lead, ...summary.reasons] };
+    return { ...base, step: "live", lines: [lead, ...summary.reasons, ...note] };
   }
   if (summary.retrying) {
-    return { ...base, step: "retrying", lines: summary.reasons };
+    return { ...base, step: "retrying", lines: [...summary.reasons, ...note] };
   }
   if (session.connection === "Connecting") {
-    return { ...base, step: "connecting", lines: summary.reasons };
+    return { ...base, step: "connecting", lines: [...summary.reasons, ...note] };
   }
-  return { ...base, step: "starting", lines: [`PrismForge is starting the connection to ${place(session)}.`] };
+  return { ...base, step: "starting", lines: [`PrismForge is starting the connection to ${place(session)}.`, ...note] };
 }
 
 export function connectionName(status: ConnectionStatus): string {
