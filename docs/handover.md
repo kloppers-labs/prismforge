@@ -4,7 +4,7 @@ Last update: 2026-11-19.
 
 ## Current state
 
-Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built. Task 3a, the profile core in Rust, and Task 3b, the profiles screen and the shell wiring, are built.
+Task 1 and Task 2 are built. Task 2 is not closed: nobody has run the app on Windows, and four native screenshots and one hand check are missing. Task 4a, the effect engine, and Task 4b, the effects screen, are built. Task 3a, the profile core in Rust, and Task 3b, the profiles screen and the shell wiring, are built. Task 6a, the application lifecycle (tray, close or quit, one instance, start-up, Settings), is built; the rest of Task 6 (packaging, the validation matrix, measurements) is not started.
 
 The repository has a Rust workspace with four crates and a desktop app. `prismforge-effects` holds six original built-in effects as pure functions, their typed control definitions and the validation of stored effect instances. `prismforge-core` holds the device types, the identity matching, the backend contract, the scene and ownership types, and the session. The session owns the backend, reconnects, keeps a readable snapshot, runs the identify action, and runs effects through an output scheduler with explicit output ownership. `prismforge-openrgb` holds our own OpenRGB SDK client for protocol 6 and the adapter. `prismforge-testkit` holds a scripted fake OpenRGB server and a simulated demo backend.
 
@@ -16,7 +16,9 @@ The session has commands for effects: list the effect definitions, apply or repl
 
 The desktop app saves profiles (Task 3b). The shell opens a real store and a separate demo store below the per-user configuration folder on first use, after it holds a folder lock. It seeds each session with the stored device list, keeps the list on disk beside the session, and applies the profile marked for apply on connect once per user connect. A profile apply holds a lock in the shell that refuses every other output command. The Profiles screen lists the profiles with their contents and how many devices are found today, shows each stored setting with the reason it would be skipped, and saves, updates (change list first), applies (a result per setting), renames, duplicates, deletes (confirmed), exports and imports. Export and import use the native dialog, opened from Rust. Devices and zones can have the user's names. The header names the active profile and its unsaved changes.
 
-All tests pass on macOS. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
+The desktop app keeps running in the background when the user chooses it (Task 6a). It has a tray icon with the connection, the PrismForge effects and the active profile, Show or Hide, Stop all PrismForge effects and Quit. The first close of the window asks whether to keep running in the tray or to quit, and remembers the answer. Settings holds the close choice and the start-up path in four steps, each off by default: start with the system, start hidden in the tray, connect to OpenRGB at start, and the profile marked to apply on connect, named on the screen. A second start shows the running PrismForge. The app settings are a durable file beside the stores. See `docs/decisions/0004-lifecycle.md`.
+
+All tests pass on macOS. The Task 6a commits have no Windows CI result yet. The Task 3b commits have no Windows CI result yet. Windows CI passed on the last commit of Task 4a and on the last Task 4b commit before review fix round 1; the fix round 1 commits have no Windows CI result yet. Windows CI also builds the unsigned installers. The app was run by hand on macOS (Apple Silicon) only. Nobody has run it on Windows. No test against a real OpenRGB server or real hardware has been done.
 
 ## Decisions
 
@@ -39,11 +41,15 @@ All tests pass on macOS. The Task 3b commits have no Windows CI result yet. Wind
 | The desktop shell owns at most one session. A new session starts only after the previous one has stopped and its identify is restored. Disconnect ends the session. | `apps/desktop/README.md` |
 | The window gets the latest snapshot at most once per 50 ms. Each view has a rising revision, and the interface ignores older views. | `apps/desktop/README.md` |
 | The TypeScript types come from the Rust serde types through `ts-rs` (feature `ts` of `prismforge-core`). The interface test fixtures come from real sessions. Tests fail when either folder is out of date. | `apps/desktop/README.md` |
-| The window has one capability with event listen and the twenty-nine app commands. The only plugin is `tauri-plugin-dialog`, called from Rust; the window has no plugin permission. | `apps/desktop/README.md` |
+| The window has one capability with event listen and the thirty-three app commands. The plugins are `tauri-plugin-dialog`, `tauri-plugin-single-instance` and `tauri-plugin-autostart`, called from Rust; the window has no plugin permission. | `apps/desktop/README.md` |
 | The real store is `store` and demo mode's is `demo-store` below the per-user configuration folder. The shell picks the store from the backend origin. | `docs/decisions/0002-profile-and-identity.md` |
 | A store opens on first use, after the shell holds `instance.lock` with the standard file lock. A second PrismForge does not touch the store and says so. | same |
 | While a profile applies, the shell refuses every other output command and profile save, update and delete. The lock is released on every exit path. | same |
 | The shell takes its locks in one order: session slot, apply slot, output gate, on-connect report, store. A permit is taken while the session slot is held; a holder of a session handle never waits for that slot. A test joins every registered command, through its shell method, with a disconnect, a mode switch and the window close in both poll orders, and with a profile apply and each of those in all six orders. It fails when a registered command is missing from it. It does not drive the Tauri wrappers or their native dialogs. | same |
+| Closing the window hides it or quits, as the user chose; the first close asks. Without a tray it always quits. Quit always stops the session first and never blocks a system quit, logout or shutdown. | `docs/decisions/0004-lifecycle.md` |
+| Start with the system, start hidden, connect at start and the apply-on-connect mark are separate switches, all off by default. With start, connect and a mark on, the lights change at system start without a click; Settings says so and names the profile. | same |
+| One PrismForge per user: a second start shows the first window and exits. App settings are `app-settings.json` beside the stores, with the store's write and recovery rules. | same |
+| The tray shows only the published view and the store: connection kind and state, effect devices running or waiting, the active profile. Stop all uses the per-device stop and the window shows one result per device. | same |
 | Every profile result, dialog and draft on screen belongs to one session and one store. It goes when the session ends or the store changes between demo and real. Disconnect clears the apply-on-connect result. | `apps/desktop/README.md` |
 | Apply on connect applies once per user connect. A reconnect after a loss does not apply again. The shell publishes, per session, whether it is not applicable, not armed, armed (with the profile), blocked by an unreadable marked profile, or fired (with its result); every interface sentence about apply on connect comes from that state. | same |
 | Export and import take no path from the window. A path inside the configuration folder is refused; an import above 1 MiB is refused before it is read. | same |
@@ -60,26 +66,28 @@ The owner changed the priority on 2026-11-18. The effect engine moves earlier.
 3. Task 4: effect engine, output scheduler and output ownership. **4a built** (engine, scheduler, ownership, session commands). **4b built** (Tauri commands, effects screen, generated parameter controls, preview, ownership hand-over). The Effects plugin provider and the measurements come next.
 4. Task 3: profiles. **3a built** (schema, store, registry on disk, capture, apply, export and import, in Rust). **3b built** (shell wiring, Tauri commands, Profiles screen, device and zone names).
 5. Task 5: component setup and layout.
-6. Task 6: lifecycle, packaging and validation on the target machine.
+6. Task 6: lifecycle, packaging and validation on the target machine. **6a built** (tray, close or quit, one instance, start-up, Settings). Packaging, the validation matrix and measurements come next.
 7. After the core engine: more colour, wave and pattern effects; audio-reactive effects; screen-reactive effects; Effects plugin provider and the test of plugin editing.
 
 Task numbers are from `docs/plans/prismforge-implementation-plan.md`.
 
 ## Verification
 
-Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `7219955`, the last product code commit of Task 3b fix round 4, including `pnpm tauri:build`. Fix round 5 changed only the lock test and docs; the Rust and interface checks ran again on it, the native build did not.
+Run on macOS (Apple Silicon) with Rust 1.99.0 and Node.js 22.23.5 on 2026-11-19, at `d568b3b`, the last product code commit of Task 6a, including `pnpm tauri:build`.
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all --check` | Pass |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Pass, no warnings |
 | `cargo clippy -p prismforge-desktop --all-targets --features ts -- -D warnings` | Pass, no warnings |
-| `cargo test --workspace` | Pass: 279 tests, the same set on Windows. 36 in `prismforge-effects`, 128 in `prismforge-core` (50 for profiles and the store), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 57 in `prismforge-desktop` (2 closed-report unit tests, 6 shell, 9 effect commands, 7 profile wiring, 8 lock order, 7 command lock table, 10 apply-on-connect state, 4 view forwarding, 3 stop-then-exit, 1 fixture drift check) |
-| `cargo test -p prismforge-desktop --test command_locks` | Pass five runs in a row, about 7 seconds each. 48 cases cover all 29 registered commands through their shell methods. Each case runs beside a disconnect, a mode switch and the window close in both poll orders, and with a profile apply in all six orders: 1,152 joins. With either known deadlock put back (a permit taken before the session slot, or a handle held across the slot), the table fails and names the commands |
+| `cargo test --workspace` | Pass: 322 tests. 36 in `prismforge-effects`, 138 in `prismforge-core` (60 for profiles, the store and the app settings file), 49 in `prismforge-openrgb`, 9 in `prismforge-testkit`, 90 in `prismforge-desktop` (2 closed-report unit tests, 6 shell, 9 effect commands, 7 profile wiring, 8 lock order, 7 command lock table, 10 apply-on-connect state, 4 view forwarding, 3 stop-then-exit, 12 lifecycle decisions, 21 lifecycle through the shell, 1 fixture drift check) |
+| `cargo test -p prismforge-desktop --test command_locks` | Pass, about 9 seconds. 56 cases cover all 33 registered commands through their shell or lifecycle methods, and 6 more cases cover the tray, window, start-up and second-start actions: 1,488 joins. With the `quit` case removed, the guard test fails with "registered but not in the lock table: [\"quit\"]" |
 | `cargo test -p prismforge-desktop --features ts --test bindings` | Pass (binding drift check) |
-| `cargo check -p prismforge-core -p prismforge-effects -p prismforge-openrgb -p prismforge-testkit --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
-| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 115 interface tests (36 for the Profiles screen, 4 for names, 4 for output during an apply and the apply-on-connect notice) |
-| `pnpm tauri:build` in `apps/desktop` | Pass at `7219955`: `PrismForge.app` (14.39 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.16 MiB), not signed |
+| `cargo check -p prismforge-core --all-targets --target x86_64-pc-windows-msvc` | Pass (type check only). The desktop crate cannot be checked this way on macOS: its Windows resource step needs `llvm-rc`. |
+| `pnpm typecheck`, `pnpm test` in `apps/desktop` | Pass: 0 type errors, 135 interface tests (19 for Settings, the first-close question, Quit and the tray stop report; 1 for the preview with a hidden native window) |
+| `pnpm tauri:build` in `apps/desktop` | Pass at `d568b3b`: `PrismForge.app` (15.50 MiB) and `PrismForge_0.1.0_aarch64.dmg` (4.46 MiB), not signed. Built with `CARGO_TARGET_DIR` set to a scratch folder, because the owner was running the earlier build from `target/release/bundle`. |
+
+Task 6a was not checked by hand. The owner was running a build of this branch at the time, and a second start would have shown and focused the owner's window. No PrismForge process was started or stopped for this task, and no start entry was registered on the build machine.
 
 The scheduler and ownership tests use simulated time and the demo backend or the fake server. They check recorded writes and snapshot counters: late ticks are skipped and counted and every frame is the frame for its own moment; a refused device makes 7 tries in a minute while another device gets about 1,800 frames; a static scene gets one frame and one more only after a scene change, a reconnect or an inventory change; a declared device gets nothing until the hand-over; after an OpenRGB restart with reused IDs every frame still reaches the same fixture device.
 
@@ -140,13 +148,15 @@ Not done:
 
 ## Next steps
 
-1. With the owner's consent and screen-capture permission, take the four missing screenshots and one of the effects screen, look at the preview animation, and check the current build by hand, including closing the window during an identify.
-2. Task 4: the Effects plugin provider (list, start and stop of plugin effects) with explicit ownership, and the static and animated performance measurements.
-3. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
-4. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
-5. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
-6. With the owner's consent, check the export and import dialogs by hand on macOS and Windows, and start a second PrismForge to see the folder-lock message.
-7. Task 5: component setup and layout. A layout will be a new field in a later profile schema version.
+1. The UI and UX sweep with the reworked navigation bar, which the owner asked for after Task 6a.
+2. Check Task 6a by hand on macOS and on Windows: the first close, hide and show from the tray, Stop all, Quit from the tray and the keyboard, a second start while hidden, and the start-up path with a test account or a disposable VM (start with the system, start hidden, connect at start, a marked profile). Remove the start entry afterwards and confirm that no PrismForge process is left.
+3. With the owner's consent and screen-capture permission, take the four missing screenshots and one of the effects screen, look at the preview animation, and check the current build by hand, including closing the window during an identify.
+4. Task 4: the Effects plugin provider (list, start and stop of plugin effects) with explicit ownership, and the static and animated performance measurements.
+5. Install the CI installer on the Windows PC. Check the connection screen, demo mode, and the retry state with OpenRGB closed.
+6. Run the probe on the Windows PC with OpenRGB 1.1 and record the result in `docs/hardware-validation.md`. The command is in `README.md`. Remove serial numbers from the output before you commit it.
+7. Connect the desktop app to that OpenRGB server and identify one device. Record what the device did. After 4b, run one effect on one device and record the frame rate it reaches and whether OpenRGB reports Direct Mode afterwards.
+8. With the owner's consent, check the export and import dialogs by hand on macOS and Windows, and start a second PrismForge to see the hand-over to the first window.
+9. Task 5: component setup and layout. A layout will be a new field in a later profile schema version.
 
 ## Known issues
 
@@ -164,7 +174,7 @@ Not done:
 - **Apply on connect does not apply again after a lost connection.** When the session reconnects by itself, the effects in the session resume, and the marked profile is not applied a second time. It applies again on the next connect by the user.
 - **Disconnect during a profile apply waits for the apply.** The apply holds a session handle, so the session ends after the apply's last command. Each command is short, so this is at most a moment, but a hung backend call makes it last until the client timeout. It cannot hang: other commands still wait for the session slot that the disconnect holds, but nothing the disconnect waits for (the apply, a save, a command waiting for its answer) waits for that slot. `tests/command_locks.rs` checks this for every registered command in every poll order.
 - **An unreadable marked profile holds the apply lock for a moment.** When PrismForge connects with a marked profile that it cannot read, apply on connect takes the apply lock while the read fails. The view names no profile as being applied. An output command sent in that moment is refused with "PrismForge is applying a profile".
-- **A second PrismForge cannot use profiles.** It sees "Another PrismForge window is using the profile folder" and runs its sessions without the stored device list.
+- **A second PrismForge exits.** A second start shows the first window and ends before it opens anything. A copy without the single-instance plugin (an older build) still finds the folder lock: it sees "Another PrismForge window is using the profile folder" and cannot change the settings.
 - **Names need a resolved device.** A device that looks identical to another one cannot be named.
 - **The hand check left demo data on the build machine.** The folder `~/Library/Application Support/io.github.kloppers-labs.prismforge` holds the demo store and the lock file from the Task 3b hand check. It is safe to delete while PrismForge is closed.
 - **A profile update adds only what the user did in this session.** The session records each user command for output (apply, stop, hardware mode, declaration, hand-back, frame rate). An update applies the records after the profile's baseline to the stored profile. Everything else stays as loaded. It needs the active profile (the one applied or saved in this session) and refuses any other. The records live in memory for one session. After an app restart, apply or create a profile before the next update.
@@ -174,10 +184,15 @@ Not done:
 - **Ambiguous devices cannot be resolved yet.** The app explains them and turns Identify off for them. A way to tell identical devices apart by hand does not exist.
 - **Disconnect ends the session.** Its diagnostics and its list of known devices are gone after a disconnect. Host and port reset to the defaults when the app restarts.
 - **Identify always lasts 3 seconds.** The shell sets it; there is no setting.
-- **Closing during an identify waits for the restore.** The app holds the exit until the session has stopped, so the window can close a moment before the process ends.
+- **Quitting during an identify waits for the restore.** The app holds the exit until the session has stopped. The window hides at once, so it can be gone a moment before the process ends.
+- **Lifecycle on Windows is not verified.** The tray, the start entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, the single-instance hand-over and the keyboard have not run on Windows. When PrismForge runs as Administrator, the autostart plugin writes the start entry to `HKLM` instead; the NSIS uninstaller removes only the `HKCU` value, and the MSI removes neither. See `docs/decisions/0004-lifecycle.md` for the manual removal.
+- **Logout and shutdown are not tested.** PrismForge does not block them, but no test shows that the release of effects finishes before the system ends the process.
+- **The tray and window glue has no automated test.** Tauri's mock runtime cannot exit and cannot show a tray. The decisions behind it are tested through fake window, exit and start-entry seams.
+- **Settings refresh when the screen opens.** A mark changed on Profiles shows on Settings when Settings opens again; the lifecycle view is not republished after a mark.
+- **The connection screen still starts with the default address.** Connect at start uses the remembered address, but the Host and Port fields show `127.0.0.1` and `6742` after a restart.
 - **One target at a time.** The effects screen applies an effect to one device or zone. Several targets need several applies. A device with one zone lists only "Whole device".
 - **The preview is a line of LEDs.** It shows the pattern on up to 60 LEDs in a line, not the real device or its layout.
-- **Effects still end with the session.** Saving a profile keeps them as a file on this computer. A PrismForge effect runs only while PrismForge runs; apply the profile again, or mark it to apply on connect.
+- **Effects still end with the session.** Saving a profile keeps them as a file on this computer. A PrismForge effect runs only while PrismForge runs; keep PrismForge running in the tray, apply the profile again, or mark it to apply on connect.
 - **A program name is free text.** The label for "another program" is the user's own words, trimmed and cut to 60 characters. Without a name it is "another program".
 - **No real-machine evidence for effects.** All scheduler numbers come from simulated time. Real frame timing and CPU use are not measured.
 - **Colour frames are not confirmed.** The client does not read the acknowledgement of a colour write. "Frames written" counts frames sent without an error, not frames OpenRGB applied.

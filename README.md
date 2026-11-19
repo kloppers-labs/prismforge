@@ -22,7 +22,8 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | Effects plugin provider, performance measurements | Not started |
 | Profiles in the Rust core: versioned files, backups and recovery, device registry on disk, capture, apply with a result per setting, export and import without private data | Built. Tested on real files in temporary folders with the demo backend and the fake server only. |
 | Profiles screen in the app: save, update with a change list, apply with a result per setting, rename, duplicate, delete, export, import, apply on connect, repaired-file notices; device and zone names | Built. Tested through the shell and the interface tests only. Native dialogs not run by hand. |
-| Layout, tray, autostart | Not started |
+| Tray, close or quit, one instance, start with the system, start hidden, connect at start, Settings screen | Built. Tested through the shell with fake window and start-entry seams and in interface tests. Native macOS build only; not run by hand, not run on Windows. |
+| Layout | Not started |
 
 ## Requirements
 
@@ -60,16 +61,25 @@ After a connection, **Devices** shows the device list and identify. **Effects** 
 
 1. Choose a device or one of its zones. Each device shows its owner: none, a PrismForge effect, a hardware mode selected in PrismForge, or another program that you named.
 2. Choose an effect and set its values. The controls come from the effect's definition. A preview shows the pattern, not the device.
-3. Choose **Apply effect**. A PrismForge effect runs only while PrismForge runs and is connected. Closing the window quits PrismForge, stops its effects and asks OpenRGB to put back the earlier lighting.
+3. Choose **Apply effect**. A PrismForge effect runs only while PrismForge runs and is connected. Quitting PrismForge stops its effects and asks OpenRGB to put back the earlier lighting.
 
 **Profiles** keeps lighting for later:
 
 - **Save as new profile** stores the effects, hardware modes, program statements and frame rate in use. Profiles are files on this computer. Nothing is saved to the devices.
 - **Apply profile** sends the stored settings and lists each one as applied or skipped, with the reason. A device that is missing, identical to another one or changed is skipped and stays in the profile. PrismForge never moves a setting to a similar device.
 - **Save changes** adds what you changed since you applied the profile. It shows the change list first. PrismForge links your changes to a profile only until you disconnect, switch between demo mode and OpenRGB, or close PrismForge; after that, apply the profile first.
-- **Apply this profile when PrismForge connects** is off by default. When it is on, PrismForge applies the profile once each time you connect. It does not start PrismForge or connect by itself.
+- **Apply this profile when PrismForge connects** is off by default. When it is on, PrismForge applies the profile once each time you connect.
 - **Export** writes a file without serial numbers or locations. **Import** adds a new profile and never replaces one.
 - Demo mode has its own profiles. They never apply to real hardware.
+
+**Settings** holds what PrismForge does when it starts and when you close the window:
+
+- **When you close the window.** The first time you close it, PrismForge asks. "Keep running in the tray" hides the window; PrismForge and its effects keep running, and its tray icon (the menu bar on macOS) shows the window again. "Quit PrismForge" ends it. Without a tray, closing the window always quits.
+- **Quit PrismForge** is in the tray menu, on Settings, and on the keyboard (Command-Q on macOS, Ctrl+Q on Windows). It stops PrismForge effects, puts back the earlier lighting where it can, disconnects and ends the process.
+- **When PrismForge starts**, in four steps, each off until you turn it on: 1. start PrismForge when you sign in; 2. start hidden in the tray; 3. connect to OpenRGB when PrismForge starts, at the address of your last Connect; 4. the profile marked "Apply this profile when PrismForge connects". With steps 1, 3 and 4 on, your lights change at system start without a click. Settings shows which profile that is.
+- Starting PrismForge a second time shows the window of the one that runs.
+
+Turn off "Start PrismForge when you sign in" before you uninstall. `docs/decisions/0004-lifecycle.md` says how to remove the entry by hand.
 
 On **Devices**, **Rename device** and **Rename zone** give your own names. They appear on every screen. Diagnostics keeps the reported names.
 
