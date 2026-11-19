@@ -58,6 +58,10 @@
       null,
   );
 
+  function zonesCount(device: SessionDevice): number {
+    return device.descriptor.zones.length;
+  }
+
   function key(target: OutputTarget): string {
     return `${target.device}|${target.zone ?? "all"}`;
   }
@@ -130,7 +134,8 @@
     {@const current = shown !== null && sameTarget(shown, row.target)}
     {@const deviceReason = choiceBlocked(session, device, null)}
     {@const own = row.reason !== null && (zone !== null && row.reason !== deviceReason)}
-    {@const described = zoned || mixed ? `state-${key(row.target)}` : own ? `why-${key(row.target)}` : row.reason !== null ? `why-${row.target.device}` : undefined}
+    {@const whole = zone === null && selected && zonesCount(device) > 1}
+    {@const described = zoned || mixed || whole ? `state-${key(row.target)}` : own ? `why-${key(row.target)}` : row.reason !== null ? `why-${row.target.device}` : undefined}
     <div
       class="pick option"
       role="option"
@@ -148,10 +153,16 @@
       use:contextMenu={() => menu(device, row.target)}
     >
       <span class="box" class:checked={selected || zoned} class:mixed class:off={row.reason !== null} aria-hidden="true">
-        {selected || zoned ? "✓" : mixed ? "–" : ""}
+        {selected ? "✓" : zoned ? "≡" : mixed ? "–" : ""}
       </span>
-      <span class="row"><span>{label}</span><span class="pick-meta">{ledCount(leds)}</span></span>
-      {#if zoned || mixed}<span id="state-{key(row.target)}" class="visually-hidden">{zoned ? "Every zone selected on its own" : "Some zones selected"}</span>{/if}
+      <span class="row">
+        <span>{label}</span>
+        {#if zoned || whole}<span class="how" aria-hidden="true">{zoned ? "Each zone" : "As one"}</span>{/if}
+        <span class="pick-meta">{ledCount(leds)}</span>
+      </span>
+      {#if zoned || mixed || whole}
+        <span id="state-{key(row.target)}" class="visually-hidden">{zoned ? "Every zone selected on its own" : whole ? "Selected as one target" : "Some zones selected"}</span>
+      {/if}
     </div>
     {#if own}<p id="why-{key(row.target)}" class="reason zone-reason">{row.reason}</p>{/if}
   {/if}
@@ -313,6 +324,15 @@
 
   .box.off {
     border-style: dashed;
+  }
+
+  .how {
+    margin-left: auto;
+    padding: 0 var(--space-1);
+    border: 1px solid var(--line-control);
+    border-radius: var(--radius-xs);
+    font-size: var(--font-xs);
+    color: var(--text-dim);
   }
 
   .row {

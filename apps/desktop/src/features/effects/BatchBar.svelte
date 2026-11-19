@@ -21,7 +21,7 @@
     if (effects.effect === null) {
       return { name: "Draft", text: "Choose an effect. Your devices stay as they are until you apply it." };
     }
-    if (effects.mixed.length > 0) {
+    if (effects.differs.length > 0) {
       return { name: "Draft", text: `Some settings differ between the targets, marked Mixed. Apply sends the values shown to all ${count} targets.` };
     }
     if (effects.allRun) {

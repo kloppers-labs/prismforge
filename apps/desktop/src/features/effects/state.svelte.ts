@@ -60,8 +60,11 @@ export class EffectsState {
   /** The last Apply or Stop press and the targets it went to; live edits never set it. */
   pressed = $state<{ count: number; key: string } | null>(null);
   batch = $state<BatchFeedback | null>(null);
-  /** Controls whose values differ between the targets that run the chosen effect; Live stays off while any is left. */
-  mixed = $state<string[]>([]);
+  private edited = $state<string[]>([]);
+  /** Settings whose running values differ between the selected targets; Live stays off until an Apply makes them equal, even after each one is edited. */
+  differs = $derived(this.effect !== null ? this.differing(this.effect) : []);
+  /** The differing settings the user has not changed yet; each is marked Mixed. */
+  mixed = $derived(this.differs.filter((id) => !this.edited.includes(id)));
   private lastColor = START_COLOR;
   externalProblem = $state<Failure | null>(null);
   private effectResult = $state<EffectFeedback | null>(null);
@@ -102,7 +105,7 @@ export class EffectsState {
   });
   /** True only while a changed setting may be sent to every target without the user pressing Apply. */
   canAutoApply = $derived(
-    this.allRun && this.mixed.length === 0 && this.blocked === null && this.targets.every((target) => !this.isHeld(target)),
+    this.allRun && this.differs.length === 0 && this.blocked === null && this.targets.every((target) => !this.isHeld(target)),
   );
 
   private reapplyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -155,7 +158,7 @@ export class EffectsState {
   /** Selects only `target`, so its own page shows; this is the single-target flow. */
   select(target: OutputTarget) {
     this.leave();
-    this.mixed = [];
+    this.edited = [];
     this.selection = [target];
     this.anchor = target;
     this.effect = null;
@@ -220,7 +223,7 @@ export class EffectsState {
       this.effect = first.effect.effect;
       this.fields = this.definition ? initialFields(this.definition, first.effect.values) : {};
     }
-    this.mixed = adopt && this.effect !== null ? this.differing(this.effect) : [];
+    this.edited = [];
   }
 
   private differing(effect: string): string[] {
@@ -246,12 +249,14 @@ export class EffectsState {
     const running = this.running ?? (session && this.targets[0] ? runningOn(session, this.targets[0]) : null);
     const values = running?.effect.effect === effect ? running.effect.values : {};
     this.fields = this.definition ? initialFields(this.definition, values, this.lastColor) : {};
-    this.mixed = this.differing(effect);
+    this.edited = [];
   }
 
   setField(id: string, field: Field) {
     this.fields = { ...this.fields, [id]: field };
-    this.mixed = this.mixed.filter((each) => each !== id);
+    if (!this.edited.includes(id)) {
+      this.edited = [...this.edited, id];
+    }
     const color = field.kind === "color" ? parseHex(field.text) : null;
     if (color) {
       this.lastColor = toHex(color);
@@ -447,7 +452,7 @@ export class EffectsState {
       );
     } else if (answer.ok) {
       this.rustProblems = {};
-      this.mixed = [];
+      this.edited = [];
     }
     this.afterBatch(answer, (report) => ({ kind: "applied", label: definition.label, instance, report }));
   }

@@ -233,13 +233,17 @@ test("every_zone_checked_stays_zone_by_zone_until_the_device_row_itself_is_check
   const whole = option("Demo Motherboard");
   expect(whole.getAttribute("aria-selected")).toBe("false");
   expect(document.getElementById(whole.getAttribute("aria-describedby")!)?.textContent).toBe("Every zone selected on its own");
-  expect(whole.querySelector(".box")?.textContent?.trim()).toBe("✓");
+  expect(within(whole).getByText("Each zone")).toBeTruthy();
   expect(screen.getByText("4 targets selected")).toBeTruthy();
   expect(screen.getByText("Demo Graphics Card (whole device), 3 zones of Demo Motherboard")).toBeTruthy();
 
   await fireEvent.click(whole, { ctrlKey: true });
 
-  expect(option("Demo Motherboard").getAttribute("aria-selected")).toBe("true");
+  const one = option("Demo Motherboard");
+  expect(one.getAttribute("aria-selected")).toBe("true");
+  expect(document.getElementById(one.getAttribute("aria-describedby")!)?.textContent).toBe("Selected as one target");
+  expect(within(one).getByText("As one")).toBeTruthy();
+  expect(within(one).queryByText("Each zone")).toBeNull();
   expect(screen.getByText("Demo Graphics Card (whole device), Demo Motherboard (whole device)")).toBeTruthy();
   await fireEvent.click(screen.getByRole("radio", { name: "Rainbow wave" }));
   await fireEvent.click(button("Apply to 2 targets"));
@@ -295,4 +299,60 @@ test("retry_is_not_offered_for_targets_that_would_be_refused_again", async () =>
   const results = await screen.findByRole("status", { name: "Results for each target" });
   expect(within(results).getByText(/Demo Light Bar: skipped\./)).toBeTruthy();
   expect(within(results).queryByRole("button", { name: /^Retry/ })).toBeNull();
+});
+
+function differing() {
+  const plain = { effect: "rainbow-wave", values: {} };
+  const other = { effect: "rainbow-wave", values: { speed: { Number: 60 }, brightness: { Number: 50 } } };
+  return withEffect(withEffect(demoConnected, { device: "demo-graphics-card", zone: null }, plain, "Running"), { device: "demo-memory-2", zone: null }, other, "Running");
+}
+
+function batchAnswer() {
+  return (call: Record<string, unknown>) => ({ results: (call.targets as object[]).map((target) => ({ target, outcome: "Applied" })) });
+}
+
+test("editing_every_mixed_setting_still_sends_nothing_until_apply", async () => {
+  const shell = fakeShell(differing(), effectHandlers({ apply_effect_batch: batchAnswer() }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(option("Demo Graphics Card"), { ctrlKey: true });
+  await fireEvent.click(option("Demo Memory Module", "Whole device", 1), { ctrlKey: true });
+  expect(screen.getAllByText(/^Mixed\./)).toHaveLength(2);
+
+  await fireEvent.input(screen.getByRole("spinbutton", { name: "Speed" }), { target: { value: "30" } });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  await fireEvent.input(screen.getByRole("spinbutton", { name: "Brightness" }), { target: { value: "70" } });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+
+  expect(screen.queryAllByText(/^Mixed\./)).toHaveLength(0);
+  expect(args(shell.calls, "apply_effect_batch")).toEqual([]);
+  expect(screen.getByText(/^Some settings differ between the targets/)).toBeTruthy();
+  expect(screen.queryByText(/Changes go to all 2 targets/)).toBeNull();
+
+  await fireEvent.click(button("Apply to 2 targets"));
+  await waitFor(() => expect(args(shell.calls, "apply_effect_batch")).toHaveLength(1));
+  const effect = args(shell.calls, "apply_effect_batch")[0]!.effect as { values: Record<string, unknown> };
+  expect(effect.values.speed).toEqual({ Number: 30 });
+  expect(effect.values.brightness).toEqual({ Number: 70 });
+});
+
+test("values_that_start_to_differ_under_the_same_selection_turn_live_off", async () => {
+  const shell = fakeShell(demoBatchRunning, effectHandlers({ apply_effect_batch: batchAnswer() }));
+  render(App);
+  await openEffects();
+  await fireEvent.click(option("Demo Graphics Card"), { ctrlKey: true });
+  await fireEvent.click(option("Demo Memory Module", "Whole device", 1), { ctrlKey: true });
+  expect(await screen.findByText(/^Changes go to all 2 targets as you make them\.$/)).toBeTruthy();
+
+  const changed = structuredClone(demoBatchRunning);
+  const memory = changed.output.scene.assignments.find((assignment) => assignment.target.device === "demo-memory-2")!;
+  memory.effect.values = { ...memory.effect.values, speed: { Number: 60 } };
+  await shell.push(changed);
+
+  expect(await screen.findByText(/^Some settings differ between the targets, marked Mixed\./)).toBeTruthy();
+  const speed = screen.getByRole("spinbutton", { name: "Speed" });
+  expect(speed.getAttribute("aria-describedby")).toMatch(/mixed-speed/);
+  await fireEvent.input(screen.getByRole("spinbutton", { name: "Brightness" }), { target: { value: "40" } });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  expect(args(shell.calls, "apply_effect_batch")).toEqual([]);
 });
