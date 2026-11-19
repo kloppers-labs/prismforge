@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+  import type { StoreView } from "../../lib/api/bindings/StoreView";
   import { deviceKey, reference } from "../devices/present";
   import { errorName, eventText, raw } from "./format";
 
-  let { session, onclose }: { session: SessionSnapshot | null; onclose: () => void } = $props();
+  let { session, store, onclose }: { session: SessionSnapshot | null; store: StoreView | null; onclose: () => void } = $props();
 
   let heading: HTMLHeadingElement | undefined = $state();
   let counters = $derived(
@@ -41,6 +42,18 @@
     <h2 id="diagnostics-title" tabindex="-1" bind:this={heading}>Diagnostics</h2>
     <button type="button" onclick={onclose}>Close</button>
   </header>
+
+  {#if store}
+    <section aria-labelledby="store-title">
+      <h3 id="store-title">Profile store</h3>
+      <dl>
+        <dt>Store</dt>
+        <dd>{store.kind === "Demo" ? "Demo profiles, kept apart from real ones" : "Profiles for real devices"}</dd>
+        <dt>Folder</dt>
+        <dd class="code">{store.folder}</dd>
+      </dl>
+    </section>
+  {/if}
 
   {#if !session}
     <p class="empty">No connection has been started.</p>

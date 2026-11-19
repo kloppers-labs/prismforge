@@ -16,13 +16,21 @@
     session,
     device,
     zone,
-  }: { effects: EffectsState; catalog: EffectCatalog; session: SessionSnapshot; device: SessionDevice; zone: number | null } = $props();
+    held,
+  }: {
+    effects: EffectsState;
+    catalog: EffectCatalog;
+    session: SessionSnapshot;
+    device: SessionDevice;
+    zone: number | null;
+    held: string | null;
+  } = $props();
 
   let target = $derived(effects.target);
   let running = $derived(effects.running);
   let runningLabel = $derived(catalog.effects.find((effect) => effect.id === running?.effect.effect)?.label ?? null);
-  let blocked = $derived(applyBlocked(session, device, zone));
-  let stopReason = $derived(target ? stopBlocked(session, target) : null);
+  let blocked = $derived(held ?? applyBlocked(session, device, zone));
+  let stopReason = $derived(held ?? (target ? stopBlocked(session, target) : null));
   let checked = $derived(effects.checked);
   let assigned = $derived(running !== null && running.effect.effect === effects.effect);
   let server = $derived(serverName(session));
@@ -56,7 +64,9 @@
     <p class="lifecycle">
       A PrismForge effect is computed by PrismForge, not by the device. It runs only while PrismForge runs and is
       connected. Closing the window quits PrismForge and stops its effects. PrismForge then asks {server} to put back the
-      earlier lighting. Nothing is saved yet. After PrismForge starts again, no effect runs until you apply it again.
+      earlier lighting. PrismForge saves nothing by itself. To keep this lighting, save it as a profile on the Profiles screen.
+      Profiles are saved on this computer, not on the device. After PrismForge starts again, no effect runs until you apply
+      it or a profile again.
     </p>
     {#if effects.canAutoApply}
       <p class="hint">This is the effect on this target. Changes apply as you make them, and the animation keeps its timing.</p>

@@ -19,7 +19,7 @@ export function effectHandlers(extra: Record<string, Handler> = {}): Record<stri
 
 export async function openEffects() {
   const screens = await screen.findByRole("navigation", { name: "Screens" });
-  await fireEvent.click(within(screens).getByRole("button", { name: "Effects" }));
+  await fireEvent.click(await within(screens).findByRole("button", { name: "Effects" }));
   return screen.findByRole("navigation", { name: "Targets" });
 }
 

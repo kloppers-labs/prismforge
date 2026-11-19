@@ -5,12 +5,24 @@
   import { serverName } from "../connection/wording";
   import IdentifyPanel from "./IdentifyPanel.svelte";
   import LedStrip from "./LedStrip.svelte";
-  import { hasDirectMode, isAmbiguous, isLive, kindLabel, ledCount, zoneShape, zoneSize } from "./present";
+  import NameEditor from "./NameEditor.svelte";
+  import { hasDirectMode, isAmbiguous, isLive, kindLabel, ledCount, reference, zoneShape, zoneSize } from "./present";
 
   let { app, session, device }: { app: AppState; session: SessionSnapshot; device: SessionDevice } = $props();
 
   let descriptor = $derived(device.descriptor);
   let capabilities = $derived(descriptor.capabilities);
+  let ref = $derived(reference(device));
+  let given = $derived(ref === null ? null : app.names.given(ref));
+  let limit = $derived(ref === null ? null : (app.profiles.store?.name_limit ?? null));
+
+  function nameDevice(name: string | null) {
+    return ref === null ? Promise.resolve(null) : app.profiles.setDeviceName(ref, name);
+  }
+
+  function nameZone(zone: number) {
+    return (name: string | null) => (ref === null ? Promise.resolve(null) : app.profiles.setZoneName(ref, zone, name));
+  }
   let details = $derived(
     (
       [
@@ -25,8 +37,14 @@
 
 <article class="detail" aria-labelledby="device-title">
   <header>
-    <h2 id="device-title">{descriptor.name}</h2>
+    <h2 id="device-title">{app.names.device(device)}</h2>
+    {#if given !== null}
+      <p class="sub">Reported as {descriptor.name}.</p>
+    {/if}
     <p class="sub">{kindLabel(descriptor.kind)} by {descriptor.vendor || "an unknown vendor"}</p>
+    {#if ref !== null && limit !== null}
+      <NameEditor kind="device" subject={app.names.device(device)} {given} {limit} onsave={nameDevice} />
+    {/if}
   </header>
 
   {#if descriptor.origin === "Simulated"}
@@ -61,15 +79,34 @@
     {:else}
       <table>
         <thead>
-          <tr><th scope="col">Zone</th><th scope="col">Shape</th><th scope="col">LEDs</th><th scope="col">Size</th></tr>
+          <tr>
+            <th scope="col">Zone</th><th scope="col">Shape</th><th scope="col">LEDs</th><th scope="col">Size</th>
+            {#if ref !== null && limit !== null}<th scope="col"><span class="visually-hidden">Name</span></th>{/if}
+          </tr>
         </thead>
         <tbody>
           {#each descriptor.zones as zone, index (index)}
             <tr>
-              <th scope="row">{zone.name}</th>
+              <th scope="row">
+                {app.names.zone(device, index)}
+                {#if ref !== null && app.names.givenZone(ref, index) !== null}
+                  <span class="reported">Reported as {zone.name}</span>
+                {/if}
+              </th>
               <td>{zoneShape(zone)}</td>
               <td class="numeric">{zone.led_count}</td>
               <td>{zoneSize(zone)}</td>
+              {#if ref !== null && limit !== null}
+                <td>
+                  <NameEditor
+                    kind="zone"
+                    subject={app.names.zone(device, index)}
+                    given={app.names.givenZone(ref, index)}
+                    {limit}
+                    onsave={nameZone(index)}
+                  />
+                </td>
+              {/if}
             </tr>
           {/each}
         </tbody>
@@ -195,6 +232,13 @@
 
   tbody th {
     font-weight: 550;
+  }
+
+  .reported {
+    display: block;
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--text-faint);
   }
 
   .facts {

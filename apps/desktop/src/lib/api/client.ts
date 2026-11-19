@@ -1,15 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { ApplyOutcome } from "./bindings/ApplyOutcome";
 import type { CommandError } from "./bindings/CommandError";
 import type { DeviceRef } from "./bindings/DeviceRef";
 import type { EffectCatalog } from "./bindings/EffectCatalog";
 import type { EffectInstance } from "./bindings/EffectInstance";
+import type { ExportReport } from "./bindings/ExportReport";
 import type { IdentifyOutcome } from "./bindings/IdentifyOutcome";
+import type { ImportReport } from "./bindings/ImportReport";
 import type { OutputTarget } from "./bindings/OutputTarget";
 import type { PreviewBatch } from "./bindings/PreviewBatch";
 import type { PreviewRequest } from "./bindings/PreviewRequest";
+import type { ProfileDetails } from "./bindings/ProfileDetails";
+import type { ProfileId } from "./bindings/ProfileId";
 import type { RestoreOutcome } from "./bindings/RestoreOutcome";
+import type { Saved } from "./bindings/Saved";
 import type { ShellView } from "./bindings/ShellView";
+import type { StoreNotice } from "./bindings/StoreNotice";
+import type { StoreView } from "./bindings/StoreView";
 
 export const VIEW_EVENT = "session-view";
 export const DEFAULT_HOST = "127.0.0.1";
@@ -26,15 +34,14 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
   }
 }
 
+const PLAIN_ERRORS = ["NoSession", "EmptyHost", "ProfileApplying", "NotConnected"];
+const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "Store", "StoreUnavailable", "Unreadable", "File"];
+
 function asFailure(error: unknown): Failure {
-  if (error === "NoSession" || error === "EmptyHost") {
-    return error;
+  if (typeof error === "string" && PLAIN_ERRORS.includes(error)) {
+    return error as CommandError;
   }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    ("Session" in error || "InvalidEffect" in error || "NoEffect" in error)
-  ) {
+  if (typeof error === "object" && error !== null && SHAPED_ERRORS.some((key) => key in error)) {
     return error as CommandError;
   }
   return { Unexpected: String(error) };
@@ -56,6 +63,22 @@ export const api = {
   clearExternal: (device: DeviceRef) => call<null>("clear_external", { device }),
   setFrameRate: (frameRate: number) => call<number>("set_frame_rate", { frameRate }),
   previewEffect: (request: PreviewRequest) => call<PreviewBatch>("preview_effect", { request }),
+  profileStore: () => call<StoreView>("profile_store"),
+  profileDetails: (id: ProfileId) => call<ProfileDetails>("profile_details", { id }),
+  createProfile: (name: string) => call<Saved>("create_profile", { name }),
+  previewProfileUpdate: (id: ProfileId) => call<Saved>("preview_profile_update", { id }),
+  updateProfile: (id: ProfileId) => call<Saved>("update_profile", { id }),
+  renameProfile: (id: ProfileId, name: string) => call<null>("rename_profile", { id, name }),
+  duplicateProfile: (id: ProfileId) => call<ProfileId>("duplicate_profile", { id }),
+  deleteProfile: (id: ProfileId) => call<null>("delete_profile", { id }),
+  applyProfile: (id: ProfileId) => call<ApplyOutcome>("apply_profile", { id }),
+  setApplyOnConnect: (id: ProfileId | null) => call<null>("set_apply_on_connect", { id }),
+  exportProfile: (id: ProfileId) => call<ExportReport | null>("export_profile", { id }),
+  importProfile: () => call<ImportReport | null>("import_profile"),
+  setDeviceName: (device: DeviceRef, name: string | null) => call<null>("set_device_name", { device, name }),
+  setZoneName: (device: DeviceRef, zone: number, name: string | null) =>
+    call<null>("set_zone_name", { device, zone, name }),
+  dismissStoreNotice: (notice: StoreNotice) => call<boolean>("dismiss_store_notice", { notice }),
   onView: (handler: (view: ShellView) => void): Promise<UnlistenFn> =>
     listen<ShellView>(VIEW_EVENT, (event) => handler(event.payload)),
 };

@@ -6,7 +6,12 @@
   import { declaredBy } from "./present";
   import type { EffectsState } from "./state.svelte";
 
-  let { effects, session, device }: { effects: EffectsState; session: SessionSnapshot; device: SessionDevice } = $props();
+  let {
+    effects,
+    session,
+    device,
+    held,
+  }: { effects: EffectsState; session: SessionSnapshot; device: SessionDevice; held: string | null } = $props();
 
   let ref = $derived(reference(device));
   let label = $derived(ref === null ? null : declaredBy(session, ref));
@@ -32,7 +37,12 @@
     </p>
     <p class="hint">Handing back only records your statement that {label} no longer writes to this device.</p>
     <div>
-      <button type="button" disabled={ref === null} onclick={() => ref !== null && effects.clearExternal(ref)}>
+      <button
+        type="button"
+        disabled={ref === null || held !== null}
+        aria-describedby={held ? "external-held" : undefined}
+        onclick={() => ref !== null && effects.clearExternal(ref)}
+      >
         Hand back to PrismForge
       </button>
     </div>
@@ -48,13 +58,20 @@
     <form class="declare" onsubmit={declare}>
       <label for="program-name">Program name (optional)</label>
       <input id="program-name" type="text" maxlength="60" autocomplete="off" bind:value={program} placeholder="another program" />
-      <button type="submit" disabled={ref === null || identifying} aria-describedby={identifying ? "external-blocked" : undefined}>
+      <button
+        type="submit"
+        disabled={ref === null || identifying || held !== null}
+        aria-describedby={held ? "external-held" : identifying ? "external-blocked" : undefined}
+      >
         Another program controls this device
       </button>
     </form>
     {#if identifying}
       <p id="external-blocked" class="hint">Off while an identify runs on this device.</p>
     {/if}
+  {/if}
+  {#if held}
+    <p id="external-held" class="hint">Off now. {held}</p>
   {/if}
   {#if problem}
     <FailureNotice error={problem} />

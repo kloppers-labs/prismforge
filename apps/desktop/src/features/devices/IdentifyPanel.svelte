@@ -5,18 +5,19 @@
   import type { AppState } from "../../lib/state/app.svelte";
   import { serverName } from "../connection/wording";
   import { describeOutcome } from "./outcome";
+  import { applyingText } from "../effects/present";
   import { identifyBlocked, reference } from "./present";
 
   let { app, session, device }: { app: AppState; session: SessionSnapshot; device: SessionDevice } = $props();
 
   let target = $derived(reference(device));
-  let blocked = $derived(identifyBlocked(session, device, app.identify?.kind === "running"));
+  let blocked = $derived(applyingText(app.view) ?? identifyBlocked(session, device, app.identify?.kind === "running"));
   let result = $derived(app.identify && app.identify.target.device === target ? app.identify : null);
   let zones = $derived(device.descriptor.zones);
   let server = $derived(serverName(session));
 
   function zoneName(zone: number | null): string {
-    return zone === null ? "the whole device" : (zones[zone]?.name ?? `zone ${zone + 1}`);
+    return zone === null ? "the whole device" : app.names.zone(device, zone);
   }
 
   function identify(zone: number | null) {
@@ -52,14 +53,14 @@
     >
       Identify device
     </button>
-    {#each zones as zone, index (index)}
+    {#each zones as _, index (index)}
       <button
         type="button"
         disabled={blocked !== null}
         aria-describedby={blocked ? "identify-blocked" : undefined}
         onclick={() => identify(index)}
       >
-        Identify zone {zone.name}
+        Identify zone {app.names.zone(device, index)}
       </button>
     {/each}
   </div>

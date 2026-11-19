@@ -6,7 +6,9 @@ import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
 import type { RestoreOutcome } from "../../lib/api/bindings/RestoreOutcome";
 import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
 import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
+import type { ShellView } from "../../lib/api/bindings/ShellView";
 import { backendErrorText } from "../../lib/errors";
+import type { Names } from "../../lib/names";
 import { capitalise, serverName } from "../connection/wording";
 import { restoreFailureText } from "../devices/outcome";
 import { hasDirectMode, isLive, reference } from "../devices/present";
@@ -36,8 +38,13 @@ export function canStop(session: SessionSnapshot, target: OutputTarget): boolean
   );
 }
 
-export function targetName(device: SessionDevice, zone: number | null): string {
-  return zone === null ? device.descriptor.name : (device.descriptor.zones[zone]?.name ?? `zone ${zone + 1}`);
+export function targetName(names: Names, device: SessionDevice, zone: number | null): string {
+  return zone === null ? names.device(device) : names.zone(device, zone);
+}
+
+/** Why no output command can be sent now: the shell refuses them all while a profile applies. */
+export function applyingText(view: ShellView): string | null {
+  return view.applying ? `PrismForge is applying the profile ${view.applying.name}. Wait until it finishes.` : null;
 }
 
 export function targetLeds(device: SessionDevice, zone: number | null): number {

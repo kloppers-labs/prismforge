@@ -119,8 +119,8 @@ test("ignores_a_view_older_than_the_one_shown", async () => {
   render(App);
   await screen.findByRole("button", { name: "Connect" });
 
-  await shell.pushView({ revision: 10, session: demoConnected });
-  await shell.pushView({ revision: 9, session: openRgbRefused });
+  await shell.pushView({ revision: 10, session: demoConnected, applying: null, connect_apply: null });
+  await shell.pushView({ revision: 9, session: openRgbRefused, applying: null, connect_apply: null });
 
   expect(await screen.findByRole("complementary", { name: "Demo mode" })).toBeTruthy();
   expect(screen.queryByText(/^Retrying/)).toBeNull();

@@ -3,6 +3,7 @@ import type { DeviceRef } from "../../lib/api/bindings/DeviceRef";
 import type { EffectCatalog } from "../../lib/api/bindings/EffectCatalog";
 import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
 import type { ShellView } from "../../lib/api/bindings/ShellView";
+import type { Names } from "../../lib/names";
 import { serverName } from "../connection/wording";
 import {
   currentEffect,
@@ -12,7 +13,7 @@ import {
   type FrameRateFeedback,
   type ModeFeedback,
 } from "./feedback";
-import { applyBlocked, deviceOf, runningOn, targetName } from "./present";
+import { applyBlocked, applyingText, deviceOf, runningOn, targetName } from "./present";
 import { check, initialFields, problemText, type Field, type Fields } from "./values";
 
 const REAPPLY_DELAY_MS = 300;
@@ -56,7 +57,7 @@ export class EffectsState {
     if (!session || !this.target || !device) {
       return "This device is not in the device list.";
     }
-    return applyBlocked(session, device, this.target.zone);
+    return applyingText(this.view()) ?? applyBlocked(session, device, this.target.zone);
   });
   /** True only while a changed setting may be sent without the user pressing Apply. */
   canAutoApply = $derived(
@@ -70,7 +71,11 @@ export class EffectsState {
   private reapplyTimer: ReturnType<typeof setTimeout> | undefined;
   private reapplyAfterCall = false;
 
-  constructor(private readonly view: () => ShellView) {}
+  constructor(
+    private readonly view: () => ShellView,
+    private readonly names: () => Names,
+    private readonly changed: () => void,
+  ) {}
 
   async load() {
     if (this.catalog) {
@@ -152,6 +157,7 @@ export class EffectsState {
     const answer = await this.call(target.device, () => api.stopEffect(target));
     this.working = null;
     if (answer.ok) {
+      this.changed();
       this.modeResult = null;
       this.effectResult = { kind: "stopped", outcome: answer.value, target, revision: this.view().revision };
     } else {
@@ -163,6 +169,7 @@ export class EffectsState {
     this.holdDevice(device);
     const answer = await this.call(device, () => api.selectMode(device, mode));
     if (answer.ok) {
+      this.changed();
       this.effectResult = null;
       const session = this.view().session;
       this.modeResult = {
@@ -192,6 +199,9 @@ export class EffectsState {
 
   async setFrameRate(requested: number) {
     const answer = await api.setFrameRate(requested);
+    if (answer.ok) {
+      this.changed();
+    }
     this.frameRateResult = answer.ok
       ? { kind: "set", requested, used: answer.value, revision: this.view().revision }
       : { kind: "failed", error: answer.error };
@@ -208,6 +218,7 @@ export class EffectsState {
     const answer = await this.call(target.device, () => api.applyEffect(target, instance));
     this.working = null;
     if (answer.ok) {
+      this.changed();
       this.rustProblems = {};
       this.modeResult = null;
       this.effectResult = {
@@ -258,6 +269,7 @@ export class EffectsState {
 
   private afterOwnership(answer: Answer<null>) {
     if (answer.ok) {
+      this.changed();
       this.effectResult = null;
       this.modeResult = null;
       this.externalProblem = null;
@@ -284,7 +296,7 @@ export class EffectsState {
   private targetLabel(target: OutputTarget): string {
     const session = this.view().session;
     const device = session ? deviceOf(session, target) : null;
-    return device ? targetName(device, target.zone) : target.device;
+    return device ? targetName(this.names(), device, target.zone) : target.device;
   }
 
   private clearResults() {

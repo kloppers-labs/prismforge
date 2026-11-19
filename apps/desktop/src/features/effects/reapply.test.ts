@@ -15,7 +15,8 @@ function applies(shell: Shell) {
 }
 
 function order(shell: Shell) {
-  return shell.commands().filter((command) => command !== "view" && command !== "effect_catalog" && command !== "preview_effect");
+  const reads = ["view", "effect_catalog", "preview_effect", "profile_store"];
+  return shell.commands().filter((command) => !reads.includes(command));
 }
 
 async function setBrightness(value: string) {

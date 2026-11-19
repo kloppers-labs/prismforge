@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SessionDevice } from "../../lib/api/bindings/SessionDevice";
+  import type { Names } from "../../lib/names";
   import { hasDirectMode, isAmbiguous, kindLabel, ledCount } from "./present";
 
   type Entry = { key: string; device: SessionDevice };
@@ -8,8 +9,9 @@
     entries,
     selected,
     issues,
+    names,
     onselect,
-  }: { entries: Entry[]; selected: string | null; issues: number; onselect: (key: string) => void } = $props();
+  }: { entries: Entry[]; selected: string | null; issues: number; names: Names; onselect: (key: string) => void } = $props();
 </script>
 
 <nav class="list" aria-labelledby="devices-title">
@@ -18,7 +20,7 @@
     {#each entries as { key, device } (key)}
       <li>
         <button type="button" aria-current={key === selected ? "true" : undefined} onclick={() => onselect(key)}>
-          <span class="name">{device.descriptor.name}</span>
+          <span class="name">{names.device(device)}</span>
           <span class="meta">{kindLabel(device.descriptor.kind)}, {ledCount(device.descriptor.led_count)}</span>
           {#if !device.available || isAmbiguous(device) || !hasDirectMode(device)}
             <span class="tags">

@@ -262,8 +262,9 @@ test("says_effects_stop_when_prismforge_closes_and_nothing_is_saved_where_the_us
 
   const apply = button("Apply effect").closest("section") as HTMLElement;
   expect(within(apply).getByText(/Closing the window quits PrismForge and stops its effects\./)).toBeTruthy();
-  expect(within(apply).getByText(/Nothing is saved yet\./)).toBeTruthy();
-  expect(screen.queryByRole("button", { name: /save|profile/i })).toBeNull();
+  expect(within(apply).getByText(/PrismForge saves nothing by itself\./)).toBeTruthy();
+  expect(within(apply).getByText(/Profiles are saved on this computer, not on the device\./)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
 });
 
 test("keeps_the_demo_banner_on_the_effects_screen", async () => {
