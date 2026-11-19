@@ -260,7 +260,7 @@ test("apply_on_connect_is_off_by_default_and_its_text_is_exact", async () => {
   expect(toggle.getAttribute("aria-describedby")).toBeTruthy();
   const description = document.getElementById(toggle.getAttribute("aria-describedby") ?? "");
   expect(description?.textContent?.trim()).toBe(
-    "When PrismForge connects, it applies this profile once. It does not start PrismForge or connect by itself.",
+    "When PrismForge connects, it applies this profile once. PrismForge connects by itself only when “Connect to OpenRGB when PrismForge starts” is on in Settings.",
   );
   await fireEvent.click(toggle);
 

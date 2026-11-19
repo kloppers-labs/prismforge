@@ -12,6 +12,10 @@
   import ConnectApplyNotice from "./features/profiles/ConnectApplyNotice.svelte";
   import ProfilesScreen from "./features/profiles/ProfilesScreen.svelte";
   import RepairedBanner from "./features/profiles/RepairedBanner.svelte";
+  import ClosePrompt from "./features/settings/ClosePrompt.svelte";
+  import SettingsScreen from "./features/settings/SettingsScreen.svelte";
+  import TrayStopNotice from "./features/settings/TrayStopNotice.svelte";
+  import { isMac } from "./features/settings/wording";
   import { failureText } from "./lib/errors";
   import Mark from "./lib/Mark.svelte";
   import { AppState } from "./lib/state/app.svelte";
@@ -47,11 +51,20 @@
     };
   });
 
+  function onkeydown(event: KeyboardEvent) {
+    if (!isMac() && event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.key.toLowerCase() === "q") {
+      event.preventDefault();
+      app.lifecycle.quit();
+    }
+  }
+
   function closeDiagnostics() {
     app.diagnosticsOpen = false;
     diagnosticsButton?.focus();
   }
 </script>
+
+<svelte:window {onkeydown} />
 
 <div class="app">
   <header class="top">
@@ -70,6 +83,9 @@
       {/if}
       <button type="button" aria-current={app.screen === "profiles" ? "page" : undefined} onclick={() => app.openProfiles()}>
         Profiles
+      </button>
+      <button type="button" aria-current={app.screen === "settings" ? "page" : undefined} onclick={() => (app.screen = "settings")}>
+        Settings
       </button>
     </nav>
     {#if active && store}
@@ -98,6 +114,15 @@
     <RepairedBanner onopen={() => app.openProfiles()} />
   {/if}
 
+  {#if app.lifecycle.trayStop}
+    <TrayStopNotice
+      report={app.lifecycle.trayStop}
+      {session}
+      label={(device, reported) => app.names.given(device) ?? reported}
+      ondismiss={() => app.lifecycle.dismissStop()}
+    />
+  {/if}
+
   {#if connectApply}
     <ConnectApplyNotice applied={connectApply} {labels} ondismiss={() => (app.connectApplyDismissed = true)} />
   {/if}
@@ -121,7 +146,9 @@
   {/if}
 
   <main>
-    {#if app.screen === "profiles"}
+    {#if app.screen === "settings"}
+      <SettingsScreen lifecycle={app.lifecycle} />
+    {:else if app.screen === "profiles"}
       <ProfilesScreen {app} />
     {:else if !session || stopped}
       <ConnectionScreen {app} stopped={session} />
@@ -136,6 +163,10 @@
 
   {#if app.diagnosticsOpen}
     <DiagnosticsDrawer {session} {store} onclose={closeDiagnostics} />
+  {/if}
+
+  {#if app.lifecycle.view?.close_prompt}
+    <ClosePrompt lifecycle={app.lifecycle} />
   {/if}
 </div>
 

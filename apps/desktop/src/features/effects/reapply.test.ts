@@ -15,7 +15,7 @@ function applies(shell: Shell) {
 }
 
 function order(shell: Shell) {
-  const reads = ["view", "effect_catalog", "preview_effect", "profile_store"];
+  const reads = ["view", "lifecycle", "effect_catalog", "preview_effect", "profile_store"];
   return shell.commands().filter((command) => !reads.includes(command));
 }
 

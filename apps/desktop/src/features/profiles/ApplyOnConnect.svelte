@@ -10,8 +10,8 @@
     <span>Apply this profile when PrismForge connects</span>
     <span class="state" aria-hidden="true">{on ? "On" : "Off"}</span>
   </button>
-  <p {id} class="hint">When PrismForge connects, it applies this profile once. It does not start PrismForge or connect by itself.</p>
-  <p class="hint">Only one profile can do this. You start PrismForge and connect it yourself.</p>
+  <p {id} class="hint">When PrismForge connects, it applies this profile once. PrismForge connects by itself only when “Connect to OpenRGB when PrismForge starts” is on in Settings.</p>
+  <p class="hint">Only one profile can do this.</p>
 </div>
 
 <style>

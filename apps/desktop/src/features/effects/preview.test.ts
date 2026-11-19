@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import App from "../../App.svelte";
 import { fakeShell } from "../../test/backend";
 import { button, chooseTarget, effectHandlers, wait } from "../../test/effects";
+import { lifecycleFresh, lifecycleHidden } from "../../test/fixtures/lifecycles";
 import { rainbowPreview } from "../../test/fixtures/previews";
 import { demoConnected } from "../../test/fixtures/sessions";
 
@@ -54,6 +55,20 @@ test("stops_requesting_while_the_document_is_hidden", async () => {
   await vi.waitFor(() => expect(requests()).toBeGreaterThan(whileHidden), { timeout: 2_000 });
 });
 
+test("stops_requesting_while_the_native_window_is_hidden_even_if_the_document_says_visible", async () => {
+  const { shell, requests } = await animatedPreview();
+
+  await shell.pushLifecycle({ ...lifecycleHidden, revision: 50 });
+  await wait(50);
+  const whileHidden = requests();
+  await wait(300);
+  expect(document.visibilityState).toBe("visible");
+  expect(requests()).toBe(whileHidden);
+
+  await shell.pushLifecycle({ ...lifecycleFresh, revision: 51 });
+  await vi.waitFor(() => expect(requests()).toBeGreaterThan(whileHidden), { timeout: 2_000 });
+});
+
 test("stops_requesting_when_the_preview_panel_closes", async () => {
   const { requests } = await animatedPreview();
 
@@ -70,7 +85,7 @@ test("never_starts_or_stops_physical_output", async () => {
   const { shell } = await animatedPreview();
   await wait(300);
 
-  expect(new Set(shell.commands())).toEqual(new Set(["view", "profile_store", "effect_catalog", "preview_effect"]));
+  expect(new Set(shell.commands())).toEqual(new Set(["view", "lifecycle", "profile_store", "effect_catalog", "preview_effect"]));
 });
 
 test("shows_one_still_frame_when_motion_is_reduced", async () => {
