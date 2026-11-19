@@ -4,7 +4,7 @@ use prismforge_core::profile::{
     ExternalControl, Extra, ModeSelection, Profile, ProfileAssignment, ProfileDevice, ProfileId,
     StoredEffect, StoredIdentity,
 };
-use prismforge_core::session::{SessionHandle, SessionSnapshot};
+use prismforge_core::session::{BatchReport, SessionHandle, SessionSnapshot, TargetOutcome};
 use prismforge_core::store::{ApplyOutcome, Profiles, StdFileOps};
 use prismforge_core::{DeviceRef, OutputOwner, OutputTarget, Rgb};
 use prismforge_effects::{ControlValue, EffectInstance};
@@ -46,15 +46,42 @@ enum Touched {
     FrameRate,
 }
 
-/// One random user command; `None` when the session refused it.
-async fn random_command(handle: &SessionHandle, rng: &mut Rng) -> Option<Touched> {
+fn random_target(rng: &mut Rng) -> OutputTarget {
+    let (name, zones) = DEVICES[rng.below(DEVICES.len() + 3).saturating_sub(3)];
+    OutputTarget {
+        device: DeviceRef::new(name),
+        zone: (rng.below(3) == 0).then(|| rng.below(zones)),
+    }
+}
+
+/// The devices of a batch's targets that the batch changed.
+fn changed(report: &BatchReport) -> Vec<Touched> {
+    report
+        .results
+        .iter()
+        .filter(|result| {
+            matches!(
+                result.outcome,
+                TargetOutcome::Applied | TargetOutcome::Stopped { .. }
+            )
+        })
+        .map(|result| Touched::Device(result.target.device.clone()))
+        .collect()
+}
+
+/// One random user command, single or batch; empty when the session changed nothing.
+async fn random_command(handle: &SessionHandle, rng: &mut Rng) -> Vec<Touched> {
     let (name, zones) = DEVICES[rng.below(DEVICES.len() + 3).saturating_sub(3)];
     let device = DeviceRef::new(name);
     let target = |rng: &mut Rng, whole: bool| OutputTarget {
         device: device.clone(),
         zone: (!whole).then(|| rng.below(zones)),
     };
-    let done = match rng.below(13) {
+    let batch = |rng: &mut Rng| {
+        let count = 1 + rng.below(4);
+        (0..count).map(|_| random_target(rng)).collect::<Vec<_>>()
+    };
+    let done = match rng.below(17) {
         0..=2 => {
             let target = target(rng, false);
             handle.apply_effect(target, solid(rng)).await.is_ok()
@@ -74,16 +101,36 @@ async fn random_command(handle: &SessionHandle, rng: &mut Rng) -> Option<Touched
             handle.declare_external(device.clone(), label).await.is_ok()
         }
         11 => handle.clear_external(device.clone()).await.is_ok(),
+        12 | 13 => {
+            let targets = batch(rng);
+            let effect = solid(rng);
+            let report = handle.apply_batch(targets, effect).await.expect("batch");
+            return changed(&report);
+        }
+        14 => {
+            let report = handle.stop_batch(batch(rng)).await.expect("stop batch");
+            return changed(&report);
+        }
+        15 => {
+            let report = handle.stop_all_effects().await.expect("stop all");
+            return changed(&report);
+        }
         _ => {
             let rate = 10 + rng.below(51) as u32;
             return handle
                 .set_frame_rate(rate)
                 .await
                 .ok()
-                .map(|_| Touched::FrameRate);
+                .map(|_| Touched::FrameRate)
+                .into_iter()
+                .collect();
         }
     };
-    done.then_some(Touched::Device(device))
+    if done {
+        vec![Touched::Device(device)]
+    } else {
+        Vec::new()
+    }
 }
 
 /// The stored profile with each touched device's settings replaced by what the session holds for it.
@@ -238,12 +285,13 @@ async fn an_update_holds_exactly_what_the_session_holds_for_every_touched_device
                 rate = false;
                 continue;
             }
-            match random_command(&handle, &mut rng).await {
-                Some(Touched::Device(device)) => {
-                    touched.insert(device);
+            for touch in random_command(&handle, &mut rng).await {
+                match touch {
+                    Touched::Device(device) => {
+                        touched.insert(device);
+                    }
+                    Touched::FrameRate => rate = true,
                 }
-                Some(Touched::FrameRate) => rate = true,
-                None => {}
             }
         }
         let at = format!("seed {seed} end");
