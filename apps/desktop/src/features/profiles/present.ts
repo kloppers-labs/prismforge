@@ -179,7 +179,6 @@ function stopped(session: SessionSnapshot | null): boolean {
   return typeof connection === "object" && connection !== null && "Disconnected" in connection && connection.Disconnected.reason !== null;
 }
 
-/** Every sentence about a pending apply on connect comes from the state the shell publishes. */
 function markProblemText(problem: MarkProblem): string {
   return problem === "NewerVersion" ? "needs a newer PrismForge, so this version cannot read it" : "is not in the store any more";
 }
