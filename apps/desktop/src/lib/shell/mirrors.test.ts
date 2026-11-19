@@ -40,6 +40,7 @@ const PROFILE_IDS = [
   "profile.apply-on-connect",
   "profile.delete",
 ];
+const DIAGNOSTICS_IDS = ["diagnostics.copy-section", "diagnostics.copy-all"];
 const EFFECT_IDS = ["target.choose", "target.stop", "target.hand-back", "target.modes", "target.leave", "effect.choose", "effect.apply"];
 
 test("every_status_strip_menu_item_has_a_visible_counterpart_in_its_panel", async () => {
@@ -113,6 +114,22 @@ test("every_profiles_menu_item_has_a_visible_counterpart_on_the_profiles_screen"
   expect([...covered].sort()).toEqual([...PROFILE_IDS].sort());
 });
 
+test("every_diagnostics_menu_item_has_a_visible_counterpart_in_the_drawer", async () => {
+  covered.clear();
+  fakeShell(demoConnected, { ...effectHandlers(), profile_store: () => storeTwo });
+  render(App);
+  await waitForConnection("Connected");
+  await go("Diagnostics");
+  const drawer = screen.getByRole("complementary", { name: "Diagnostics" });
+  await within(drawer).findByRole("region", { name: "Profile store" });
+
+  for (const section of within(drawer).getAllByRole("region")) {
+    await expectMirrored(await itemIds(section));
+  }
+
+  expect([...covered].sort()).toEqual([...DIAGNOSTICS_IDS].sort());
+});
+
 test("the_registry_holds_only_items_that_a_menu_offers", () => {
-  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS, ...EFFECT_IDS, ...PROFILE_IDS].sort());
+  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS, ...EFFECT_IDS, ...PROFILE_IDS, ...DIAGNOSTICS_IDS].sort());
 });
