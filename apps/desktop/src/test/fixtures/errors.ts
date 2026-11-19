@@ -67,3 +67,38 @@ export const noEffect: CommandError = {
     }
   }
 };
+
+export const invalidName: CommandError = {
+  "Store": {
+    "InvalidName": {
+      "problem": "Empty"
+    }
+  }
+};
+
+export const notActive: CommandError = {
+  "Store": {
+    "NotActive": {
+      "id": "p-0000000000000002",
+      "active": "p-0000000000000001"
+    }
+  }
+};
+
+export const nameTaken: CommandError = {
+  "Store": {
+    "NameTaken": {
+      "name": "Evening"
+    }
+  }
+};
+
+export const profileApplying: CommandError = "ProfileApplying";
+
+export const sessionBusy: CommandError = {
+  "Store": {
+    "SessionUnavailable": {
+      "error": "Busy"
+    }
+  }
+};
