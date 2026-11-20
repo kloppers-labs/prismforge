@@ -15,7 +15,7 @@ The code is in `crates/prismforge-core/src/profile` (the model, capture, matchin
 1. **The store writes files on this computer only.** It never writes to device memory. No type, command or error in the store uses the word "save mode".
 2. **Loading writes nothing to hardware.** Opening the store, importing a file and reading a profile send nothing to OpenRGB.
 3. **Applying a profile is an explicit command.** It uses the same session commands as the effects screen.
-4. **Apply on connect is off by default.** The user marks at most one profile. Only that profile is applied, once each time the session becomes live after a disconnect.
+4. **Apply on connect is off by default.** Since Task 12 it is the rule "When PrismForge connects" (`0007-automation.md`), switched off by default. Only its profile is applied, once each time the session becomes live after a disconnect.
 5. **Nothing goes over the network.** The store has no network code.
 
 ## Files
@@ -25,7 +25,8 @@ The caller gives the store one folder. The desktop app uses two folders below it
 | File | Holds |
 |---|---|
 | `devices.json` | The known-device registry: each `DeviceRef` with its identifying fields, and the user's names for the device and its zones |
-| `settings.json` | The profile to apply on connect, or none |
+| `settings.json` | The automation rules (Task 12, `0007-automation.md`) and, for older versions, the profile the connects rule applies |
+| `rule-runs.json` | The last run of each automation rule (Task 12) |
 | `groups.json` | The user's groups of targets (Task 9) |
 | `setup.json` | The setup: components, outputs and views (Task 10, `0006-setup-model.md`) |
 | `profiles/<id>.json` | One profile |
@@ -125,9 +126,9 @@ Every file starts with a format marker and a schema version:
 { "format": "prismforge.profile", "schema_version": { "major": 1, "minor": 0 }, "id": "p-…", "name": "Evening", … }
 ```
 
-The markers are `prismforge.profile`, `prismforge.profile-export`, `prismforge.devices`, `prismforge.settings`, `prismforge.groups` and `prismforge.setup`.
+The markers are `prismforge.profile`, `prismforge.profile-export`, `prismforge.devices`, `prismforge.settings`, `prismforge.groups`, `prismforge.setup` and `prismforge.rule-runs`.
 
-1. **Each format has its own version.** This build writes profiles and exports as version 2.0 (Task 10) and every other file as version 1.0. It reads profiles and exports with major version 1 or 2, and every other file with major version 1.
+1. **Each format has its own version.** This build writes profiles and exports as version 2.0 (Task 10), the store settings as version 1.1 (Task 12: the automation rules) and every other file as version 1.0. It reads profiles and exports with major version 1 or 2, and every other file with major version 1.
 2. **A minor version only adds fields.** An older build keeps the fields it does not know and writes them back unchanged. It writes its own version number.
 3. **Any other change is a new major version.** That includes a new value for a closed field (device kind, zone kind), a renamed field and a removed field.
 4. **A file with a newer major version is refused.** The store reports `FileProblem::NewerVersion` and leaves the file exactly as it is. It never writes, renames or "repairs" that file. Operations on it return `StoreError::NewerFile`. Other files still load.
