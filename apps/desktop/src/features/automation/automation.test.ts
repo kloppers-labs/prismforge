@@ -262,6 +262,40 @@ test("devices_left_to_other_programs_or_not_there_are_counted_in_the_row_and_nam
   expect(outsideDetails(problem)).toBe(true);
 });
 
+test("one_device_left_alone_is_counted_in_the_singular", async () => {
+  const view = sleepDevices(openRgbAfterSleepAndWake, (devices) => {
+    devices.push({ device: "dev-x", name: "Case Fans", outcome: { Skipped: { reason: { DeclaredExternal: { label: "iCUE" } } } } });
+  });
+  fakeShell(null, { automation: () => view });
+  render(App);
+  await openAutomation();
+
+  const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
+  expect(lastRun(sleep).textContent).toContain("1 device left as it is, named in Details.");
+});
+
+test("a_lights_off_run_whose_planned_devices_were_all_left_to_other_programs_is_not_a_failure", async () => {
+  const declared = sleepDevices(openRgbAfterSleepAndWake, (devices) => {
+    for (const device of devices) {
+      if (device.outcome === "Black") {
+        device.outcome = { Skipped: { reason: { DeclaredExternal: { label: "iCUE" } } } };
+      }
+    }
+  });
+  const shell = fakeShell(null, { automation: () => declared, mark_runs_seen: () => declared });
+  render(App);
+  await waitFor(() => expect(called(shell, "automation").length).toBeGreaterThan(0));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(screen.queryByRole("status", { name: "Automation" })).toBeNull();
+
+  await openAutomation();
+  const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
+  const line = lastRun(sleep);
+  expect(line.querySelector("svg")).toBeNull();
+  expect(line.textContent).not.toContain("Did not finish");
+  expect(line.textContent).toContain("1 device left as it is, named in Details.");
+});
+
 test("a_lights_off_run_that_came_too_late_says_it_did_not_finish_on_the_run_line", async () => {
   const late = sleepDevices(openRgbAfterSleepAndWake, (devices) => {
     for (const device of devices) {
@@ -524,6 +558,26 @@ test("a_sleep_rule_whose_lights_off_came_too_late_counts_as_failed", async () =>
     outcome: { LightsOff: { report: { devices: [{ device: "dev-k", name: "Keyboard", outcome: { Skipped: { reason: "NoDirectOrOffMode" } } }] } } },
   };
   expect(runFailed(nothingPlanned)).toBe(false);
+  const declared = { Skipped: { reason: { DeclaredExternal: { label: "iCUE" } } } } as const;
+  const leftToOthers: RuleRun = {
+    ...late,
+    outcome: { LightsOff: { report: { devices: [{ device: "dev-a", name: "Strip", outcome: declared }] } } },
+  };
+  expect(runFailed(leftToOthers)).toBe(false);
+  const leftAndLate: RuleRun = {
+    ...late,
+    outcome: {
+      LightsOff: {
+        report: {
+          devices: [
+            { device: "dev-a", name: "Strip", outcome: declared },
+            { device: "dev-b", name: "Fans", outcome: { Skipped: { reason: "TooLate" } } },
+          ],
+        },
+      },
+    },
+  };
+  expect(runFailed(leftAndLate)).toBe(true);
 });
 
 test("a_failed_sleep_run_that_was_not_recorded_still_raises_the_start_notice", async () => {

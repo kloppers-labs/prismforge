@@ -256,7 +256,7 @@ export function runSummary(run: RuleRun): RunSummary {
 }
 
 export function leftAloneText(devices: number): string {
-  return `${count(devices, "device", "devices")} left as they are, named in Details.`;
+  return `${count(devices, "device", "devices")} left as ${devices === 1 ? "it is" : "they are"}, named in Details.`;
 }
 
 /** Skips the session made for a step PrismForge had planned, as opposed to devices left out of the plan. */
@@ -268,7 +268,12 @@ function sessionSkip(outcome: LightsOffOutcome): LightsOffSkip | null {
   return reason === "TooLate" || reason === "Identifying" || typeof reason === "object" ? reason : null;
 }
 
-/** A run that did not do what the rule says: a failure, a frame not kept, a write too late, or no planned device switched off. */
+function plannedSkip(outcome: LightsOffOutcome): boolean {
+  const reason = sessionSkip(outcome);
+  return reason !== null && !leftAlone(reason);
+}
+
+/** A run that did not do what the rule says: a failure, a frame not kept, a write too late, or no planned device switched off; devices left to another program do not count. */
 export function runFailed(run: RuleRun): boolean {
   const outcome = run.outcome;
   if ("Failed" in outcome) {
@@ -280,7 +285,7 @@ export function runFailed(run: RuleRun): boolean {
   const results = outcome.LightsOff.report.devices.map((device) => device.outcome);
   const failed = results.some((result) => typeof result === "object" && "Failed" in result);
   const late = results.some((result) => sessionSkip(result) === "TooLate");
-  const planned = results.filter((result) => done(result) || sessionSkip(result) !== null || (typeof result === "object" && "Failed" in result)).length;
+  const planned = results.filter((result) => done(result) || plannedSkip(result) || (typeof result === "object" && "Failed" in result)).length;
   const off = results.filter(done).length;
   return failed || late || (planned > 0 && off === 0);
 }
