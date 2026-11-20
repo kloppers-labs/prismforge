@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 use crate::apply_lock::{ApplyLock, Permit};
+use crate::automation::OpenRgbChecks;
 use crate::forward::forward;
 use crate::on_connect::{Report, apply_on_connect};
 use crate::publisher::{Publisher, ViewSink};
@@ -44,6 +45,8 @@ pub struct Shell<S: ViewSink> {
     pub(crate) lock: Arc<ApplyLock<S>>,
     /// The window's live request outlives a session; never held across an await.
     live_request: std::sync::Mutex<Vec<OutputTarget>>,
+    /// What OpenRGB's own event profiles do, read per session.
+    pub(crate) checks: Arc<OpenRgbChecks>,
 }
 
 struct Active<S> {
@@ -67,6 +70,7 @@ impl<S: ViewSink> Shell<S> {
             active: Mutex::new(None),
             stores,
             live_request: std::sync::Mutex::new(Vec::new()),
+            checks: Arc::new(OpenRgbChecks::default()),
         }
     }
 
@@ -90,17 +94,24 @@ impl<S: ViewSink> Shell<S> {
         self.current().await.0.map(|handle| handle.snapshot())
     }
 
-    /// The profile that connect at start applies: the mark in the real store, which opens if needed.
+    /// What connect at start does by the rules of the real store, which opens if needed.
     pub async fn start_profile(&self) -> crate::lifecycle::StartProfile {
         use crate::lifecycle::StartProfile;
-        use crate::on_connect::{Mark, marked};
-        match self.stores.profiles(StoreKind::Real).await {
-            Err(reason) => StartProfile::Unavailable { reason },
-            Ok(profiles) => match marked(&profiles).await {
-                None => StartProfile::NotMarked,
-                Some(Mark::Ready(_, name)) => StartProfile::Marked { name },
-                Some(Mark::Unreadable(_, problem)) => StartProfile::Unreadable { problem },
-            },
+        use crate::on_connect::{Mark, due_rule, marked};
+        use prismforge_core::automation::RuleAction;
+        let profiles = match self.stores.profiles(StoreKind::Real).await {
+            Err(reason) => return StartProfile::Unavailable { reason },
+            Ok(profiles) => profiles,
+        };
+        if let Some((trigger, RuleAction::LightsOff)) = due_rule(&profiles.rules().await, true) {
+            return StartProfile::LightsOff { trigger };
+        }
+        match marked(&profiles, true).await {
+            None => StartProfile::NotMarked,
+            Some(Mark::Ready(trigger, _, name)) => StartProfile::Marked { name, trigger },
+            Some(Mark::Unreadable(trigger, _, problem)) => {
+                StartProfile::Unreadable { problem, trigger }
+            }
         }
     }
 
@@ -117,7 +128,23 @@ impl<S: ViewSink> Shell<S> {
     /// Seeds the backend with the stored registry and keeps it beside the session, then connects.
     pub async fn start<B: RgbBackend + Send + 'static>(
         &self,
+        backend: B,
+    ) -> Result<ShellView, CommandError> {
+        self.start_with(backend, false).await
+    }
+
+    /// The connect at start: the rule "When PrismForge starts" applies in place of "When PrismForge connects".
+    pub async fn start_at_launch<B: RgbBackend + Send + 'static>(
+        &self,
+        backend: B,
+    ) -> Result<ShellView, CommandError> {
+        self.start_with(backend, true).await
+    }
+
+    async fn start_with<B: RgbBackend + Send + 'static>(
+        &self,
         mut backend: B,
+        launch: bool,
     ) -> Result<ShellView, CommandError> {
         let mut active = self.active.lock().await;
         end(active.take()).await;
@@ -134,8 +161,8 @@ impl<S: ViewSink> Shell<S> {
             let known = handle.known_devices();
             tokio::spawn(async move { profiles.keep_registry(known).await })
         });
-        let report =
-            profiles.map(|profiles| Arc::new(Report::new(profiles, self.publisher.clone())));
+        let report = profiles
+            .map(|profiles| Arc::new(Report::new(profiles, self.publisher.clone(), launch)));
         if let Some(report) = &report {
             report.publish().await;
         }
@@ -145,6 +172,7 @@ impl<S: ViewSink> Shell<S> {
                 handle.clone(),
                 self.lock.clone(),
                 self.publisher.clone(),
+                self.checks.clone(),
             ))
         });
         let mut updates = handle.subscribe();

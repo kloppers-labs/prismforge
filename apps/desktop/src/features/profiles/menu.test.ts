@@ -46,11 +46,9 @@ test("the_profile_row_menu_offers_the_actions_of_that_profile", async () => {
     "Rename",
     "Duplicate",
     "Export…",
-    "Apply this profile when PrismForge connects",
     "Delete",
   ]);
-  const mark = within(active).getByRole("menuitemcheckbox", { name: "Apply this profile when PrismForge connects" });
-  expect(mark.getAttribute("aria-checked")).toBe("false");
+  expect(within(active).queryByRole("menuitemcheckbox")).toBeNull();
   expect(within(active).getByRole("menuitem", { name: "Delete" }).previousElementSibling?.getAttribute("role")).toBe("separator");
   await fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
 
@@ -112,32 +110,6 @@ test("rename_and_duplicate_in_the_menu_use_the_same_paths_as_their_buttons", asy
 
   await pick(await row("Evening"), "Actions for Evening", "Duplicate");
   await waitFor(() => expect(args(shell, "duplicate_profile")).toEqual([{ id: EVENING }]));
-});
-
-test("the_apply_on_connect_item_toggles_like_the_switch", async () => {
-  let store: StoreView = storeTwo;
-  const shell = fakeShell(
-    demoConnected,
-    handlers(storeTwo, {
-      profile_store: () => store,
-      set_apply_on_connect: (call) => {
-        store = { ...storeTwo, summary: { ...storeTwo.summary, apply_on_connect: (call.id as string | null) ?? null } };
-        return null;
-      },
-    }),
-  );
-  render(App);
-
-  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Apply this profile when PrismForge connects", "menuitemcheckbox");
-  await waitFor(() => expect(args(shell, "set_apply_on_connect")).toEqual([{ id: OLDER }]));
-
-  const menu = await waitFor(async () => {
-    const opened = await openMenu(await row("Evening (2)"), "Actions for Evening (2)");
-    expect(within(opened).getByRole("menuitemcheckbox").getAttribute("aria-checked")).toBe("true");
-    return opened;
-  });
-  await fireEvent.click(within(menu).getByRole("menuitemcheckbox"));
-  await waitFor(() => expect(args(shell, "set_apply_on_connect")).toEqual([{ id: OLDER }, { id: null }]));
 });
 
 test("save_changes_in_the_menu_shows_the_change_list_first", async () => {
@@ -231,15 +203,9 @@ test("a_menu_request_is_dropped_when_the_details_fail_to_load", async () => {
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-test("duplicate_and_the_mark_in_the_menu_show_their_profile_first_like_every_row_item", async () => {
-  const shell = fakeShell(demoConnected, handlers(storeTwo, { duplicate_profile: () => OLDER, set_apply_on_connect: () => null }));
+test("duplicate_in_the_menu_shows_its_profile_first_like_every_row_item", async () => {
+  const shell = fakeShell(demoConnected, handlers(storeTwo, { duplicate_profile: () => OLDER }));
   render(App);
-
-  await pick(await row("Evening (2)"), "Actions for Evening (2)", "Apply this profile when PrismForge connects", "menuitemcheckbox");
-  await screen.findByRole("article", { name: "Evening (2)" });
-  await waitFor(() => expect(args(shell, "set_apply_on_connect")).toEqual([{ id: OLDER }]));
-  const order = shell.commands().filter((command) => command === "profile_details" || command === "set_apply_on_connect");
-  expect(order.indexOf("profile_details")).toBeLessThan(order.indexOf("set_apply_on_connect"));
 
   await fireEvent.click(await row("Evening"));
   await screen.findByRole("article", { name: "Evening" });

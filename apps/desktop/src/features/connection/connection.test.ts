@@ -127,8 +127,8 @@ test("ignores_a_view_older_than_the_one_shown", async () => {
   render(App);
   await screen.findByRole("button", { name: "Connect" });
 
-  await shell.pushView({ revision: 10, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable" });
-  await shell.pushView({ revision: 9, session: openRgbRefused, applying: null, connect_apply: null, on_connect: "NotApplicable" });
+  await shell.pushView({ revision: 10, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable", rule_run: null });
+  await shell.pushView({ revision: 9, session: openRgbRefused, applying: null, connect_apply: null, on_connect: "NotApplicable", rule_run: null });
 
   expect(await findDemoMarker()).toBeTruthy();
   expect(screen.queryByText(/^Retrying/)).toBeNull();
@@ -215,7 +215,7 @@ test("a_marked_profile_is_named_by_the_connect_button_before_connecting", async 
   fakeShell(null, { lifecycle: () => lifecycleStartPath });
   render(App);
 
-  const line = visible(await screen.findByText("Connecting applies Evening, the profile marked to apply on connect, as soon as the devices are read."));
+  const line = visible(await screen.findByText("Connecting applies Evening, the profile of the rule “When PrismForge connects”, as soon as the devices are read."));
   expect(line.closest("form")).toBeTruthy();
   expect(await screen.findByRole("button", { name: "Profile: none active, Evening applies on connect" })).toBeTruthy();
 });
@@ -241,7 +241,7 @@ test("a_stopped_server_with_a_marked_profile_shows_the_same_mark_in_the_line_and
   fakeShell(openRgbOldServer, { lifecycle: () => lifecycleStartPath });
   render(App);
 
-  visible(await screen.findByText(/^Connecting applies Evening, the profile marked to apply on connect/));
+  visible(await screen.findByText(/^Connecting applies Evening, the profile of the rule “When PrismForge connects”/));
   expect(await screen.findByRole("button", { name: "Profile: none active, Evening applies on connect" })).toBeTruthy();
 });
 

@@ -18,7 +18,7 @@
   let fromLast = $derived(remembered !== null && remembered.host === host.trim() && remembered.port === port);
   let summary = $derived(stopped ? summarise(stopped) : null);
   let start = $derived(app.lifecycle.view?.start_profile ?? null);
-  let marked = $derived(start !== null && typeof start === "object" && "Marked" in start ? start.Marked.name : null);
+  let marked = $derived(start !== null && typeof start === "object" && "Marked" in start && start.Marked.trigger === "Connects" ? start.Marked.name : null);
   let problem = $derived(
     !hostValid
       ? "Enter the address of the computer that runs OpenRGB."
@@ -98,7 +98,7 @@
           {/if}
         </div>
         {#if marked}
-          <p class="marked">Connecting applies {marked}, the profile marked to apply on connect, as soon as the devices are read.</p>
+          <p class="marked">Connecting applies {marked}, the profile of the rule “When PrismForge connects”, as soon as the devices are read.</p>
         {/if}
         <button class="primary" type="submit" disabled={!hostValid || !portValid || app.working !== null}>
           {#if app.working === "connect"}<span class="spinner" aria-hidden="true"></span>Connecting…{:else}Connect{/if}

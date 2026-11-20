@@ -1,3 +1,4 @@
+use prismforge_core::automation::Trigger;
 use std::time::Duration;
 
 use prismforge_core::profile::{
@@ -13,7 +14,7 @@ use tokio::time::sleep;
 use crate::session::{
     connected, demo, is_connected, output_packets, reference, strip, wait_until, whole,
 };
-use crate::support::{TempDir, effect};
+use crate::support::{TempDir, connects_rule, effect};
 
 const RED: Rgb = Rgb::new(255, 0, 0);
 const BLUE: Rgb = Rgb::new(0, 0, 255);
@@ -393,7 +394,7 @@ async fn applying_while_not_connected_is_refused_unless_marked_for_connect() {
 
     let refused = profiles.apply(&handle, &id).await;
     profiles
-        .set_apply_on_connect(Some(id.clone()))
+        .set_rule(Trigger::Connects, connects_rule(&id))
         .await
         .expect("mark");
     let waiting = profiles.apply(&handle, &id).await;

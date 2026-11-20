@@ -10,11 +10,15 @@ pub mod packet_id {
     pub const REQUEST_PROTOCOL_VERSION: u32 = 40;
     pub const SET_CLIENT_NAME: u32 = 50;
     pub const SET_SERVER_NAME: u32 = 51;
+    pub const SET_CLIENT_FLAGS: u32 = 52;
+    pub const SET_SERVER_FLAGS: u32 = 53;
     pub const DEVICE_LIST_UPDATED: u32 = 100;
     pub const UPDATE_LEDS: u32 = 1050;
     pub const UPDATE_ZONE_LEDS: u32 = 1051;
     pub const SET_CUSTOM_MODE: u32 = 1100;
     pub const UPDATE_MODE: u32 = 1101;
+    /// Reads one settings key; PrismForge never sends the packets that change settings (251 to 254).
+    pub const SETTINGS_GET: u32 = 250;
 }
 
 pub const ACK_STATUS_OK: u32 = 0;
@@ -27,6 +31,8 @@ const COLOR_LEN: usize = 4;
 pub enum PayloadError {
     #[error("payload of {actual} bytes does not match expected {expected} bytes")]
     Length { expected: usize, actual: usize },
+    #[error("payload is not valid: {detail}")]
+    Invalid { detail: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

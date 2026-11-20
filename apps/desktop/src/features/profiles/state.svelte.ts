@@ -224,15 +224,6 @@ export class ProfilesState {
     await this.refresh();
   }
 
-  async setApplyOnConnect(id: ProfileId | null) {
-    const scope = this.scope;
-    const answer = await api.setApplyOnConnect(id);
-    if (!answer.ok && scope === this.scope) {
-      this.outcome = { kind: "failed", error: answer.error };
-    }
-    await this.refresh();
-  }
-
   async exportProfile(id: ProfileId) {
     const name = this.nameOf(id);
     const answer = await this.run("export", () => api.exportProfile(id));

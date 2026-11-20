@@ -3,6 +3,7 @@ mod controller;
 mod cursor;
 mod header;
 mod packet;
+mod settings;
 
 pub use controller::{
     ControllerData, ControllerDataError, MatrixMap, ModeData, SegmentData, StringProblem, ZoneData,
@@ -13,4 +14,8 @@ pub use packet::{
     ACK_STATUS_OK, Ack, PayloadError, decode_ack, decode_controller_ids, decode_string, decode_u32,
     encode_packet, encode_string, encode_u32, encode_update_leds, encode_update_mode,
     encode_update_zone_leds, packet_id,
+};
+pub use settings::{
+    PROFILE_MANAGER_KEY, SERVER_FLAG_SUPPORTS_SETTINGS_MANAGER, decode_event_profiles,
+    decode_server_flags, encode_settings_key,
 };

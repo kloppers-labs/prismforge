@@ -77,21 +77,22 @@ export type StartPath = {
   hidden: boolean;
   connect: boolean;
   address: string | null;
-  profile: string | null;
+  /** What the start rule does, as "applies Evening" or "switches the lights off". */
+  action: string | null;
 };
 
 export function startPathText(path: StartPath): string {
   if (path.system === null) {
     return "PrismForge cannot tell whether your lights change at system start, because it cannot read its start entry.";
   }
-  if (path.system && path.connect && path.address !== null && path.profile !== null) {
+  if (path.system && path.connect && path.address !== null && path.action !== null) {
     const start = path.hidden ? `starts hidden in ${trayName()}` : "starts";
-    return `When you sign in, PrismForge ${start}, connects to OpenRGB at ${path.address} and applies ${path.profile}. Your lights change at system start without a click.`;
+    return `When you sign in, PrismForge ${start}, connects to OpenRGB at ${path.address} and ${path.action}. Your lights change at system start without a click.`;
   }
   const missing = [
     ...(path.system ? [] : ["start PrismForge when you sign in"]),
     ...(path.connect ? [] : ["connect to OpenRGB when PrismForge starts"]),
-    ...(path.profile !== null ? [] : ["a profile marked to apply when PrismForge connects"]),
+    ...(path.action !== null ? [] : ["a rule that applies a profile or switches the lights off when PrismForge starts or connects"]),
   ];
   return `Your lights do not change by themselves at system start. Not set: ${missing.join(", ")}.`;
 }

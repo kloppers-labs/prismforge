@@ -38,12 +38,12 @@ import {
   waitForConnection,
 } from "../../test/shell";
 
-const AREAS = ["Devices", "Effects", "Setup", "Profiles", "Diagnostics", "Settings"];
+const AREAS = ["Devices", "Effects", "Setup", "Profiles", "Automation", "Diagnostics", "Settings"];
 
 afterEach(() => vi.restoreAllMocks());
 
 function shellView(session: SessionSnapshot | null, revision: number, extra: Partial<ShellView> = {}): ShellView {
-  return { revision, session, applying: null, connect_apply: null, on_connect: "NotApplicable", ...extra };
+  return { revision, session, applying: null, connect_apply: null, on_connect: "NotApplicable", rule_run: null, ...extra };
 }
 
 function withStore(store: StoreView) {
@@ -364,7 +364,7 @@ test("area_shortcuts_follow_the_final_rail_order", async () => {
   await fireEvent.keyDown(document.body, { key: "3", code: "Digit3", ctrlKey: true });
   expect(current()).toEqual(["Setup"]);
   await fireEvent.keyDown(document.body, { key: "5", code: "Digit5", ctrlKey: true });
-  expect(current()).toEqual(["Setup"]);
+  expect(current()).toEqual(["Automation"]);
   await fireEvent.keyDown(document.body, { key: ",", code: "Comma", ctrlKey: true });
   expect(current()).toEqual(["Settings"]);
   await fireEvent.keyDown(document.body, { key: "&", code: "Digit1", ctrlKey: true });

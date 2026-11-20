@@ -1,4 +1,5 @@
 use prismforge_core::OutputTarget;
+use prismforge_core::automation::RuleRun;
 use prismforge_core::profile::{ApplyError, ApplyReport, ProfileId};
 use prismforge_core::session::{OutputError, SessionError, SessionSnapshot};
 use prismforge_core::setup::PlanError;
@@ -20,6 +21,8 @@ pub struct ShellView {
     pub connect_apply: Option<ConnectApply>,
     /// Whether this session will still apply a marked profile when it connects.
     pub on_connect: OnConnect,
+    /// The last automation rule that ran since PrismForge started.
+    pub rule_run: Option<RuleRun>,
 }
 
 /// The apply-on-connect state of the session, taken from its trigger and the store's mark.
@@ -112,6 +115,8 @@ pub enum CommandError {
         limit: usize,
     },
     ProfileApplying,
+    /// An automation rule is switching the lights off; it ends within a second or two.
+    RuleRunning,
     NotConnected,
     Store(StoreError),
     StoreUnavailable(StoreUnavailable),

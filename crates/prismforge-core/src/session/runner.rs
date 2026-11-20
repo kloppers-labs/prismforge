@@ -22,6 +22,7 @@ use crate::session::output::Output;
 use crate::session::snapshot::{OutputStatus, SessionSnapshot};
 use crate::session::{Command, Reply, SessionConfig, SessionError};
 
+mod automation;
 mod batches;
 mod claims;
 mod frames;
@@ -264,6 +265,17 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 self.answer(reply, result.map_err(SessionError::from));
             }
             Command::Identify { request, reply } => self.start_identify(request, reply).await,
+            Command::EventProfiles(reply) => {
+                let result = match self.link {
+                    Link::Connected => self.read_event_profiles().await,
+                    _ => Err(BackendError::NotConnected),
+                };
+                self.answer(reply, result.map_err(SessionError::from));
+            }
+            Command::Resync(reply) => {
+                self.forget_device_state();
+                self.answer(reply, Ok(()));
+            }
             Command::Output(command) => self.on_output(command).await,
         }
     }

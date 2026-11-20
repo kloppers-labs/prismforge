@@ -36,7 +36,7 @@ test("apply_sits_in_the_effect_bar_early_in_the_tab_order", async () => {
   expect(within(bar).getByRole("button", { name: "Stop effect" })).toBeTruthy();
   const position = tabStops().indexOf(button("Apply effect"));
   expect(position).toBeGreaterThan(-1);
-  expect(position).toBeLessThan(14);
+  expect(position).toBeLessThan(15);
 });
 
 test("the_whole_effect_card_chooses_the_effect", async () => {
@@ -102,7 +102,7 @@ test("the_effects_lifecycle_text_sits_behind_details_under_one_line", async () =
   await waitFor(() => expect(screen.getByText("Runs while PrismForge runs and is connected.")).toBeTruthy());
   const how = screen.getByText("How effects run").closest("details") as HTMLDetailsElement;
   expect(how.open).toBe(false);
-  expect(within(how).getByText(/no effect runs until you apply one, or until a profile marked to apply on connect is applied/)).toBeTruthy();
+  expect(within(how).getByText(/no effect runs until you apply one, or until a rule applies a profile/)).toBeTruthy();
 });
 
 test("the_bar_holds_only_the_target_the_actions_the_mode_and_the_output", async () => {

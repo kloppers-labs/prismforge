@@ -2791,6 +2791,7 @@ dependencies = [
  "prismforge-core",
  "prismforge-effects",
  "prismforge-openrgb",
+ "prismforge-system-events",
  "prismforge-testkit",
  "serde",
  "serde_json",
@@ -2819,8 +2820,19 @@ version = "0.1.0"
 dependencies = [
  "prismforge-core",
  "prismforge-testkit",
+ "serde_json",
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "prismforge-system-events"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tokio",
+ "ts-rs",
+ "windows",
 ]
 
 [[package]]

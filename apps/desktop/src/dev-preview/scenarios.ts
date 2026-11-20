@@ -1,4 +1,6 @@
+import type { AutomationView } from "../lib/api/bindings/AutomationView";
 import type { GroupsView } from "../lib/api/bindings/GroupsView";
+import * as automations from "../test/fixtures/automations";
 import type { SetupStoreView } from "../lib/api/bindings/SetupStoreView";
 import { acrossDemoSkipped } from "../test/fixtures/acrossReports";
 import { liveRealAcross } from "../test/fixtures/live";
@@ -12,13 +14,13 @@ import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import type { StoreView } from "../lib/api/bindings/StoreView";
 import { isLive } from "../features/devices/present";
-import { lifecycleChosen, lifecycleFresh, lifecycleStartPath, lifecycleTrayStopped } from "../test/fixtures/lifecycles";
+import { lifecycleChosen, lifecycleFresh, lifecycleStartLightsOff, lifecycleStartPath, lifecycleTrayStopped } from "../test/fixtures/lifecycles";
 import * as sessions from "../test/fixtures/sessions";
 import { storeEmpty, storeOffline, storeRecovered, storeSaved, storeTwo, storeUnsaved } from "../test/fixtures/stores";
 import { viewApplying, viewArmedRetrying, viewConnectApplied } from "../test/fixtures/views";
 import type { Handler } from "./transport";
 
-export type Area = "Devices" | "Effects" | "Setup" | "Profiles" | "Settings";
+export type Area = "Devices" | "Effects" | "Setup" | "Profiles" | "Automation" | "Settings";
 
 export type Scenario = {
   label: string;
@@ -40,6 +42,9 @@ export type Scenario = {
   live?: LiveOutput;
   rescan?: boolean;
   setup?: SetupStoreView;
+  automation?: AutomationView;
+  /** The rule the Automation screen scrolls to, by its trigger in lower case. */
+  rule?: string;
   /** What the Setup area shows: a tab, a template added, components selected, an effect drafted, applied or live. */
   setupTab?: "PC" | "Desk";
   setupTemplate?: string;
@@ -57,7 +62,7 @@ function onConnect(session: SessionSnapshot | null): ShellView["on_connect"] {
 }
 
 function view(session: SessionSnapshot | null, extra: Partial<ShellView> = {}): ShellView {
-  return { revision: 1, session, applying: null, connect_apply: null, on_connect: onConnect(session), ...extra };
+  return { revision: 1, session, applying: null, connect_apply: null, on_connect: onConnect(session), rule_run: null, ...extra };
 }
 
 const base = { store: storeEmpty, lifecycle: lifecycleFresh };
@@ -120,6 +125,9 @@ export const SCENARIOS: Record<string, Scenario> = {
     rescan: true,
   },
   settings: { ...openRgb, label: "Settings", view: view(sessions.openRgbConnected), lifecycle: lifecycleStartPath, area: "Settings" },
+  "settings-start-profile": { ...openRgb, label: "Settings, a rule applies a profile at start", view: view(sessions.openRgbConnected), lifecycle: lifecycleStartPath, area: "Settings", scrollTo: "start-title" },
+  "settings-start-lights-off": { ...openRgb, label: "Settings, a rule switches the lights off at start", view: view(sessions.openRgbConnected), lifecycle: lifecycleStartLightsOff, area: "Settings", scrollTo: "start-title" },
+  "settings-start-none": { ...openRgb, label: "Settings, no rule at start", view: view(sessions.openRgbConnected), area: "Settings", scrollTo: "start-title" },
   "settings-background": { ...base, label: "Settings, keep running chosen", view: view(sessions.demoConnected), lifecycle: lifecycleChosen, area: "Settings" },
   diagnostics: { ...openRgb, label: "Diagnostics drawer", view: view(sessions.openRgbDegraded), diagnostics: true },
   "long-names": { ...base, label: "Long server address and profile name", view: view(long.session), store: long.store },
@@ -295,3 +303,74 @@ Object.assign(SCENARIOS, {
 });
 
 export const DEFAULT_SCENARIO = "demo";
+
+Object.assign(SCENARIOS, {
+  "automation-off": { ...base, label: "Automation, no rule on", view: view(sessions.demoConnected), area: "Automation", automation: automations.demoNoRules },
+  "automation-sleep-wake": {
+    ...openRgb,
+    label: "Automation, lights off at sleep and a profile at wake",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbSleepAndWake,
+  },
+  "automation-last-runs": {
+    ...openRgb,
+    label: "Automation, last runs with a skipped device",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbAfterSleepAndWake,
+    rule: "wakes",
+  },
+  "automation-deleted-profile": {
+    ...openRgb,
+    label: "Automation, a rule whose profile was deleted",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbDeletedProfile,
+    rule: "wakes",
+  },
+  "automation-openrgb-also": {
+    ...openRgb,
+    label: "Automation, OpenRGB also acts",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbAlsoActs,
+    rule: "sleeps",
+  },
+  "automation-not-here": {
+    ...base,
+    label: "Automation on macOS or Linux",
+    view: view(sessions.demoConnected),
+    area: "Automation",
+    automation: automations.demoNotOnThisSystem,
+    rule: "sleeps",
+  },
+  "automation-events-failed": {
+    ...base,
+    label: "Automation, the event window could not start",
+    view: view(sessions.demoConnected),
+    area: "Automation",
+    automation: automations.demoEventsFailed,
+    rule: "sleeps",
+  },
+  "automation-run-not-written": {
+    ...openRgb,
+    label: "Automation, a run the store could not write",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbRunNotWritten,
+  },
+  "automation-failed-notice": {
+    ...openRgb,
+    label: "Start notice for a failed sleep rule",
+    view: view(sessions.openRgbConnected),
+    automation: automations.openRgbSleepFailed,
+  },
+  "automation-migrated": {
+    ...openRgb,
+    label: "Automation, the connects rule from an earlier mark",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbMigratedConnects,
+  },
+} satisfies Record<string, Scenario>);

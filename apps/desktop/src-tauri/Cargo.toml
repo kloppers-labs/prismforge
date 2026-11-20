@@ -12,7 +12,7 @@ repository.workspace = true
 name = "prismforge_desktop"
 
 [features]
-ts = ["dep:ts-rs", "prismforge-core/ts", "prismforge-effects/ts"]
+ts = ["dep:ts-rs", "prismforge-core/ts", "prismforge-effects/ts", "prismforge-system-events/ts"]
 
 [build-dependencies]
 tauri-build = { version = "=2.7.5", features = [] }
@@ -21,6 +21,7 @@ tauri-build = { version = "=2.7.5", features = [] }
 prismforge-core.workspace = true
 prismforge-effects.workspace = true
 prismforge-openrgb.workspace = true
+prismforge-system-events.workspace = true
 prismforge-testkit.workspace = true
 serde.workspace = true
 tauri = { version = "=2.12.6", features = ["tray-icon"] }

@@ -26,7 +26,39 @@ export const lifecycleStartPath: LifecycleView = {
   "tray_stop": null,
   "start_profile": {
     "Marked": {
-      "name": "Evening"
+      "name": "Evening",
+      "trigger": "Connects"
+    }
+  },
+  "folder": "store-folder"
+};
+
+export const lifecycleStartLightsOff: LifecycleView = {
+  "revision": 6,
+  "settings": {
+    "Ready": {
+      "settings": {
+        "on_close": null,
+        "start_hidden": false,
+        "connect_at_start": true,
+        "address": {
+          "host": "127.0.0.1",
+          "port": 6742
+        }
+      },
+      "notices": []
+    }
+  },
+  "tray": "Available",
+  "start_with_system": "Registered",
+  "machine_start_entry": false,
+  "window_visible": true,
+  "quitting": false,
+  "close_prompt": false,
+  "tray_stop": null,
+  "start_profile": {
+    "LightsOff": {
+      "trigger": "Starts"
     }
   },
   "folder": "store-folder"

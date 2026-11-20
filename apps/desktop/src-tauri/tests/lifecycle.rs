@@ -4,13 +4,15 @@ use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use prismforge_core::automation::Trigger;
+use prismforge_core::profile::ProfileId;
 use prismforge_core::session::{ReconnectPolicy, RestoreOutcome, SessionConfig};
 use prismforge_core::store::{CloseAction, OpenRgbAddress, ProfileStore, StdFileOps};
 use prismforge_core::{BackendOrigin, ConnectionState, DeviceRef, OutputTarget};
 use prismforge_desktop::{
-    AppSettingChange, CommandError, ConnectOutcome, OnConnect, SettingProblem, SettingsState,
-    Shell, ShellConfig, StartEntryState, StartProfile, StopResult, StoreUnavailable, Stores,
-    TrayState, marks, stop_then_exit,
+    AppSettingChange, Automation, CommandError, ConnectOutcome, EventSupport, MarkProblem,
+    OnConnect, SettingProblem, SettingsState, Shell, ShellConfig, StartEntryState, StartProfile,
+    StopResult, StoreUnavailable, Stores, TrayState, marks, stop_then_exit,
 };
 use prismforge_effects::EffectInstance;
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
@@ -20,7 +22,7 @@ use tokio::time::Instant;
 
 use support::lifecycle::{FakeEntry, FakeExit, FakeWindow, lifecycle};
 use support::temp::TempDir;
-use support::{Recorder, is_connected, is_retrying, stores};
+use support::{ConnectsRule, Recorder, connects_action, is_connected, is_retrying, stores};
 
 const ADDRESS: &str = "127.0.0.1:6742";
 const GPU: &str = "demo-graphics-card";
@@ -734,7 +736,8 @@ async fn the_settings_name_the_real_profile_that_start_up_applies() {
     assert_eq!(
         marked,
         StartProfile::Marked {
-            name: "Evening".into()
+            name: "Evening".into(),
+            trigger: Trigger::Connects,
         }
     );
 }
@@ -838,7 +841,23 @@ async fn every_change_to_the_marked_profile_publishes_the_start_profile() {
     let (shell, recorder, _dir) = shell("start-profile-published");
     let entry = FakeEntry::default();
     let (lifecycle, views) = lifecycle(&entry);
-    let marked = |name: &str| StartProfile::Marked { name: name.into() };
+    let marked = |name: &str| StartProfile::Marked {
+        name: name.into(),
+        trigger: Trigger::Connects,
+    };
+    let automation = Automation::new(EventSupport::NotOnThisSystem);
+    let mark = async |id: Option<ProfileId>| {
+        let (enabled, action) = connects_action(id);
+        marks::set_rule(
+            &shell,
+            &lifecycle,
+            &automation,
+            Trigger::Connects,
+            enabled,
+            action,
+        )
+        .await
+    };
 
     marks::start(
         &shell,
@@ -849,26 +868,75 @@ async fn every_change_to_the_marked_profile_publishes_the_start_profile() {
     .expect("start");
     recorder.wait_for(is_connected).await;
     let id = shell.create_profile("Evening").await.expect("save").id;
-    marks::set_apply_on_connect(&shell, &lifecycle, Some(id.clone()))
-        .await
-        .expect("mark");
+    mark(Some(id.clone())).await.expect("mark");
     assert_eq!(views.last().start_profile, marked("Evening"));
     marks::rename_profile(&shell, &lifecycle, &id, "Night")
         .await
         .expect("rename");
     assert_eq!(views.last().start_profile, marked("Night"));
-    marks::set_apply_on_connect(&shell, &lifecycle, None)
-        .await
-        .expect("unmark");
+    mark(None).await.expect("unmark");
     assert_eq!(views.last().start_profile, StartProfile::NotMarked);
-    marks::set_apply_on_connect(&shell, &lifecycle, Some(id.clone()))
-        .await
-        .expect("mark again");
+    mark(Some(id.clone())).await.expect("mark again");
     marks::delete_profile(&shell, &lifecycle, &id)
         .await
         .expect("delete");
-    assert_ne!(views.last().start_profile, marked("Night"));
+    assert_eq!(
+        views.last().start_profile,
+        StartProfile::Unreadable {
+            problem: MarkProblem::Missing,
+            trigger: Trigger::Connects,
+        }
+    );
     let published = views.views().len();
     marks::stop(&shell, &lifecycle).await;
     assert_eq!(views.views().len(), published + 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_rule_that_switches_the_lights_off_at_start_counts_as_the_start_action() {
+    let (shell, recorder, _dir) = shell("start-lights-off");
+    let entry = FakeEntry::default();
+    let (lifecycle, _) = lifecycle(&entry);
+    let automation = Automation::new(EventSupport::NotOnThisSystem);
+    marks::start(
+        &shell,
+        &lifecycle,
+        OpenRgbBackend::new(Local(desk_server()), ClientConfig::default()),
+    )
+    .await
+    .expect("start");
+    recorder.wait_for(is_connected).await;
+
+    marks::set_rule(
+        &shell,
+        &lifecycle,
+        &automation,
+        Trigger::Connects,
+        true,
+        prismforge_core::automation::RuleAction::LightsOff,
+    )
+    .await
+    .expect("connects");
+    assert_eq!(
+        lifecycle.view(&shell).await.start_profile,
+        StartProfile::LightsOff {
+            trigger: Trigger::Connects
+        }
+    );
+    marks::set_rule(
+        &shell,
+        &lifecycle,
+        &automation,
+        Trigger::Starts,
+        true,
+        prismforge_core::automation::RuleAction::LightsOff,
+    )
+    .await
+    .expect("starts");
+    assert_eq!(
+        lifecycle.view(&shell).await.start_profile,
+        StartProfile::LightsOff {
+            trigger: Trigger::Starts
+        }
+    );
 }

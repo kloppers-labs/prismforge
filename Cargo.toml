@@ -13,6 +13,7 @@ repository = "https://github.com/kloppers-labs/prismforge"
 prismforge-core = { path = "crates/prismforge-core" }
 prismforge-effects = { path = "crates/prismforge-effects" }
 prismforge-openrgb = { path = "crates/prismforge-openrgb" }
+prismforge-system-events = { path = "crates/prismforge-system-events" }
 prismforge-testkit = { path = "crates/prismforge-testkit" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }

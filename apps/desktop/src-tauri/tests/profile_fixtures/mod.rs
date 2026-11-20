@@ -14,6 +14,7 @@ use serde_json::Value;
 use tokio::time::sleep;
 
 use crate::Module;
+use crate::support::ConnectsRule;
 use crate::support::temp::TempDir;
 
 const GPU: &str = "demo-graphics-card";
@@ -65,7 +66,9 @@ impl ProfileModules {
         for (index, id) in self.ids.iter().enumerate() {
             json = json.replace(id.as_str(), &format!("p-{:016x}", index + 1));
         }
-        serde_json::from_str(&json).expect("fixture json")
+        let mut value = serde_json::from_str(&json).expect("fixture json");
+        crate::fixed_run_times(&mut value);
+        value
     }
 
     fn add(&mut self, module: fn(&mut Self) -> &mut Module, name: &str, value: &impl Serialize) {

@@ -5,8 +5,8 @@ mod generated;
 use prismforge_core::session::{BatchReport, LiveOutput};
 use prismforge_core::store::{ApplyOutcome, ExportReport, ImportReport, ProfileDetails, Saved};
 use prismforge_desktop::{
-    AcrossPreview, AcrossPreviewRequest, AcrossReport, AppSettingChange, CommandError,
-    EffectCatalog, GroupsView, LifecycleView, SetupStoreView, ShellView, StoreView,
+    AcrossPreview, AcrossPreviewRequest, AcrossReport, AppSettingChange, AutomationView,
+    CommandError, EffectCatalog, GroupsView, LifecycleView, SetupStoreView, ShellView, StoreView,
 };
 use prismforge_effects::{PreviewBatch, PreviewRequest};
 use ts_rs::{Config, TS};
@@ -39,6 +39,7 @@ fn committed_bindings_match_the_rust_types() {
     AcrossReport::export_all(&config).expect("export AcrossReport");
     AcrossPreviewRequest::export_all(&config).expect("export AcrossPreviewRequest");
     AcrossPreview::export_all(&config).expect("export AcrossPreview");
+    AutomationView::export_all(&config).expect("export AutomationView");
 
     generated.compare_or_update();
 }

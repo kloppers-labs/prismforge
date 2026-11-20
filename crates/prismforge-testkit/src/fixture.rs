@@ -6,6 +6,7 @@ const FLAG_HAS_BRIGHTNESS: u32 = 1 << 4;
 const FLAG_HAS_PER_LED_COLOR: u32 = 1 << 5;
 const FLAG_HAS_MODE_SPECIFIC_COLOR: u32 = 1 << 6;
 const FLAG_MANUAL_SAVE: u32 = 1 << 8;
+const FLAG_AUTOMATIC_SAVE: u32 = 1 << 9;
 const COLORS_PER_LED: u32 = 1;
 const COLORS_MODE_SPECIFIC: u32 = 2;
 const ZONE_TYPE_LINEAR: i32 = 1;
@@ -71,6 +72,16 @@ impl FixtureMode {
 
     pub fn direct() -> Self {
         Self::plain("Direct", FLAG_HAS_PER_LED_COLOR, COLORS_PER_LED)
+    }
+
+    pub fn off() -> Self {
+        Self::plain("Off", 0, 0)
+    }
+
+    /// Marks the mode as saving to device memory by itself, as some keyboards report every mode.
+    pub fn saving_automatically(mut self) -> Self {
+        self.flags |= FLAG_AUTOMATIC_SAVE;
+        self
     }
 
     pub fn static_color() -> Self {

@@ -6,7 +6,7 @@
   import type { StoreSummary } from "../../lib/api/bindings/StoreSummary";
   import Dialog from "../../lib/Dialog.svelte";
   import { failureText } from "../../lib/errors";
-  import ApplyOnConnect from "./ApplyOnConnect.svelte";
+  import ConnectsRule from "./ConnectsRule.svelte";
   import ChangeList from "./ChangeList.svelte";
   import { notConnectedText, onConnectText, unsavedText, type Labels } from "./present";
   import ResultPanel from "./ResultPanel.svelte";
@@ -26,6 +26,7 @@
     session,
     onConnect,
     onsavenew,
+    onautomation,
   }: {
     profiles: ProfilesState;
     details: ProfileDetails;
@@ -36,6 +37,7 @@
     session: SessionSnapshot | null;
     onConnect: OnConnect;
     onsavenew: () => void;
+    onautomation: () => void;
   } = $props();
 
   let resultBox: HTMLDivElement | undefined = $state();
@@ -211,10 +213,10 @@
     </form>
   {/if}
 
-  <ApplyOnConnect
-    on={marked}
+  <ConnectsRule
+    applies={marked}
     status={session ? onConnectText(onConnect, session) : null}
-    onchange={(on) => profiles.setApplyOnConnect(on ? details.id : null)}
+    {onautomation}
   />
 
   <SettingsList {details} {labels} />

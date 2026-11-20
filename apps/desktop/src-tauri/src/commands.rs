@@ -29,13 +29,13 @@ pub async fn connect_openrgb(
     marks::connect_openrgb(&shell, &lifecycle, host, port, openrgb(host, port)).await
 }
 
-/// The one connect path, for the Connect button and for connect at start.
-pub async fn connect(
+/// Connect at start: the path of the Connect button, where the rule "When PrismForge starts" applies.
+pub async fn connect_at_start(
     shell: &DesktopShell,
     host: &str,
     port: u16,
 ) -> Result<ShellView, CommandError> {
-    shell.start(openrgb(host, port)).await
+    shell.start_at_launch(openrgb(host, port)).await
 }
 
 fn openrgb(host: &str, port: u16) -> OpenRgbBackend<TcpConnector> {

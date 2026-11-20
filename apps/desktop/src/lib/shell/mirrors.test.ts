@@ -41,7 +41,6 @@ const PROFILE_IDS = [
   "profile.rename",
   "profile.duplicate",
   "profile.export",
-  "profile.apply-on-connect",
   "profile.delete",
 ];
 const DIAGNOSTICS_IDS = ["diagnostics.copy-section", "diagnostics.copy-all"];

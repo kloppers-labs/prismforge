@@ -95,13 +95,6 @@ impl<S: ViewSink> Shell<S> {
         Ok(profiles.apply(&handle, id).await?)
     }
 
-    pub async fn set_apply_on_connect(&self, id: Option<ProfileId>) -> Result<(), CommandError> {
-        let (_, profiles) = self.store().await?;
-        let marked = profiles.set_apply_on_connect(id).await;
-        self.report_on_connect().await;
-        Ok(marked?)
-    }
-
     pub async fn export_file_name(&self, id: &ProfileId) -> Result<String, CommandError> {
         let (_, profiles) = self.store().await?;
         let name = profiles.profile(id).await?.name;
@@ -149,7 +142,7 @@ impl<S: ViewSink> Shell<S> {
         Ok(profiles.dismiss_notice(notice).await)
     }
 
-    async fn store(&self) -> Result<(Option<SessionHandle>, Profiles), CommandError> {
+    pub(crate) async fn store(&self) -> Result<(Option<SessionHandle>, Profiles), CommandError> {
         let (handle, kind) = self.current().await;
         Ok((handle, self.stores.profiles(kind).await?))
     }

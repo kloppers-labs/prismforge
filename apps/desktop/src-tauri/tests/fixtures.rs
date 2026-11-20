@@ -1,3 +1,4 @@
+mod automation_fixtures;
 mod effect_fixtures;
 mod generated;
 mod group_fixtures;
@@ -310,6 +311,22 @@ async fn openrgb_failures(sessions: &mut Module) {
     sessions.add("openRgbOldServer", &refused.snapshot());
 }
 
+/// The time of every rule run, fixed so the fixtures stay the same on every run.
+pub(crate) const RUN_TIME_MS: u64 = 1_795_000_000_000;
+
+pub(crate) fn fixed_run_times(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            if fields.contains_key("trigger") && fields.contains_key("outcome") {
+                fields.insert("at_ms".into(), RUN_TIME_MS.into());
+            }
+            fields.values_mut().for_each(fixed_run_times);
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(fixed_run_times),
+        _ => {}
+    }
+}
+
 pub(crate) fn reference(snapshot: &SessionSnapshot, serial: &str) -> DeviceRef {
     snapshot
         .devices
@@ -358,6 +375,8 @@ async fn committed_fixtures_match_real_sessions() {
     let mut setups = setup_fixtures::SetupModules::new();
     setup_fixtures::generate(&mut setups, &mut sessions, &mut live, &mut errors).await;
     setup_fixtures::geometry(&generated);
+    let mut automations = automation_fixtures::AutomationModules::new();
+    automation_fixtures::generate(&mut automations).await;
 
     generated.write("sessions.ts", &sessions.render());
     generated.write("outcomes.ts", &outcomes.render());
@@ -378,5 +397,6 @@ async fn committed_fixtures_match_real_sessions() {
     generated.write("setups.ts", &setups.setups.render());
     generated.write("acrossReports.ts", &setups.reports.render());
     generated.write("acrossPreviews.ts", &setups.previews.render());
+    generated.write("automations.ts", &automations.views.render());
     generated.compare_or_update();
 }

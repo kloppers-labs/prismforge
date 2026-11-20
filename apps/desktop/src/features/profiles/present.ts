@@ -235,7 +235,7 @@ function markProblemText(problem: MarkProblem): string {
 }
 
 function profileLabel(name: string | null): string {
-  return name ?? "the profile marked to apply on connect";
+  return name ?? "the profile of the rule “When PrismForge connects”";
 }
 
 /** The one text for what apply on connect did; the notice and the status line both use it. */
@@ -253,7 +253,7 @@ function nextText(next: Marked | null): string {
   }
   return "Ready" in next
     ? ` After you disconnect and connect, PrismForge applies ${next.Ready.name} by itself.`
-    : ` The profile marked for the next connect ${markProblemText(next.Unreadable.problem)}, so nothing is applied then.`;
+    : ` The profile of the rule for the next connect ${markProblemText(next.Unreadable.problem)}, so nothing is applied then.`;
 }
 
 /** Every sentence about a pending apply on connect comes from the state the shell publishes. */
@@ -264,31 +264,31 @@ export function onConnectText(
   if (stopped(session)) {
     let next = "";
     if (state === "NotArmed") {
-      next = " No profile is marked to apply on connect.";
+      next = " No rule applies a profile when PrismForge connects.";
     } else if (typeof state === "object" && "Armed" in state) {
       next = ` When you connect, PrismForge applies ${state.Armed.name} as soon as it has read the devices.`;
     } else if (typeof state === "object" && "Unreadable" in state) {
-      next = ` The profile marked to apply on connect ${markProblemText(state.Unreadable.problem)}. Nothing is applied when you connect.`;
+      next = ` The profile of the rule “When PrismForge connects” ${markProblemText(state.Unreadable.problem)}. Nothing is applied when you connect.`;
     }
     return `The connection stopped and PrismForge does not try again. Connect again on the Devices screen.${next}`;
   }
   if (state === "NotApplicable") {
     return session === null
-      ? "When you connect, PrismForge applies the profile marked to apply on connect, if there is one, as soon as it has read the devices."
+      ? "When you connect, PrismForge applies the profile of the rule “When PrismForge connects”, if there is one, as soon as it has read the devices."
       : "Profiles are not available in this window, so no profile is applied when PrismForge connects.";
   }
   if (state === "NotArmed") {
-    return "No profile is marked to apply on connect. A profile you mark before PrismForge has read the devices is applied then.";
+    return "No rule applies a profile when PrismForge connects. A rule you set before PrismForge has read the devices applies then.";
   }
   if ("Armed" in state) {
     return `PrismForge will apply ${state.Armed.name} as soon as it has read the devices.`;
   }
   if ("Unreadable" in state) {
-    return `The profile marked to apply on connect ${markProblemText(state.Unreadable.problem)}. Nothing is applied when PrismForge connects.`;
+    return `The profile of the rule “When PrismForge connects” ${markProblemText(state.Unreadable.problem)}. Nothing is applied when PrismForge connects.`;
   }
   const { ran, next } = state.Fired;
   const done = ran
-    ? `${connectResultText(ran)} Apply on connect does not run again by itself in this session, also not when the connection comes back. You can still apply a profile yourself.`
+    ? `${connectResultText(ran)} The rule “When PrismForge connects” does not run again by itself in this session, also not when the connection comes back. You can still apply a profile yourself.`
     : "No profile was marked when PrismForge connected, so none was applied by itself. A profile you mark now is not applied by itself in this session. You can still apply it yourself.";
   return `${done}${nextText(next)}`;
 }

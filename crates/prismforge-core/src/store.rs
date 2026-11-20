@@ -19,6 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
 
+use crate::automation::{Rule, RuleAction, RuleProblem, RuleRun, Rules, RunLog, Trigger};
 use crate::device::DeviceRef;
 use crate::identity::KnownDevice;
 use crate::profile::{
@@ -35,7 +36,7 @@ pub use app_settings::{
 pub use durable::{STORE_FILE_LIMIT, WriteFailure, WriteStep};
 pub use envelope::{
     EXPORT_FORMAT, FileProblem, PROFILE_FORMAT, PROFILE_SCHEMA_VERSION, REGISTRY_FORMAT,
-    SCHEMA_VERSION, SETTINGS_FORMAT, SchemaVersion,
+    RULE_RUNS_FORMAT, SCHEMA_VERSION, SETTINGS_FORMAT, SETTINGS_SCHEMA_VERSION, SchemaVersion,
 };
 pub use files::{FileOps, StdFileOps};
 pub use groups::{
@@ -59,6 +60,7 @@ const PROFILES: &str = "profiles";
 const PROFILE_EXTENSION: &str = ".json";
 const REGISTRY_FILE: &str = "devices.json";
 const SETTINGS_FILE: &str = "settings.json";
+const RULE_RUNS_FILE: &str = "rule-runs.json";
 
 /// An application store operation that did not happen; nothing here ever touches device memory.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
@@ -94,6 +96,8 @@ pub enum StoreError {
     InvalidGroups { problem: FileProblem },
     #[error("the setup is not valid: {problem}")]
     InvalidSetup { problem: SetupProblem },
+    #[error("the rule is not valid: {problem}")]
+    InvalidRule { problem: RuleProblem },
     /// An update needs the profile applied or saved in this session; `active` is the one that is.
     #[error("profile {id} was not applied in this session")]
     NotActive {
@@ -142,6 +146,8 @@ pub struct ProfileStore {
     locked: BTreeMap<ProfileId, FileProblem>,
     notices: Vec<StoreNotice>,
     setup: SetupFile,
+    runs: RunLog,
+    runs_lock: Option<FileProblem>,
 }
 
 impl ProfileStore {
@@ -164,11 +170,15 @@ impl ProfileStore {
             locked: BTreeMap::new(),
             notices: Vec::new(),
             setup,
+            runs: RunLog::default(),
+            runs_lock: None,
         };
         let file = store.registry_file();
         (store.registry, store.registry_lock) = store.load_or_default(&file, &decode_registry);
         let file = store.settings_file();
         (store.settings, store.settings_lock) = store.load_or_default(&file, &decode_settings);
+        let file = store.runs_file();
+        (store.runs, store.runs_lock) = store.load_or_default(&file, &decode_runs);
         store.load_profiles()?;
         store.notices.extend_from_slice(store.setup.notices());
         Ok(store)
@@ -237,12 +247,9 @@ impl ProfileStore {
         self.create(profile)
     }
 
-    /// Removes the profile's file and backup; clears the apply-on-connect choice if it was this profile.
+    /// Removes the profile's file and backup; rules that name it keep the name and report it missing.
     pub fn delete(&mut self, id: &ProfileId) -> Result<(), StoreError> {
         self.profile(id)?;
-        if self.settings.apply_on_connect.as_ref() == Some(id) {
-            self.set_apply_on_connect(None)?;
-        }
         let file = self.profile_file(id);
         durable::remove(self.ops.as_ref(), &file).map_err(|error| StoreError::Remove {
             file: file.name.clone(),
@@ -252,27 +259,74 @@ impl ProfileStore {
         Ok(())
     }
 
-    pub fn apply_on_connect(&self) -> Option<&ProfileId> {
-        self.settings.apply_on_connect.as_ref()
+    /// The stored rules, or for a store from before rules existed, the rules its mark means.
+    pub fn rules(&self) -> Rules {
+        let mark = self.settings.apply_on_connect.clone();
+        match &self.settings.automation {
+            Some(rules) => {
+                let mut rules = rules.clone();
+                rules.follow_mark(mark);
+                rules
+            }
+            None => Rules::migrated(mark),
+        }
     }
 
-    /// Marks the one profile to apply when PrismForge connects, or none.
-    pub fn set_apply_on_connect(&mut self, id: Option<ProfileId>) -> Result<(), StoreError> {
-        if let Some(id) = &id {
-            self.profile(id)?;
+    /// The profile the connects rule applies, or none.
+    pub fn apply_on_connect(&self) -> Option<ProfileId> {
+        self.rules().mark().cloned()
+    }
+
+    /// Replaces the rule for `trigger`; a rule switched on must name a profile the store has now.
+    pub fn set_rule(&mut self, trigger: Trigger, rule: Rule) -> Result<(), StoreError> {
+        rule.check()
+            .map_err(|problem| StoreError::InvalidRule { problem })?;
+        if let (true, RuleAction::ApplyProfile { profile }) = (rule.enabled, &rule.action) {
+            self.profile(profile)?;
         }
-        if self.settings.apply_on_connect == id {
-            return Ok(());
-        }
-        let mut settings = self.settings.clone();
-        settings.apply_on_connect = id;
         let file = self.settings_file();
         self.unlocked(&file, self.settings_lock.as_ref())?;
+        let mut rules = self.rules();
+        rules.set(trigger, rule);
+        let mut settings = self.settings.clone();
+        settings.apply_on_connect = rules.mark().cloned();
+        settings.automation = Some(rules);
+        if settings == self.settings {
+            return Ok(());
+        }
         let bytes = envelope::seal(SETTINGS_FORMAT, Map::new(), &settings);
         durable::write(self.ops.as_ref(), &file, &bytes, &|bytes| {
             decode_settings(bytes).is_ok()
         })?;
         self.settings = settings;
+        Ok(())
+    }
+
+    /// The last run of each rule that ran, also from before this start.
+    pub fn runs(&self) -> &[RuleRun] {
+        &self.runs.runs
+    }
+
+    /// Keeps the run in memory, then writes it; a failed write is returned and the run is still shown.
+    pub fn record_run(&mut self, run: RuleRun) -> Result<(), StoreError> {
+        self.runs.record(run);
+        self.write_runs()
+    }
+
+    pub fn mark_runs_seen(&mut self, triggers: &[Trigger]) -> Result<(), StoreError> {
+        if !self.runs.mark_seen(triggers) {
+            return Ok(());
+        }
+        self.write_runs()
+    }
+
+    fn write_runs(&mut self) -> Result<(), StoreError> {
+        let file = self.runs_file();
+        self.unlocked(&file, self.runs_lock.as_ref())?;
+        let bytes = envelope::seal(RULE_RUNS_FORMAT, Map::new(), &self.runs);
+        durable::write(self.ops.as_ref(), &file, &bytes, &|bytes| {
+            decode_runs(bytes).is_ok()
+        })?;
         Ok(())
     }
 
@@ -419,7 +473,7 @@ impl ProfileStore {
                 &id,
                 profile,
                 now,
-                self.apply_on_connect(),
+                self.apply_on_connect().as_ref(),
                 self.setup().ok(),
             ),
         })
@@ -434,7 +488,7 @@ impl ProfileStore {
             id,
             self.profile(id)?,
             now,
-            self.apply_on_connect(),
+            self.apply_on_connect().as_ref(),
             self.setup().ok(),
         ))
     }
@@ -455,7 +509,7 @@ impl ProfileStore {
                     problem: problem.clone(),
                 })
                 .collect(),
-            apply_on_connect: self.settings.apply_on_connect.clone(),
+            apply_on_connect: self.apply_on_connect(),
             active: None,
             unsaved_changes: None,
             notices: self.notices.clone(),
@@ -637,6 +691,10 @@ impl ProfileStore {
     fn settings_file(&self) -> StoreFile {
         StoreFile::new(&self.root, None, SETTINGS_FILE)
     }
+
+    fn runs_file(&self) -> StoreFile {
+        StoreFile::new(&self.root, None, RULE_RUNS_FILE)
+    }
 }
 
 fn checked_name(name: &str) -> Result<String, StoreError> {
@@ -651,6 +709,10 @@ fn decode_registry(bytes: &[u8]) -> Result<Registry, FileProblem> {
 
 fn decode_settings(bytes: &[u8]) -> Result<Settings, FileProblem> {
     envelope::decode(envelope::open(bytes, SETTINGS_FORMAT)?)
+}
+
+fn decode_runs(bytes: &[u8]) -> Result<RunLog, FileProblem> {
+    envelope::decode(envelope::open(bytes, RULE_RUNS_FORMAT)?)
 }
 
 pub(crate) fn mix(value: u64) -> u64 {

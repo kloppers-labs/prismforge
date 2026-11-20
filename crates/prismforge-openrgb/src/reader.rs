@@ -22,21 +22,24 @@ pub(crate) struct Reply {
 pub(crate) struct Pending {
     device_id: u32,
     packet_id: u32,
+    reply_packet_id: u32,
     completion: Completion,
     payload: Option<Vec<u8>>,
     reply: oneshot::Sender<Result<Reply, ClientError>>,
 }
 
 impl Pending {
+    /// `reply_packet_id` is the ID the server answers with; most requests are answered with their own ID.
     pub fn new(
         device_id: u32,
-        packet_id: u32,
+        (packet_id, reply_packet_id): (u32, u32),
         completion: Completion,
         reply: oneshot::Sender<Result<Reply, ClientError>>,
     ) -> Self {
         Self {
             device_id,
             packet_id,
+            reply_packet_id,
             completion,
             payload: None,
             reply,
@@ -69,10 +72,9 @@ impl PendingSlot {
 
     fn on_payload(&self, device_id: u32, packet_id: u32, payload: Vec<u8>) {
         let mut slot = self.lock();
-        let Some(pending) = slot
-            .as_mut()
-            .filter(|pending| pending.device_id == device_id && pending.packet_id == packet_id)
-        else {
+        let Some(pending) = slot.as_mut().filter(|pending| {
+            pending.device_id == device_id && pending.reply_packet_id == packet_id
+        }) else {
             return;
         };
         pending.payload.get_or_insert(payload);

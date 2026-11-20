@@ -11,6 +11,7 @@ pub(crate) struct ApplyLock<S> {
     slot: Arc<Mutex<()>>,
     gate: Arc<RwLock<()>>,
     running: Arc<AtomicBool>,
+    lights_off: Arc<AtomicBool>,
     publisher: Arc<Publisher<S>>,
 }
 
@@ -22,6 +23,7 @@ pub(crate) struct Permit {
 /// Releases the lock and clears `applying` in the view when dropped, on every exit path.
 pub(crate) struct ApplyGuard<S: ViewSink> {
     running: Arc<AtomicBool>,
+    lights_off: Arc<AtomicBool>,
     publisher: Arc<Publisher<S>>,
     _slot: OwnedMutexGuard<()>,
     gate: Option<OwnedRwLockWriteGuard<()>>,
@@ -33,19 +35,35 @@ impl<S: ViewSink> ApplyLock<S> {
             slot: Arc::new(Mutex::new(())),
             gate: Arc::new(RwLock::new(())),
             running: Arc::new(AtomicBool::new(false)),
+            lights_off: Arc::new(AtomicBool::new(false)),
             publisher,
         }
     }
 
     pub fn permit(&self) -> Result<Permit, CommandError> {
         if self.running.load(Ordering::SeqCst) {
-            return Err(CommandError::ProfileApplying);
+            return Err(self.busy());
         }
         self.gate
             .clone()
             .try_read_owned()
             .map(|gate| Permit { _gate: gate })
-            .map_err(|_| CommandError::ProfileApplying)
+            .map_err(|_| self.busy())
+    }
+
+    fn busy(&self) -> CommandError {
+        if self.lights_off.load(Ordering::SeqCst) {
+            CommandError::RuleRunning
+        } else {
+            CommandError::ProfileApplying
+        }
+    }
+
+    /// For a rule that switches the lights off: other output commands are refused with that reason.
+    pub async fn begin_rule(&self) -> ApplyGuard<S> {
+        let slot = self.slot.clone().lock_owned().await;
+        self.lights_off.store(true, Ordering::SeqCst);
+        self.hold(slot, None).await
     }
 
     /// For the user: refused at once while another apply runs.
@@ -78,6 +96,7 @@ impl<S: ViewSink> ApplyLock<S> {
         }
         let mut guard = ApplyGuard {
             running: self.running.clone(),
+            lights_off: self.lights_off.clone(),
             publisher: self.publisher.clone(),
             _slot: slot,
             gate: None,
@@ -91,6 +110,7 @@ impl<S: ViewSink> Drop for ApplyGuard<S> {
     fn drop(&mut self) {
         self.gate.take();
         self.running.store(false, Ordering::SeqCst);
+        self.lights_off.store(false, Ordering::SeqCst);
         self.publisher.set_applying(None);
     }
 }

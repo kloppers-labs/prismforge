@@ -80,6 +80,7 @@
               {session}
               onConnect={app.view.on_connect}
               onsavenew={() => (saving = true)}
+              onautomation={() => app.go("automation")}
             />
           {/key}
         {:else}

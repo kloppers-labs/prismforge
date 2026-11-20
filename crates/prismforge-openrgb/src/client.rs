@@ -7,11 +7,13 @@ use tokio::sync::{oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
+use prismforge_core::automation::EventProfiles;
+
 use crate::protocol::{
     ACK_STATUS_OK, ControllerData, ControllerDataError, FrameError, MAX_PACKET_SIZE, ModeData,
-    decode_controller_ids, decode_u32, encode_packet, encode_string, encode_u32,
-    encode_update_leds, encode_update_mode, encode_update_zone_leds, packet_id,
-    parse_controller_data,
+    PROFILE_MANAGER_KEY, decode_controller_ids, decode_event_profiles, decode_server_flags,
+    decode_u32, encode_packet, encode_settings_key, encode_string, encode_u32, encode_update_leds,
+    encode_update_mode, encode_update_zone_leds, packet_id, parse_controller_data,
 };
 use crate::reader::{self, Completion, Pending, PendingSlot, ReaderStatus, Reply, io_failure};
 
@@ -214,6 +216,43 @@ where
         .await
     }
 
+    /// Sends empty client flags, which the server answers with its own; PrismForge asks for no role.
+    pub async fn server_flags(&mut self) -> Result<u32, ClientError> {
+        let packet = packet_id::SET_CLIENT_FLAGS;
+        let reply = self
+            .request_answered_by(
+                0,
+                (packet, packet_id::SET_SERVER_FLAGS),
+                &encode_u32(0),
+                "client flags",
+            )
+            .await?;
+        match reply.payload {
+            None => Ok(0),
+            Some(payload) => decode_server_flags(&payload).map_err(|error| readable(packet, error)),
+        }
+    }
+
+    /// Reads OpenRGB's `ProfileManager` settings; nothing here can change them.
+    pub async fn event_profiles(&mut self) -> Result<EventProfiles, ClientError> {
+        let packet = packet_id::SETTINGS_GET;
+        let key = encode_settings_key(PROFILE_MANAGER_KEY);
+        let reply = self
+            .request(0, packet, &key, Completion::Ack, "settings request")
+            .await?;
+        match (reply.payload, reply.status) {
+            (Some(payload), _) => {
+                decode_event_profiles(&payload).map_err(|error| readable(packet, error))
+            }
+            (None, Some(status)) if status != ACK_STATUS_OK => Err(ClientError::Rejected {
+                packet_id: packet,
+                device_id: 0,
+                status,
+            }),
+            (None, _) => Err(readable(packet, "acknowledged without a reply")),
+        }
+    }
+
     pub fn poll_notification(&mut self) -> Option<Notification> {
         if let Some(failure) = &self.failure {
             return Some(Notification::Closed(failure.clone()));
@@ -292,10 +331,43 @@ where
         completion: Completion,
         operation: &'static str,
     ) -> Result<Reply, ClientError> {
+        self.exchange(
+            device_id,
+            (packet_id, packet_id),
+            payload,
+            completion,
+            operation,
+        )
+        .await
+    }
+
+    async fn request_answered_by(
+        &mut self,
+        device_id: u32,
+        packets: (u32, u32),
+        payload: &[u8],
+        operation: &'static str,
+    ) -> Result<Reply, ClientError> {
+        self.exchange(device_id, packets, payload, Completion::Ack, operation)
+            .await
+    }
+
+    async fn exchange(
+        &mut self,
+        device_id: u32,
+        (packet_id, reply_packet_id): (u32, u32),
+        payload: &[u8],
+        completion: Completion,
+        operation: &'static str,
+    ) -> Result<Reply, ClientError> {
         self.begin_exchange()?;
         let (reply, response) = oneshot::channel();
-        self.pending
-            .set(Pending::new(device_id, packet_id, completion, reply));
+        self.pending.set(Pending::new(
+            device_id,
+            (packet_id, reply_packet_id),
+            completion,
+            reply,
+        ));
         if let Err(error) = self.ensure_open() {
             self.pending.take();
             self.exchange_open = false;
@@ -380,6 +452,14 @@ where
     fn fail(&mut self, error: ClientError) -> ClientError {
         self.reader.abort();
         self.failure.get_or_insert(error).clone()
+    }
+}
+
+/// A reply that was framed correctly but cannot be read; the connection itself stays in step.
+fn readable(packet_id: u32, detail: impl ToString) -> ClientError {
+    ClientError::MalformedReply {
+        packet_id,
+        detail: detail.to_string(),
     }
 }
 

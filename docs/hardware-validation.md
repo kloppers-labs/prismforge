@@ -80,3 +80,24 @@ OpenRGB reports 36 LEDs for each header. The real LED counts are not known yet.
 - Reconnect after an OpenRGB restart.
 - Start with the system and the start profile.
 - A screen reader, high contrast themes and 200 % scaling.
+
+## To test: automation on system events (Task 12)
+
+Nothing in this section has run on Windows yet. Build from the Task 12 branch, connect to OpenRGB 1.1 on the Windows 11 PC, and on **Automation** switch on "When the system goes to sleep, switch the lights off" and "When the system wakes, apply the profile …" with a profile that runs an effect. Switch on the session-end rule only for the sign-out and shutdown checks. After each check, open Automation and read the last run of the rule. Record the result here; remove serial numbers first.
+
+| Check | What to look for |
+|---|---|
+| Sleep from the Start menu | The lights go dark before the PC sleeps. The last run of the sleep rule says the lights were switched off and names the keyboard as skipped, because its modes save to its memory. The keyboard is not written. |
+| Sleep with the power button | The same. Note how long the power button needs before the PC is asleep. |
+| Wake | Within about 30 seconds the profile's effect runs again on every device that came back; the last run of the wake rule names any device that did not come back. Note how long the fans, RAM and GPU take to come back. |
+| Hibernate, then start | The same as sleep and wake. Windows gives one signal for both. |
+| Restart | With the session-end rule on: the lights go dark, or show the rule's profile, before the PC restarts. At the next start the last run of the rule shows the result, or nothing if Windows ended PrismForge first. |
+| Shut down with Fast Startup on | The same. Note whether the devices stay lit after the PC is off (motherboard power after shutdown). |
+| Shut down with Fast Startup off | The same. |
+| Sign out | The same as shutdown. |
+| Each check above with OpenRGB's own profile settings on | In OpenRGB, Settings, Profile Manager: turn on "Load Profile on Suspend", "Load Profile on Resume" and "Load Profile on Exit" with a named profile. The rules on Automation say that OpenRGB also loads that profile. Note which program's lighting the devices show after each event; the last writer wins. Turn the OpenRGB settings off again afterwards. |
+| Quit from the tray with the quit rule "switch the lights off" | The lights go dark and stay dark after PrismForge has ended. |
+| OpenRGB's answer to the flags and settings packets | With OpenRGB running, open Automation. It says either which OpenRGB profiles act on the same events, or that PrismForge cannot check. Diagnostics shows no lost connection at the connect. If the connection drops at every connect, OpenRGB does not answer packet 52 or 250 as its source says; report it. |
+| Seam start | Automation shows no "could not start receiving sleep, wake and session end" or "Part of PrismForge's set-up for system events failed" message. If it does, note the detail. |
+| A failed rule at the next start | With the sleep rule on, quit OpenRGB, then sleep and wake the PC. At the next start of PrismForge the notices area says the sleep rule did not do what it should, until you dismiss it or open Automation. |
+| Settings after the change | Settings, step 4, names the rule "When PrismForge connects" or "When PrismForge starts" and its profile. A profile that was marked "Apply this profile when PrismForge connects" before Task 12 shows as the connects rule, switched on, and still applies at the connect at start. |

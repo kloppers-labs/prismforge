@@ -45,6 +45,8 @@
       app.lifecycle.dismissStop();
     } else if (notice.kind === "connectApply") {
       app.connectApplyDismissed = true;
+    } else if (notice.kind === "automation") {
+      void app.automation.dismiss(app.automation.unseenWith(app.view.rule_run));
     }
   }
 </script>
@@ -103,6 +105,12 @@
             ondismiss={() => dismiss(notice)}
           />
         {/if}
+      {:else if notice.kind === "automation"}
+        <Notice tone="warning" label="Automation" title={notice.title} ondismiss={() => dismiss(notice)}>
+          {#snippet actions()}
+            <button type="button" class="small" onclick={() => app.go("automation")}>Open Automation</button>
+          {/snippet}
+        </Notice>
       {:else if notice.kind === "connectApply"}
         {@const outcome = app.view.connect_apply?.outcome}
         <Notice

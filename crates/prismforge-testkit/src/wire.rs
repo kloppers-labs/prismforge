@@ -7,14 +7,19 @@ pub const ACK: u32 = 10;
 pub const REQUEST_PROTOCOL_VERSION: u32 = 40;
 pub const SET_CLIENT_NAME: u32 = 50;
 pub const SET_SERVER_NAME: u32 = 51;
+pub const SET_CLIENT_FLAGS: u32 = 52;
+pub const SET_SERVER_FLAGS: u32 = 53;
 pub const DEVICE_LIST_UPDATED: u32 = 100;
 pub const DETECTION_PROGRESS_CHANGED: u32 = 102;
+pub const SETTINGS_GET: u32 = 250;
 pub const UPDATE_LEDS: u32 = 1050;
 pub const UPDATE_ZONE_LEDS: u32 = 1051;
 pub const SET_CUSTOM_MODE: u32 = 1100;
 pub const UPDATE_MODE: u32 = 1101;
 pub const SAVE_MODE: u32 = 1102;
 pub const SIGNAL_UPDATE: u32 = 1150;
+
+pub const SERVER_FLAGS_DEFAULT: u32 = 1 | (1 << 4);
 
 pub const STATUS_OK: u32 = 0;
 pub const STATUS_INVALID_ID: u32 = 4;

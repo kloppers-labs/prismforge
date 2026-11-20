@@ -27,6 +27,7 @@ PrismForge is at an early stage. The desktop app shows the connection, the devic
 | Profiles screen in the app: save, update with a change list, apply with a result per setting, rename, duplicate, delete, export, import, apply on connect, repaired-file notices; device and zone names | Built. Tested through the shell and the interface tests only. Native dialogs not run by hand. |
 | Tray, close or quit, one instance, start with the system, start hidden, connect at start, Settings screen | Built. Tested through the shell with fake window and start-entry seams and in interface tests. Native macOS build only; not run by hand, not run on Windows. |
 | Setup model in the Rust core: components with a declared shape, outputs with mirrored branches and daisy chains, views, a place for each LED, effects across the setup as one picture, the setup file, profile schema 2 | Built. Tested in Rust with generic fixtures, the demo backend and the fake server in simulated time only. |
+| Automation: one rule for each event (PrismForge starts, connects or quits; the system sleeps, wakes or ends the session), each off until you switch it on; apply a profile or switch the lights off; the earlier "apply on connect" mark became the connects rule | Built. Tested in Rust with a fake event source, the demo backend and the fake server in simulated time, and in interface tests. The Windows event window is only type-checked on macOS; sleep, wake and session end have not run on Windows. |
 | Setup area: PC view and desk view, list twin, templates, editing without a drag, undo, live colours and a draft on the drawing, apply across the setup, the mode kept on Effects | Built. Tested through the shell, in interface tests and looked at in a browser preview with simulated data. Not run against a real server, on real hardware, in the native window or on Windows. |
 
 ## Requirements
@@ -75,7 +76,7 @@ After a connection, **Devices** shows the device list and identify. **Effects** 
 - **Save as new profile** stores the effects, hardware modes, program statements and frame rate in use. Profiles are files on this computer. Nothing is saved to the devices.
 - **Apply profile** sends the stored settings and lists each one as applied or skipped, with the reason. A device that is missing, identical to another one or changed is skipped and stays in the profile. PrismForge never moves a setting to a similar device.
 - **Save changes** adds what you changed since you applied the profile. It shows the change list first. PrismForge links your changes to a profile only until you disconnect, switch between demo mode and OpenRGB, or close PrismForge; after that, apply the profile first.
-- **Apply this profile when PrismForge connects** is off by default. When it is on, PrismForge applies the profile once each time you connect.
+- Whether a profile applies when PrismForge connects is a rule on **Automation**. The profile screen names it and links there.
 - **Export** writes a file without serial numbers or locations. **Import** adds a new profile and never replaces one.
 - Demo mode has its own profiles. They never apply to real hardware.
 
@@ -83,8 +84,18 @@ After a connection, **Devices** shows the device list and identify. **Effects** 
 
 - **When you close the window.** The first time you close it, PrismForge asks. "Keep running in the tray" hides the window; PrismForge and its effects keep running, and its tray icon (the menu bar on macOS) shows the window again. "Quit PrismForge" ends it. Without a tray, closing the window always quits.
 - **Quit PrismForge** is in the tray menu, on Settings, in the macOS app menu, and on the keyboard (Command-Q on macOS, Ctrl+Q on Windows). It stops PrismForge effects, puts back the earlier lighting where it can, disconnects and ends the process. When the system ends PrismForge instead (Dock Quit on macOS, logging out, shutting down), PrismForge tries the same for up to 4 seconds; the system may end it sooner. Ending it in Task Manager or Activity Monitor puts nothing back.
-- **When PrismForge starts**, in four steps, each off until you turn it on: 1. start PrismForge when you sign in; 2. start hidden in the tray; 3. connect to OpenRGB when PrismForge starts, at the address of your last Connect; 4. the profile marked "Apply this profile when PrismForge connects". With steps 1, 3 and 4 on, your lights change at system start without a click. Settings shows which profile that is.
+- **When PrismForge starts**, in four steps, each off until you turn it on: 1. start PrismForge when you sign in; 2. start hidden in the tray; 3. connect to OpenRGB when PrismForge starts, at the address of your last Connect; 4. a rule on Automation that applies a profile when PrismForge starts or connects. With steps 1, 3 and 4 on, your lights change at system start without a click. Settings shows which profile that is.
 - Starting PrismForge a second time shows the window of the one that runs.
+
+**Automation** holds one rule for each event, read as a sentence such as "When the system goes to sleep, switch the lights off." Every rule is off until you switch it on, and rules run only while PrismForge runs.
+
+- The events are: PrismForge starts, PrismForge connects, the system goes to sleep or hibernates, the system wakes, you sign out or the system shuts down or restarts, and PrismForge quits. The actions are: apply a profile, switch the lights off, or do nothing.
+- Switching the lights off writes black through Direct Mode, or picks a device's own "Off" mode when that mode does not save to device memory. Other devices are left alone and named in the result.
+- What PrismForge can promise differs: it *will* act when it starts, connects and quits; it *tries to* act at sleep and session end, because Windows can end or freeze it first; after a wake it acts once the devices are back, within about 30 seconds, and then needs at most 10 seconds for the rule itself.
+- Sleep, wake and session end are received on Windows only for now. On macOS and Linux those rules do nothing, and the screen says so.
+- When OpenRGB's own "load profile" settings act on the same event, the rule says so: two programs then write, and the last one wins. PrismForge reads those settings and never changes them.
+- Settings, step 4, names what the start or connect rule does at start: apply a profile or switch the lights off.
+- Each rule shows its last run: when, what changed and which devices were skipped and why. A failed run at sleep or session end is also a notice at the next start until you dismiss it or open Automation. `docs/decisions/0007-automation.md` has the details.
 
 Start with the system is always for your user only. Turn it off before you uninstall: the NSIS uninstaller removes the entry, the MSI does not. To remove it by hand on Windows, run `reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v PrismForge /f`; on macOS, `rm ~/Library/LaunchAgents/PrismForge.plist`. An earlier build run as administrator may have added an entry for every user; Settings says so, and removing it needs `reg delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v PrismForge /f` in a Command Prompt opened as administrator. `docs/decisions/0004-lifecycle.md` has the details.
 

@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
+use crate::automation::{Rule, RuleAction, RuleRun, Rules, Trigger};
 use crate::connection::ConnectionState;
 use crate::device::DeviceRef;
 use crate::identity::KnownDevice;
@@ -228,8 +229,55 @@ impl Profiles {
         Ok(())
     }
 
-    pub async fn set_apply_on_connect(&self, id: Option<ProfileId>) -> Result<(), StoreError> {
-        self.with(move |store| store.set_apply_on_connect(id)).await
+    pub async fn rules(&self) -> Rules {
+        self.with(|store| store.rules()).await
+    }
+
+    pub async fn set_rule(&self, trigger: Trigger, rule: Rule) -> Result<(), StoreError> {
+        self.with(move |store| store.set_rule(trigger, rule)).await
+    }
+
+    /// Switches the rule for `trigger` and sets its action; fields from a newer version stay.
+    pub async fn change_rule(
+        &self,
+        trigger: Trigger,
+        enabled: bool,
+        action: RuleAction,
+    ) -> Result<(), StoreError> {
+        self.with(move |store| {
+            let mut rule = store.rules().rule(trigger).clone();
+            rule.enabled = enabled;
+            rule.action = action;
+            rule.newer = None;
+            store.set_rule(trigger, rule)
+        })
+        .await
+    }
+
+    pub async fn runs(&self) -> Vec<RuleRun> {
+        self.with(|store| store.runs().to_vec()).await
+    }
+
+    pub async fn record_run(&self, run: RuleRun) -> Result<(), StoreError> {
+        self.with(move |store| store.record_run(run)).await
+    }
+
+    pub async fn mark_runs_seen(&self, triggers: Vec<Trigger>) -> Result<(), StoreError> {
+        self.with(move |store| store.mark_runs_seen(&triggers))
+            .await
+    }
+
+    /// Keeps a failed background write as a notice of the store, as the registry does.
+    pub async fn note_write_failure(&self, error: StoreError) {
+        if let StoreError::Write(failure) = error {
+            self.with(move |store| {
+                store.note(StoreNotice {
+                    file: failure.file.clone(),
+                    event: NoticeEvent::WriteFailed { failure },
+                });
+            })
+            .await;
+        }
     }
 
     /// Applies profile `id` now; while not connected only a profile marked to apply on connect waits.
@@ -242,7 +290,7 @@ impl Profiles {
         let (profile, marked, setup) = self
             .with(move |store| {
                 let profile = store.profile(&key)?.clone();
-                let marked = store.apply_on_connect() == Some(&key);
+                let marked = store.apply_on_connect().as_ref() == Some(&key);
                 Ok::<_, StoreError>((profile, marked, store.setup().ok().cloned()))
             })
             .await?;
@@ -263,7 +311,7 @@ impl Profiles {
         &self,
         handle: &SessionHandle,
     ) -> Result<Option<ApplyReport>, ApplyError> {
-        let Some(id) = self.with(|store| store.apply_on_connect().cloned()).await else {
+        let Some(id) = self.with(|store| store.apply_on_connect()).await else {
             return Ok(None);
         };
         match self.apply(handle, &id).await? {

@@ -1,3 +1,4 @@
+use prismforge_core::automation::EventProfiles;
 use prismforge_core::{
     BackendError, BackendEvent, BackendInfo, BackendOrigin, ConnectionState, DeviceCapabilities,
     DeviceDescriptor, DeviceIdentity, DeviceIssue, DeviceRef, Inventory, InventoryDevice,
@@ -7,7 +8,7 @@ use tokio::time::timeout;
 
 use crate::client::{ClientConfig, ClientError, MIN_PROTOCOL_VERSION, Notification, OpenRgbClient};
 use crate::connector::Connector;
-use crate::protocol::ModeData;
+use crate::protocol::{ModeData, SERVER_FLAG_SUPPORTS_SETTINGS_MANAGER};
 use crate::translate::describe;
 
 pub struct OpenRgbBackend<C: Connector> {
@@ -429,6 +430,34 @@ impl<C: Connector> RgbBackend for OpenRgbBackend<C> {
             .update_zone_leds(runtime_id, zone as u32, colors)
             .await;
         result.map_err(|error| self.fail(error))
+    }
+
+    async fn event_profiles(&mut self) -> Result<Option<EventProfiles>, BackendError> {
+        let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
+        let flags = match client.server_flags().await {
+            Ok(flags) => flags,
+            Err(error) => return Err(self.settings_error(error)),
+        };
+        if flags & SERVER_FLAG_SUPPORTS_SETTINGS_MANAGER == 0 {
+            return Ok(None);
+        }
+        let client = self.client.as_mut().ok_or(BackendError::NotConnected)?;
+        match client.event_profiles().await {
+            Ok(profiles) => Ok(Some(profiles)),
+            Err(error) => Err(self.settings_error(error)),
+        }
+    }
+}
+
+impl<C: Connector> OpenRgbBackend<C> {
+    /// A settings reply the client could not read leaves the connection in step; anything else closes it.
+    fn settings_error(&mut self, error: ClientError) -> BackendError {
+        match error {
+            ClientError::MalformedReply { .. } | ClientError::Rejected { .. } => {
+                backend_error(error)
+            }
+            error => self.fail(error),
+        }
     }
 }
 

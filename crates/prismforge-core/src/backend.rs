@@ -3,6 +3,7 @@ use std::future::Future;
 use prismforge_effects::Rgb;
 use serde::{Deserialize, Serialize};
 
+use crate::automation::EventProfiles;
 use crate::capabilities::DeviceCapabilities;
 use crate::connection::{ConnectionState, LossCause};
 use crate::device::{BackendOrigin, DeviceRef};
@@ -71,6 +72,13 @@ pub trait RgbBackend {
         device: &DeviceRef,
         colors: &[Rgb],
     ) -> impl Future<Output = Result<(), BackendError>> + Send;
+
+    /// OpenRGB's own event profiles; `None` when this backend has no settings manager to ask.
+    fn event_profiles(
+        &mut self,
+    ) -> impl Future<Output = Result<Option<EventProfiles>, BackendError>> + Send {
+        std::future::ready(Ok(None))
+    }
 
     fn write_zone_frame(
         &mut self,

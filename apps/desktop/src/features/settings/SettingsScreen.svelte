@@ -11,9 +11,12 @@
   import FrameRate from "../effects/FrameRate.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { SettingKey, LifecycleState } from "./state.svelte";
+  import { EVENTS } from "../automation/wording";
+  import type { StartProfile } from "../../lib/api/bindings/StartProfile";
+  import type { Trigger } from "../../lib/api/bindings/Trigger";
   import { MACHINE_ENTRY_REMOVAL, addressText, quitShortcut, settingsNoticeText, startPathText, trayName } from "./wording";
 
-  let { app, lifecycle, onprofiles }: { app: AppState; lifecycle: LifecycleState; onprofiles: () => void } = $props();
+  let { app, lifecycle, onautomation }: { app: AppState; lifecycle: LifecycleState; onautomation: () => void } = $props();
 
   let session = $derived(app.session);
   let catalog = $derived(app.effects.catalog);
@@ -36,7 +39,7 @@
       hidden: settings?.start_hidden ?? false,
       connect: settings?.connect_at_start ?? false,
       address: settings?.address ? addressText(settings.address) : null,
-      profile: startProfile !== null && typeof startProfile === "object" && "Marked" in startProfile ? startProfile.Marked.name : null,
+      action: startAction(startProfile),
     }),
   );
   let trayDetail = $derived(view && typeof view.tray === "object" ? view.tray.Unavailable.detail : null);
@@ -44,6 +47,20 @@
   let quitting = $derived(lifecycle.pending === "quit" || (view?.quitting ?? false));
   let backgroundEnabled = $derived(ready && tray);
   let closeFocus = $derived<CloseAction>(backgroundEnabled && settings?.on_close !== "Quit" ? "Background" : "Quit");
+
+  function startAction(start: StartProfile | null): string | null {
+    if (start === null || typeof start !== "object") {
+      return null;
+    }
+    if ("Marked" in start) {
+      return `applies ${start.Marked.name}`;
+    }
+    return "LightsOff" in start ? "switches the lights off" : null;
+  }
+
+  function ruleEvent(trigger: Trigger): string {
+    return EVENTS[trigger];
+  }
 
   function failed(key: SettingKey): string | null {
     const failure = lifecycle.failure;
@@ -210,24 +227,27 @@
       </li>
 
       <li>
-        <p class="step-title">Apply the profile marked “Apply this profile when PrismForge connects”</p>
+        <p class="step-title">Apply a profile or switch the lights off by a rule in Automation</p>
         <div class="profile">
           {#if startProfile === null || startProfile === "NotMarked"}
-            <p>None marked.</p>
+            <p>No rule applies a profile or switches the lights off when PrismForge starts or connects.</p>
+          {:else if "LightsOff" in startProfile}
+            <p>Switches the lights off by the rule “When {ruleEvent(startProfile.LightsOff.trigger)}”, once, as soon as the connection is made.</p>
           {:else if "Marked" in startProfile}
-            <p>Applies <strong>{startProfile.Marked.name}</strong>, once, as soon as the connection is made.</p>
+            <p>Applies <strong>{startProfile.Marked.name}</strong> by the rule “When {ruleEvent(startProfile.Marked.trigger)}”, once, as soon as the connection is made.</p>
           {:else if "Unreadable" in startProfile}
             <p class="unavailable">
+              The profile of the rule “When {ruleEvent(startProfile.Unreadable.trigger)}”
               {startProfile.Unreadable.problem === "NewerVersion"
-                ? "The marked profile needs a newer PrismForge, so nothing is applied."
-                : "The marked profile is no longer in the store, so nothing is applied."}
+                ? "needs a newer PrismForge, so nothing is applied."
+                : "is no longer in the store, so nothing is applied."}
             </p>
           {:else}
             <p class="unavailable">{storeUnavailableText(startProfile.Unavailable.reason)}</p>
           {/if}
-          <button type="button" class="small" onclick={onprofiles}>Open Profiles</button>
+          <button type="button" class="small" onclick={onautomation}>Open Automation</button>
         </div>
-        <p class="help">Mark one of your OpenRGB profiles on the Profiles screen. Demo profiles are never applied at start.</p>
+        <p class="help">Set the rule “When PrismForge starts” or “When PrismForge connects” in Automation. Demo profiles are never applied at start.</p>
       </li>
     </ol>
 
@@ -235,7 +255,7 @@
 
     <Details summary="When your lighting changes without a click">
       <p>
-        Connecting alone writes nothing to your devices. Without a click in a session, PrismForge changes your lighting only when “Connect to OpenRGB when PrismForge starts” is on and a profile is set to “Apply this profile when PrismForge connects”. Then PrismForge applies that profile as soon as the connection is made.
+        Connecting alone writes nothing to your devices. Without a click, PrismForge changes your lighting only through a rule you switched on in Automation: when PrismForge starts or connects, when the system sleeps, wakes or ends your session, or when PrismForge quits. At system start that needs “Connect to OpenRGB when PrismForge starts” and a rule that applies a profile when PrismForge starts or connects.
       </p>
       <p>PrismForge effects run only while PrismForge runs and is connected. Nothing is stored on your devices.</p>
     </Details>
@@ -261,6 +281,7 @@
     <p class="help">Stops PrismForge effects, puts back the lighting from before where it can, disconnects and ends PrismForge. The shortcut is {quitShortcut()}.</p>
     <Details>
       <p>Quit in the tray menu does the same. While PrismForge quits, further Quit requests wait for it.</p>
+      <p>A rule “When PrismForge quits” in Automation runs first, for at most 2 seconds; the devices it changed keep that state.</p>
       <p>When the system ends PrismForge instead, for example when you log out or shut down, PrismForge tries the same for up to 4 seconds. The system may end it sooner, and then the devices keep the last effect frame. Ending PrismForge in Task Manager or Activity Monitor puts nothing back.</p>
     </Details>
     <button type="button" disabled={quitting} onclick={() => lifecycle.quit()}>

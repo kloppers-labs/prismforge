@@ -164,5 +164,5 @@ test("an_automatic_apply_keeps_on_connect_in_the_profile_chip_name", async () =>
 
   await shell.pushView({ ...viewApplying, applying: { ...viewApplying.applying!, automatic: true }, revision: 50 });
 
-  expect(await within(strip()).findByRole("button", { name: "Profile: applying Evening on connect" })).toBeTruthy();
+  expect(await within(strip()).findByRole("button", { name: "Profile: applying Evening by a rule" })).toBeTruthy();
 });

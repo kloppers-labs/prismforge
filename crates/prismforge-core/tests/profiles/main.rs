@@ -1,6 +1,7 @@
 mod across;
 mod app_settings;
 mod apply;
+mod automation_store;
 mod displaced;
 mod durability;
 mod format;

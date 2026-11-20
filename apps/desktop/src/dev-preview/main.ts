@@ -47,6 +47,14 @@ async function arrange() {
   if (rail && scenario.area === "Setup") {
     await setup();
   }
+  if (rail && scenario.area === "Settings" && scenario.scrollTo) {
+    await wait(200);
+    document.getElementById(scenario.scrollTo)?.scrollIntoView({ block: "start" });
+  }
+  if (rail && scenario.area === "Automation" && scenario.rule) {
+    await wait(200);
+    document.getElementById(`rule-${scenario.rule}-title`)?.scrollIntoView({ block: "start" });
+  }
   if (params.has("open")) {
     await wait(100);
     document.querySelector<HTMLButtonElement>(`button[aria-controls='${params.get("open")}-panel']`)?.click();
