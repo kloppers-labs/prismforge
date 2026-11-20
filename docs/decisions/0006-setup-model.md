@@ -16,9 +16,11 @@ A setup has three lists.
 
 | Part | Holds |
 |---|---|
-| Component | A lit thing with a declared shape: an id (`c-…`), a name and a geometry. |
+| Component | A lit thing with a declared shape: an id (`c-…`), a name, a geometry and, optionally, a frame (Task 11). |
 | Output | One channel PrismForge writes: an id (`o-…`), a device and a zone (or the whole device) by stored reference, the device and zone names it had, the first LED, and its branches. |
-| View | A named picture, such as "PC" or "Desk": an id (`v-…`), a name and placements. |
+| View | A named picture, such as "PC" or "Desk": an id (`v-…`), a name, placements and unlit outlines (Task 11). |
+
+**Drawing only (Task 11).** A component's `frame` is a rectangle drawn round its LEDs, such as a graphics card or a cooler plate: width and height in percent of the LEDs' longer side, 10 to 1000. A view's `outlines` are unlit drawings of a case, a desk, a monitor or a PC: an id (`u-…`), a name, a kind, a centre, a width and height (1 to 4000 view units) and a turn. Neither has LEDs: the planner ignores both, and no output, part or LED count depends on them. Both fields are optional with serde defaults, so a setup file written before Task 11 loads unchanged (a test loads one byte for byte); a component without a frame is written without the field. The format stays at schema 1.0: an older PrismForge keeps both as unknown fields.
 
 A **placement** puts one component in one view: its centre (`x`, `y`) in view units, the length of its longer side (`size`), a turn in whole degrees clockwise (`rotation`, 0 to 359) and a left-right flip before the turn (`flipped`). A component appears at most once in a view. It may be in several views, or in none: an unplaced component still belongs to its output.
 
@@ -115,24 +117,25 @@ The code is in `apps/desktop/src/features/setup` and `apps/desktop/src-tauri/src
 | `setup` | Reads the stored setup, each output matched against the devices of now (`SetupOutputStatus`), and the limits | `Profiles::setup`, `resolve_outputs` |
 | `save_setup` | Stores a drawing; returns the same view | `Profiles::save_setup` |
 | `apply_across` | Plans a view of the **saved** setup against the devices of now and runs one effect across it; with a list of targets, only those, on the plane of the whole view | `plan_across`, `AcrossPlan::only`, `SessionHandle::apply_across` |
-| `preview_across` | Renders frames of an effect across a view of the drawing it is given, against no device, up to 16,384 LEDs | `plan_across`, `Effect::render_across` |
+| `preview_across` | Renders frames of an effect across a view of the drawing it is given, against no device, on a blocking thread; up to 16,384 LEDs, and fewer frames so that LEDs times frames stay at or under 60,000 colours | `plan_across`, `Effect::render_across` |
 
 `apply_across` returns an `AcrossReport`: the `BatchReport`, `excluded` (outputs whose zone changed or whose parts no longer fit, with their state and problem) and `not_placed` (per target, how many of its LEDs no placed component covers; they are written black). A `PlanError` (unknown view, a setup that is not valid, a flow out of range) is a `CommandError` and sends nothing. The lock places are in `0002-profile-and-identity.md`.
 
 ### Two views, a drawing and its list
 
 - **Tabs "PC" and "Desk"** are the views `v-pc` and `v-desk`. They are made in the drawing when the stored setup has none. Views with other ids are kept and not shown.
-- **The drawing** is SVG with a fixed extent of 1000 × 700 view units, so a number means the same at every window size. Each component is a generic outline made for PrismForge (a circle with a hub for a ring, a rounded bar for a strip, a grid for a matrix, a frame for a screen edge, a dot for a point, a path for a free line) with its LEDs at the places the Rust model computes; a test compares the TypeScript port with a fixture the Rust model writes. LED 1 is larger, ringed and numbered "1", with an arrow along the direction of the LEDs. Mirrored components are joined by a dashed line; the parts of a daisy chain by an arrow from the last LED of one part to the first of the next, in wire order. A component wired to nothing has hollow, dashed LEDs.
-- **The list twin** beside the drawing has the same components in the same order and is the keyboard and screen-reader path. Each row says the shape and LED count, the device and zone it is wired to, whether it is a mirror ("one control with …; all four always show the same colours") or a chain part ("Part 2 of 2 of a daisy chain on …: LEDs 9 to 16"), where LED 1 is and which way the LEDs run as drawn (after the turn and the flip), and its place. Focus and selection are apart, as in the target list of Effects (`0005-shell-and-design-tokens.md`).
+- **The drawing** is SVG with a fixed extent of 1000 × 700 view units, so a number means the same at every window size. Each component is a generic outline made for PrismForge (a circle with a hub for a ring, a rounded bar for a strip, a grid for a matrix, a frame for a screen edge, a dot for a point, a path for a free line, a filled rectangle for a frame) with its LEDs at the places the Rust model computes; a test compares the TypeScript port with a fixture the Rust model writes. LED 1 is larger, ringed and numbered "1", with an arrow along the direction of the LEDs. Mirrored components are joined by a dashed line; the parts of a daisy chain by an arrow from the last LED of one part to the first of the next, in wire order. A component wired to nothing has hollow, dashed LEDs. Unlit outlines are dashed, behind the components, with an italic name; they have no LEDs. Unlit LEDs use `--led-off`, at least 3:1 against the drawing and against a shape (a test reads the tokens).
+- **The list twin** beside the drawing has the same components in the same order, then the outlines as named items ("Outline of a case. No LEDs: it is drawn only and nothing is wired to it."), and is the keyboard and screen-reader path. Each row says the shape and LED count, the device and zone it is wired to, whether it is a mirror ("one control with …; all four always show the same colours") or a chain part ("Part 2 of 2 of a daisy chain on …: LEDs 9 to 16"), where LED 1 is and which way the LEDs run as drawn (after the turn and the flip), and its place. Focus and selection are apart, as in the target list of Effects (`0005-shell-and-design-tokens.md`).
 - **Outputs** lists each output once: a mirrored output is "4 fans mirrored: one control shown in 4 places", a chain "2 parts in a daisy chain", what it holds, and how many of its LEDs have a place in this view and how many are not placed and stay dark during an effect across the setup. An output with nothing in this view says that an effect across this view leaves it as it is, because the planner leaves it out.
 
 The drawing never claims more control than the hardware has: a mirror is drawn as one control in several places, a chain as parts of one zone, unplaced LEDs are counted, and Identify says that it lights the whole device or zone and names every component on it.
 
 ### Placing and templates
 
-- **From the detected devices.** Each device, or each zone of a device with several, can be placed in the view on screen with a name, a shape from the first library of the research (strip or bar, ring fan, fan with two rings, matrix, screen edge, single light) and an LED count, which starts at the zone's count. When the zone already shows a component, the user must say whether the new one is a mirror or the next part of the daisy chain; Place stays off until then. A fan with two rings is two ring components chained on one output, the inner one smaller at the same centre.
+- **From the detected devices.** Each device, or each zone of a device with several, can be placed in the view on screen with a name, a shape from the first library of the research (strip or bar, ring fan, fan with two rings, matrix, screen edge, single light, free line, and a block with a strip, a ring or a grid of LEDs inside a frame) and an LED count, which starts at the zone's count. When the zone already shows a component, the user must say whether the new one is a mirror or the next part of the daisy chain; Place stays off until then. A fan with two rings is two ring components chained on one output, the inner one smaller at the same centre.
 - **Templates.** "Tower PC" proposes three front fans, a rear fan, two cooler strips, two memory modules, the graphics card and a board edge; "Desk" a screen edge, a desk strip, a keyboard, a light bar and a mouse logo. They place components and wire none. "Not wired yet" lists each with an output choice and the same mirror-or-chain question. LED counts in a template are placeholders, never a product's count.
 - A component of the other view can be placed here; its wiring is the same in both views.
+- **Outlines.** "Add an outline" adds a case, a desk, a monitor or a PC to the view on screen. The Tower PC template draws a case behind its components; the Desk template a desk, a monitor and a PC. Outlines move, turn and resize with fields, buttons and keys like components, are never flipped, and are deleted with a confirmation; taking one out of the view deletes it.
 
 ### Editing without a drag
 
@@ -144,12 +147,15 @@ Every edit has a button or a number field and, from the list, a key; a drag on t
 | Turn | Turn (degrees, any whole number); Turn left or right 15° | `[` and `]` |
 | Flip | Flip (pressed state) | Shift+H |
 | Size | Size, 10 to 1000 | — |
-| LED count, first LED, direction | LED count (or columns and rows, or LEDs per side); LED 1 angle or corner; Reverse the LED order | — |
+| LED count, first LED, direction | LED count (or columns and rows, or LEDs per side); LED 1 angle or corner; Reverse the direction | — |
+| Points of a free line | Point N, x and y (the arrow keys change a number field); Add a point; Remove point N (2 to 256 points) | — |
+| Frame | Add a frame; Frame width and Frame height in percent; Remove the frame | — |
+| Outline | Name, Kind, X, Y, Width, Height, Turn; Move and Turn buttons; Delete outline | Alt with an arrow, `[` and `]`, Delete |
 | Name | Name | — |
 | Wiring | Output, mirror or chain, Earlier or Later in the chain, Starts at LED, Unwire | — |
 | Take out of the view, delete | Buttons; Delete component asks first | Delete takes out of the view |
 
-Several selected components move by the same amount, so their spacing stays; each turns and flips round its own centre. Moves keep centres inside the view. Flip mirrors the drawing only; Reverse the LED order changes the order on the wire. LED counts are checked before Save with the store's rules (1 to the zone's maximum for each component; the parts must fit the LEDs the zone has now), and the reason shows beside the field.
+Several selected components move by the same amount, so their spacing stays; each turns and flips round its own centre. Moves keep centres inside the view. Flip mirrors the drawing only; Reverse the direction changes the order on the wire: a strip or free line puts LED 1 at the other end, a ring or screen edge keeps LED 1 and runs the other way round, and a matrix puts LED 1 in the corner of its last LED, so the same LEDs run exactly backwards (a test checks every corner, rows and columns, with and without serpentine). A number field or a name that the drawing does not take (clamped, unchanged or empty) shows the value the drawing keeps; an empty name says why. LED counts are checked before Save with the store's rules (1 to the zone's maximum for each component; the parts must fit the LEDs the zone has now), and the reason shows beside the field.
 
 ### Save model and undo
 
@@ -171,7 +177,7 @@ The panel names the mode with its flow ("Across the setup: PC view, flowing left
 
 ### Effects keeps the mode
 
-When the selected targets run an effect across the setup, Effects says so with the flow, and a Live edit, an Apply and a Retry go through `apply_across` with that view and flow and those targets; they are never sent as "each device". Targets in different modes are not sent in either mode: Live is off and Apply says why.
+When the selected targets run an effect across the setup, Effects says so with the flow, and a Live edit, an Apply and a Retry go through `apply_across` with that view and flow and those targets; they are never sent as "each device". Targets that cannot keep one mode are not sent: Live is off and Apply says which case it is. Some run across the setup and some on each device; all run across the setup but on different views or flows; or a whole device is selected whose zones run across the setup, where an effect on the whole device would end that picture on them.
 
 ### Groups and menus
 
