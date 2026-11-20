@@ -1,3 +1,4 @@
+use prismforge_core::automation::Trigger;
 use std::time::Duration;
 
 use prismforge_core::store::{ApplyOutcome, Profiles, StdFileOps};
@@ -6,7 +7,7 @@ use prismforge_effects::{ControlValue, EffectInstance};
 use tokio::time::sleep;
 
 use crate::session::{demo, whole};
-use crate::support::TempDir;
+use crate::support::{TempDir, connects_rule};
 
 #[tokio::test(start_paused = true)]
 async fn read_only_queries_do_not_wake_snapshot_subscribers() {
@@ -69,7 +70,9 @@ fn saves_that_change_nothing_write_nothing() {
         .expect("create");
     store.rename(&id, "Other").expect("rename");
     store.rename(&id, "Same").expect("rename back");
-    store.set_apply_on_connect(Some(id.clone())).expect("mark");
+    store
+        .set_rule(Trigger::Connects, connects_rule(&id))
+        .expect("mark");
     let files = dir.files();
     let main = format!("profiles/{id}.json");
     let before: Vec<Vec<u8>> = files.iter().map(|name| dir.read(name)).collect();
@@ -78,7 +81,7 @@ fn saves_that_change_nothing_write_nothing() {
     let current = store.profile(&id).expect("profile").clone();
     store.update(&id, current).expect("same content");
     store
-        .set_apply_on_connect(Some(id.clone()))
+        .set_rule(Trigger::Connects, connects_rule(&id))
         .expect("same mark");
     assert!(!store.record_known_devices(&[]).expect("same registry"));
 

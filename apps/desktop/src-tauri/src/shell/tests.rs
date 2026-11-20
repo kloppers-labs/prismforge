@@ -1,14 +1,11 @@
-#[allow(dead_code)]
-#[path = "../../tests/support/temp.rs"]
-mod temp;
-
+use prismforge_core::automation::{RuleAction, Trigger};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_effects::EffectInstance;
 use prismforge_openrgb::{ClientConfig, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer};
 
 use super::*;
-use temp::TempDir;
+use crate::temp::TempDir;
 
 struct Quiet;
 
@@ -34,7 +31,15 @@ async fn marked(dir: &TempDir) -> Shell<Quiet> {
     };
     shell.apply_effect(target, rainbow).await.expect("effect");
     let id = shell.create_profile("Glow").await.expect("save").id;
-    shell.set_apply_on_connect(Some(id)).await.expect("mark");
+    crate::automation::Automation::new(crate::system_events::EventSupport::NotOnThisSystem)
+        .set_rule(
+            &shell,
+            Trigger::Connects,
+            true,
+            RuleAction::ApplyProfile { profile: id },
+        )
+        .await
+        .expect("mark");
     settle().await;
     shell
 }

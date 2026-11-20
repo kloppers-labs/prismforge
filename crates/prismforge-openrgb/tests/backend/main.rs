@@ -7,4 +7,5 @@ mod modes;
 mod negotiation;
 mod output;
 mod parsing;
+mod settings;
 mod support;

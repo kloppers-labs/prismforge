@@ -6,11 +6,14 @@ pub const PROFILE_FORMAT: &str = "prismforge.profile";
 pub const EXPORT_FORMAT: &str = "prismforge.profile-export";
 pub const REGISTRY_FORMAT: &str = "prismforge.devices";
 pub const SETTINGS_FORMAT: &str = "prismforge.settings";
+pub const RULE_RUNS_FORMAT: &str = "prismforge.rule-runs";
 
 /// The schema this build writes for every file but profiles and exports; it reads files with the same major version.
 pub const SCHEMA_VERSION: SchemaVersion = SchemaVersion { major: 1, minor: 0 };
 /// The schema this build writes for profiles and exports; it reads version 1 as well and migrates it.
 pub const PROFILE_SCHEMA_VERSION: SchemaVersion = SchemaVersion { major: 2, minor: 0 };
+/// Version 1.1 added the automation rules; a 1.0 build keeps them as unknown fields.
+pub const SETTINGS_SCHEMA_VERSION: SchemaVersion = SchemaVersion { major: 1, minor: 1 };
 const OLDEST_MAJOR: u32 = 1;
 
 const FORMAT_KEY: &str = "format";
@@ -122,10 +125,10 @@ pub(crate) fn seal(format: &str, leading: Map<String, Value>, body: &impl Serial
 }
 
 fn current(format: &str) -> SchemaVersion {
-    if format == PROFILE_FORMAT || format == EXPORT_FORMAT {
-        PROFILE_SCHEMA_VERSION
-    } else {
-        SCHEMA_VERSION
+    match format {
+        PROFILE_FORMAT | EXPORT_FORMAT => PROFILE_SCHEMA_VERSION,
+        SETTINGS_FORMAT => SETTINGS_SCHEMA_VERSION,
+        _ => SCHEMA_VERSION,
     }
 }
 

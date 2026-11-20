@@ -38,6 +38,8 @@ struct State {
     held_acks: HashMap<usize, Vec<Vec<u8>>>,
     session: u32,
     next_connection: usize,
+    server_flags: u32,
+    settings: HashMap<String, String>,
 }
 
 struct Controller {
@@ -73,6 +75,8 @@ impl FakeServer {
                 held_acks: HashMap::new(),
                 session: 0,
                 next_connection: 0,
+                server_flags: wire::SERVER_FLAGS_DEFAULT,
+                settings: HashMap::new(),
             })),
         }
     }
@@ -80,6 +84,16 @@ impl FakeServer {
     /// `None` makes the server ignore version requests, like a protocol 0 server.
     pub fn set_protocol_version(&self, version: Option<u32>) {
         self.lock().protocol_version = version;
+    }
+
+    /// The flags the server sends back when a client sends its own.
+    pub fn set_server_flags(&self, flags: u32) {
+        self.lock().server_flags = flags;
+    }
+
+    /// The JSON the settings manager returns for `key`; an unknown key returns `{}`.
+    pub fn set_settings(&self, key: &str, json: &str) {
+        self.lock().settings.insert(key.into(), json.into());
     }
 
     pub fn add_device(&self, id: u32, device: FixtureDevice) {
@@ -289,6 +303,23 @@ impl State {
                     name.push(0);
                     replies.push(wire::frame(0, wire::SET_SERVER_NAME, &name));
                 }
+            }
+            wire::SET_CLIENT_FLAGS => {
+                replies.push(wire::frame(
+                    0,
+                    wire::SET_SERVER_FLAGS,
+                    &self.server_flags.to_le_bytes(),
+                ));
+            }
+            wire::SETTINGS_GET => {
+                let key = payload.strip_suffix(&[0]).unwrap_or(payload);
+                let json = self
+                    .settings
+                    .get(String::from_utf8_lossy(key).as_ref())
+                    .map_or("{}", String::as_str);
+                let mut body = json.as_bytes().to_vec();
+                body.push(0);
+                replies.push(wire::frame(0, packet_id, &body));
             }
             wire::REQUEST_CONTROLLER_COUNT => {
                 let mut body = Writer::default();

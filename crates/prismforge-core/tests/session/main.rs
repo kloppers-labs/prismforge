@@ -1,4 +1,5 @@
 mod across;
+mod automation;
 mod batch;
 mod connection;
 mod diagnostics;

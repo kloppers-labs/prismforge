@@ -1,3 +1,4 @@
+use prismforge_core::automation::Trigger;
 use std::time::Duration;
 
 use prismforge_core::profile::{DeviceStatus, EffectProblem, ItemOutcome, SkipReason};
@@ -11,7 +12,7 @@ use prismforge_testkit::{FakeServer, FixtureDevice};
 use tokio::time::sleep;
 
 use crate::session::{connected, output_packets, reference, whole};
-use crate::support::{TempDir, golden};
+use crate::support::{TempDir, connects_rule, golden};
 
 const SECRET_SERIAL: &str = "SERIAL-1234-PRIVATE";
 const SECRET_LOCATION: &str = "HID: /dev/hidraw7 usb-0000:00:14.0-3";
@@ -334,7 +335,7 @@ async fn loading_and_importing_write_nothing_to_hardware() {
         .expect("capture")
         .id;
     profiles
-        .set_apply_on_connect(Some(id.clone()))
+        .set_rule(Trigger::Connects, connects_rule(&id))
         .await
         .expect("mark");
     let file = dir.file("marked.json");

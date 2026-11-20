@@ -6,6 +6,7 @@ mod tray_model;
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
+use prismforge_core::automation::Trigger;
 use prismforge_core::store::{CloseAction, OpenRgbAddress, StoreNotice};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -59,14 +60,22 @@ pub struct LifecycleView {
     pub folder: String,
 }
 
-/// The single source is the per-profile mark "Apply this profile when PrismForge connects".
+/// The profile a rule applies at the connect at start: "When PrismForge starts", or else "When PrismForge connects".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum StartProfile {
     NotMarked,
-    Marked { name: String },
-    Unreadable { problem: MarkProblem },
-    Unavailable { reason: StoreUnavailable },
+    Marked {
+        name: String,
+        trigger: Trigger,
+    },
+    Unreadable {
+        problem: MarkProblem,
+        trigger: Trigger,
+    },
+    Unavailable {
+        reason: StoreUnavailable,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

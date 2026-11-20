@@ -1,3 +1,4 @@
+pub mod automation;
 mod backend;
 mod capabilities;
 mod connection;

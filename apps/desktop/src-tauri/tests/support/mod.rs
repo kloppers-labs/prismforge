@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod events;
 pub mod lifecycle;
 pub mod logged;
 pub mod setups;
@@ -8,8 +9,12 @@ pub mod temp;
 use std::time::Duration;
 
 use prismforge_core::ConnectionState;
+use prismforge_core::automation::{RuleAction, Trigger};
+use prismforge_core::profile::ProfileId;
 use prismforge_core::session::{LiveOutput, SessionSnapshot};
-use prismforge_desktop::{ShellView, Stores, ViewSink};
+use prismforge_desktop::{
+    Automation, AutomationView, CommandError, EventSupport, Shell, ShellView, Stores, ViewSink,
+};
 use tokio::sync::watch;
 use tokio::time::Instant;
 
@@ -100,4 +105,33 @@ pub fn is_retrying(snapshot: &SessionSnapshot) -> bool {
 pub fn stores(label: &str) -> (Stores, TempDir) {
     let dir = TempDir::new(label);
     (Stores::new(dir.path().to_path_buf()), dir)
+}
+
+/// The rule "When PrismForge connects": switched on with `id`, or off without one.
+pub fn connects_action(id: Option<ProfileId>) -> (bool, RuleAction) {
+    match id {
+        Some(profile) => (true, RuleAction::ApplyProfile { profile }),
+        None => (false, RuleAction::Nothing),
+    }
+}
+
+/// Sets the connects rule the way the Automation screen does, as the profile mark did before rules.
+#[allow(async_fn_in_trait)]
+pub trait ConnectsRule {
+    async fn set_apply_on_connect(
+        &self,
+        id: Option<ProfileId>,
+    ) -> Result<AutomationView, CommandError>;
+}
+
+impl<S: ViewSink> ConnectsRule for Shell<S> {
+    async fn set_apply_on_connect(
+        &self,
+        id: Option<ProfileId>,
+    ) -> Result<AutomationView, CommandError> {
+        let (enabled, action) = connects_action(id);
+        Automation::new(EventSupport::NotOnThisSystem)
+            .set_rule(self, Trigger::Connects, enabled, action)
+            .await
+    }
 }

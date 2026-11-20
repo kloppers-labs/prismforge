@@ -1,4 +1,5 @@
 use prismforge_core::ApplyMode;
+use prismforge_core::automation::Trigger;
 use prismforge_core::profile::ProfileId;
 use prismforge_core::setup::ViewId;
 use prismforge_core::store::{
@@ -7,7 +8,7 @@ use prismforge_core::store::{
 use prismforge_effects::Flow;
 use serde_json::json;
 
-use crate::support::{TempDir, full_profile, golden, profile};
+use crate::support::{TempDir, connects_rule, full_profile, golden, profile};
 
 const GOLDEN_ID: &str = "p-golden";
 const GOLDEN_FILE: &str = "profiles/p-golden.json";
@@ -156,7 +157,7 @@ fn rejects_future_profile_version() {
     assert_eq!(store.rename(&id("p-future"), "Mine"), Err(refused.clone()));
     assert_eq!(store.delete(&id("p-future")), Err(refused.clone()));
     assert_eq!(
-        store.set_apply_on_connect(Some(id("p-future"))),
+        store.set_rule(Trigger::Connects, connects_rule(&id("p-future"))),
         Err(refused)
     );
     let summary = store.summary(None);

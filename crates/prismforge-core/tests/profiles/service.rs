@@ -1,3 +1,4 @@
+use prismforge_core::automation::Trigger;
 use std::io;
 use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex};
@@ -15,7 +16,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep};
 
 use crate::session::{connected, demo, openrgb, reference, start, strip, whole};
-use crate::support::{TempDir, profile};
+use crate::support::{TempDir, connects_rule, profile};
 
 const LIGHT_BAR: &str = "demo-light-bar";
 const GPU: &str = "demo-graphics-card";
@@ -77,7 +78,10 @@ async fn apply_on_connect_is_off_by_default_and_applies_once_per_connect() {
     assert_eq!(mode_calls(&controls), 0);
     drop(unmarked);
 
-    profiles.set_apply_on_connect(Some(id)).await.expect("mark");
+    profiles
+        .set_rule(Trigger::Connects, connects_rule(&id))
+        .await
+        .expect("mark");
     let backend = prismforge_testkit::DemoBackend::new();
     let controls = backend.controls();
     let handle = start(backend);
@@ -280,7 +284,7 @@ fn store_operations_keep_names_distinct_and_the_marker_honest() {
         .create(profile("  Evening  ", Vec::new()))
         .expect("create");
     store
-        .set_apply_on_connect(Some(copy.clone()))
+        .set_rule(Trigger::Connects, connects_rule(&copy))
         .expect("mark");
 
     assert_eq!(store.profile(&copy).expect("copy").name, "Evening (2)");
@@ -323,7 +327,8 @@ fn store_operations_keep_names_distinct_and_the_marker_honest() {
     let mut names = names;
     names.sort();
     assert_eq!(names, expected);
-    assert_eq!(reopened.apply_on_connect(), None);
+    assert_eq!(reopened.apply_on_connect(), Some(copy.clone()));
+    assert!(reopened.profile(&copy).is_err());
     assert!(!dir.files().iter().any(|name| name.contains(copy.as_str())));
 }
 

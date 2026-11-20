@@ -1048,11 +1048,12 @@ export const viewApplying: ShellView = {
       "ran": null,
       "next": null
     }
-  }
+  },
+  "rule_run": null
 };
 
 export const viewConnectApplied: ShellView = {
-  "revision": 38,
+  "revision": 39,
   "session": {
     "connection": "Connected",
     "backend": {
@@ -2214,6 +2215,73 @@ export const viewConnectApplied: ShellView = {
         }
       }
     }
+  },
+  "rule_run": {
+    "trigger": "Connects",
+    "at_ms": 1795000000000,
+    "outcome": {
+      "Applied": {
+        "profile": "p-0000000000000001",
+        "name": "Evening",
+        "report": {
+          "frame_rate": {
+            "Applied": {
+              "in_use": 45
+            }
+          },
+          "items": [
+            {
+              "device": "demo-memory-2",
+              "label": "Demo Memory Module",
+              "target": "demo-memory-2",
+              "item": {
+                "External": {
+                  "label": "OpenRGB Effects plugin"
+                }
+              },
+              "outcome": "Applied"
+            },
+            {
+              "device": "demo-light-bar",
+              "label": "Demo Light Bar",
+              "target": "demo-light-bar",
+              "item": {
+                "HardwareMode": {
+                  "index": 1,
+                  "name": "Breathing"
+                }
+              },
+              "outcome": "Applied"
+            },
+            {
+              "device": "demo-graphics-card",
+              "label": "Demo Graphics Card",
+              "target": "demo-graphics-card",
+              "item": {
+                "Effect": {
+                  "zone": null,
+                  "effect": "moving-highlight"
+                }
+              },
+              "outcome": "Applied"
+            },
+            {
+              "device": "demo-motherboard",
+              "label": "Demo Motherboard",
+              "target": "demo-motherboard",
+              "item": {
+                "Effect": {
+                  "zone": 1,
+                  "effect": "solid"
+                }
+              },
+              "outcome": "Applied"
+            }
+          ]
+        },
+        "missing": []
+      }
+    }
   }
 };
 
@@ -2332,11 +2400,12 @@ export const viewArmedRetrying: ShellView = {
       "id": "p-0000000000000003",
       "name": "Desk"
     }
-  }
+  },
+  "rule_run": null
 };
 
 export const viewFiredRetrying: ShellView = {
-  "revision": 22,
+  "revision": 23,
   "session": {
     "connection": {
       "Retrying": {
@@ -2691,11 +2760,43 @@ export const viewFiredRetrying: ShellView = {
         }
       }
     }
+  },
+  "rule_run": {
+    "trigger": "Connects",
+    "at_ms": 1795000000000,
+    "outcome": {
+      "Applied": {
+        "profile": "p-0000000000000003",
+        "name": "Desk",
+        "report": {
+          "frame_rate": {
+            "Applied": {
+              "in_use": 30
+            }
+          },
+          "items": [
+            {
+              "device": "dev-5ae0445e22cbba19",
+              "label": "Fixture Strip",
+              "target": "dev-5ae0445e22cbba19",
+              "item": {
+                "Effect": {
+                  "zone": null,
+                  "effect": "rainbow-wave"
+                }
+              },
+              "outcome": "Applied"
+            }
+          ]
+        },
+        "missing": []
+      }
+    }
   }
 };
 
 export const viewStoppedArmed: ShellView = {
-  "revision": 29,
+  "revision": 30,
   "session": {
     "connection": {
       "Disconnected": {
@@ -2775,6 +2876,38 @@ export const viewStoppedArmed: ShellView = {
     "Armed": {
       "id": "p-0000000000000003",
       "name": "Desk"
+    }
+  },
+  "rule_run": {
+    "trigger": "Connects",
+    "at_ms": 1795000000000,
+    "outcome": {
+      "Applied": {
+        "profile": "p-0000000000000003",
+        "name": "Desk",
+        "report": {
+          "frame_rate": {
+            "Applied": {
+              "in_use": 30
+            }
+          },
+          "items": [
+            {
+              "device": "dev-5ae0445e22cbba19",
+              "label": "Fixture Strip",
+              "target": "dev-5ae0445e22cbba19",
+              "item": {
+                "Effect": {
+                  "zone": null,
+                  "effect": "rainbow-wave"
+                }
+              },
+              "outcome": "Applied"
+            }
+          ]
+        },
+        "missing": []
+      }
     }
   }
 };

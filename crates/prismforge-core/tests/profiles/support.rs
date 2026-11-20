@@ -372,3 +372,16 @@ pub fn full_profile() -> Profile {
         extra: extra(&[("future_profile_field", json!({"layout": [1, 2, 3]}))]),
     }
 }
+
+/// The rule "When PrismForge connects, apply `profile`", switched on.
+pub fn connects_rule(
+    profile: &prismforge_core::profile::ProfileId,
+) -> prismforge_core::automation::Rule {
+    prismforge_core::automation::Rule {
+        enabled: true,
+        action: prismforge_core::automation::RuleAction::ApplyProfile {
+            profile: profile.clone(),
+        },
+        ..Default::default()
+    }
+}

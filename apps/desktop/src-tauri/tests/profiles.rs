@@ -18,7 +18,7 @@ use prismforge_testkit::{DemoBackend, DemoControls, DemoOutput, FakeServer, Fixt
 use tokio::time::sleep;
 
 use support::temp::TempDir;
-use support::{Recorder, is_connected, is_retrying};
+use support::{ConnectsRule, Recorder, is_connected, is_retrying};
 
 const GPU: &str = "demo-graphics-card";
 const LIGHT_BAR: &str = "demo-light-bar";

@@ -15,7 +15,7 @@ use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, DemoControls, FakeServer, FixtureDevice, wire};
 
 use support::temp::TempDir;
-use support::{Recorder, is_connected, is_retrying};
+use support::{ConnectsRule, Recorder, is_connected, is_retrying};
 
 fn config() -> ShellConfig {
     ShellConfig {
@@ -391,7 +391,7 @@ async fn a_marked_profile_that_is_gone_is_unreadable_as_missing() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_failed_delete_of_the_marked_profile_publishes_the_cleared_mark() {
+async fn a_failed_delete_of_the_rules_profile_publishes_the_state_again_and_the_rule_stays() {
     let dir = TempDir::new("delete-fails");
     let (shell, recorder) = shell_on(&dir);
     let controls = demo_failing(&shell, &recorder).await;
@@ -426,7 +426,7 @@ async fn a_failed_delete_of_the_marked_profile_publishes_the_cleared_mark() {
         matches!(deleted, Err(CommandError::Store(StoreError::Remove { .. }))),
         "{deleted:?}"
     );
-    assert_eq!(shell.view().on_connect, OnConnect::NotArmed);
+    assert!(armed("Glow")(&shell.view()), "{:?}", shell.view().on_connect);
     drop(controls);
 }
 

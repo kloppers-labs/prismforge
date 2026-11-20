@@ -8,13 +8,15 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use prismforge_core::automation::{RuleAction, Trigger};
 use prismforge_core::profile::ProfileId;
 use prismforge_core::setup::{Setup, ViewId};
 use prismforge_core::store::{CloseAction, GroupId, NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_desktop::{
-    AcrossPreviewRequest, AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores,
-    TrayState, marks, preview_across, preview_effect, stop_then_exit,
+    AcrossPreviewRequest, AppSettingChange, Automation, EventSupport, ExitGuard, Lifecycle,
+    OnConnect, Shell, ShellConfig, Stores, SystemEvent, TrayState, end_of_session, marks,
+    preview_across, preview_effect, quit_with_rule, stop_then_exit,
 };
 use prismforge_effects::{EffectInstance, Flow, PreviewRequest};
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
@@ -23,7 +25,7 @@ use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 use support::lifecycle::{FakeEntry, FakeExit, FakeWindow, LifecycleRecorder};
 use support::setups::{fan, output, pc, place, setup, view};
 use support::temp::TempDir;
-use support::{Recorder, is_connected};
+use support::{ConnectsRule, Recorder, is_connected};
 
 const PATIENCE: Duration = Duration::from_secs(600);
 const GPU: &str = "demo-graphics-card";
@@ -34,6 +36,7 @@ type Run<'a> = Pin<Box<dyn Future<Output = ()> + 'a>>;
 struct Fixture {
     shell: Shell<Recorder>,
     lifecycle: Lifecycle<LifecycleRecorder>,
+    automation: Automation,
     window: FakeWindow,
     exit: FakeExit,
     id: ProfileId,
@@ -397,17 +400,59 @@ fn cases() -> Vec<Case> {
             .shell
             .apply_profile(&f.unknown)
             .await),
-        case!("set_apply_on_connect", "mark", |f| f
-            .shell
-            .set_apply_on_connect(Some(f.id.clone()))
-            .await),
-        case!("set_apply_on_connect", "unmark", |f| {
-            marks::set_apply_on_connect(&f.shell, &f.lifecycle, None).await
+        case!("automation", "view", |f| f.automation.view(&f.shell).await),
+        case!("set_rule", "connects applies the profile", |f| {
+            let action = RuleAction::ApplyProfile {
+                profile: f.id.clone(),
+            };
+            marks::set_rule(
+                &f.shell,
+                &f.lifecycle,
+                &f.automation,
+                Trigger::Connects,
+                true,
+                action,
+            )
+            .await
         }),
-        case!("set_apply_on_connect", "unknown", |f| f
-            .shell
-            .set_apply_on_connect(Some(f.unknown.clone()))
-            .await),
+        case!("set_rule", "connects off", |f| {
+            let action = RuleAction::Nothing;
+            marks::set_rule(
+                &f.shell,
+                &f.lifecycle,
+                &f.automation,
+                Trigger::Connects,
+                false,
+                action,
+            )
+            .await
+        }),
+        case!("set_rule", "lights off at sleep", |f| {
+            let action = RuleAction::LightsOff;
+            marks::set_rule(
+                &f.shell,
+                &f.lifecycle,
+                &f.automation,
+                Trigger::Sleeps,
+                true,
+                action,
+            )
+            .await
+        }),
+        case!("set_rule", "unknown profile at wake", |f| {
+            let action = RuleAction::ApplyProfile {
+                profile: f.unknown.clone(),
+            };
+            marks::set_rule(
+                &f.shell,
+                &f.lifecycle,
+                &f.automation,
+                Trigger::Wakes,
+                true,
+                action,
+            )
+            .await
+        }),
         case!("export_profile", "file name and file", |f| {
             let _ = f.shell.export_file_name(&f.id).await;
             f.shell.export_profile(&f.id, f.destination.clone()).await
@@ -514,6 +559,23 @@ fn system_actions() -> Vec<Case> {
             .lifecycle
             .close_requested(&f.shell, &f.window, &f.exit)
             .await),
+        case!("Sleep", "sleep rule", |f| f
+            .automation
+            .on_event(&f.shell, SystemEvent::Sleep)
+            .await),
+        case!("Wake", "wake sequence and rule", |f| f
+            .automation
+            .on_event(&f.shell, SystemEvent::Wake)
+            .await),
+        case!("SessionEnd", "session-end rule, then the stop", |f| {
+            f.automation
+                .on_event(&f.shell, SystemEvent::SessionEnd)
+                .await;
+            end_of_session(&f.shell, &f.automation, &ExitGuard::default()).await
+        }),
+        case!("quit rule", "quit rule, then the stop", |f| {
+            quit_with_rule(&f.shell, &f.automation, &ExitGuard::default(), || {}).await
+        }),
         case!("tray model", "follow", |f| f
             .lifecycle
             .tray_model(&f.shell)
@@ -566,6 +628,29 @@ async fn template() -> Template {
         .set_apply_on_connect(Some(id.clone()))
         .await
         .expect("mark");
+    let automation = Automation::new(EventSupport::Available);
+    let rules = [
+        (Trigger::Sleeps, RuleAction::LightsOff),
+        (
+            Trigger::Wakes,
+            RuleAction::ApplyProfile {
+                profile: id.clone(),
+            },
+        ),
+        (Trigger::SessionEnds, RuleAction::LightsOff),
+        (
+            Trigger::Quits,
+            RuleAction::ApplyProfile {
+                profile: id.clone(),
+            },
+        ),
+    ];
+    for (trigger, action) in rules {
+        automation
+            .set_rule(&shell, trigger, true, action)
+            .await
+            .expect("rule");
+    }
     shell
         .export_profile(&id, outside.path().join("glow.json"))
         .await
@@ -616,6 +701,7 @@ async fn fixture(template: &Template) -> Fixture {
     Fixture {
         shell,
         lifecycle,
+        automation: Automation::new(EventSupport::Available),
         window: FakeWindow::default(),
         exit: FakeExit::default(),
         id: template.id.clone(),
@@ -815,6 +901,35 @@ fn glue_actions() -> BTreeSet<String> {
         .filter(|variant| !variant.is_empty())
         .map(str::to_owned)
         .collect()
+}
+
+fn system_events() -> BTreeSet<String> {
+    let events = source("src/system_events.rs");
+    let (_, body) = events
+        .split_once("pub enum SystemEvent {")
+        .expect("the system event enum");
+    let (body, _) = body.split_once('}').expect("end of the event enum");
+    body.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("///"))
+        .map(|line| line.trim_end_matches(',').to_owned())
+        .collect()
+}
+
+#[test]
+fn every_system_event_is_in_the_lock_table() {
+    let table: BTreeSet<String> = system_actions()
+        .iter()
+        .map(|case| case.command.to_owned())
+        .collect();
+
+    let missing: Vec<_> = system_events().difference(&table).cloned().collect();
+
+    assert_eq!(system_events().len(), 3);
+    assert!(
+        missing.is_empty(),
+        "system events not in the lock table: {missing:?}"
+    );
 }
 
 #[test]

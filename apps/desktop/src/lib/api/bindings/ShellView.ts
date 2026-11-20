@@ -2,6 +2,7 @@
 import type { ApplyingProfile } from "./ApplyingProfile";
 import type { ConnectApply } from "./ConnectApply";
 import type { OnConnect } from "./OnConnect";
+import type { RuleRun } from "./RuleRun";
 import type { SessionSnapshot } from "./SessionSnapshot";
 
 /**
@@ -19,4 +20,8 @@ connect_apply: ConnectApply | null,
 /**
  * Whether this session will still apply a marked profile when it connects.
  */
-on_connect: OnConnect, };
+on_connect: OnConnect, 
+/**
+ * The last automation rule that ran since PrismForge started.
+ */
+rule_run: RuleRun | null, };

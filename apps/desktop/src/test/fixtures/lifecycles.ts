@@ -26,7 +26,8 @@ export const lifecycleStartPath: LifecycleView = {
   "tray_stop": null,
   "start_profile": {
     "Marked": {
-      "name": "Evening"
+      "name": "Evening",
+      "trigger": "Connects"
     }
   },
   "folder": "store-folder"

@@ -1,8 +1,10 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use crate::automation::Automation;
 use crate::publisher::ViewSink;
 use crate::shell::Shell;
+use crate::system_events::EventSupport;
 
 /// Holds the first exit request until the shell has stopped; later requests pass.
 #[derive(Default)]
@@ -16,6 +18,9 @@ impl ExitGuard {
         !self.stopping.swap(true, Ordering::SeqCst)
     }
 }
+
+/// Below the 5 seconds after which Windows ends a hidden app at session end or lists it as blocking.
+pub const LAST_STOP_LIMIT: Duration = Duration::from_secs(4);
 
 /// A user quit waits this long for the stop, then ends the process anyway.
 pub const QUIT_STOP_LIMIT: Duration = Duration::from_secs(10);
@@ -46,4 +51,31 @@ pub async fn stop_at_exit<S: ViewSink>(
     limit: Duration,
 ) -> bool {
     guard.stopped.load(Ordering::SeqCst) || stop_within(shell, limit).await
+}
+
+/// A user quit with its rule first: the rule waits at most [`crate::automation::QUIT_RULE_LIMIT`].
+pub async fn quit_with_rule<S: ViewSink>(
+    shell: &Shell<S>,
+    automation: &Automation,
+    guard: &ExitGuard,
+    exit: impl FnOnce(),
+) {
+    automation.at_quit(shell).await;
+    quit_then_exit(shell, guard, exit).await;
+}
+
+/// The final `Exit` without a user quit: the session-end rule, then the stop, together within [`LAST_STOP_LIMIT`].
+pub async fn end_of_session<S: ViewSink>(
+    shell: &Shell<S>,
+    automation: &Automation,
+    guard: &ExitGuard,
+) -> bool {
+    if guard.stopped.load(Ordering::SeqCst) {
+        return true;
+    }
+    let started = tokio::time::Instant::now();
+    if automation.support() == EventSupport::Available {
+        automation.at_session_end(shell).await;
+    }
+    stop_within(shell, LAST_STOP_LIMIT.saturating_sub(started.elapsed())).await
 }

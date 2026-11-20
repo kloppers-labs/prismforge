@@ -88,15 +88,6 @@ pub async fn apply_profile(
     shell.apply_profile(&id).await
 }
 
-#[tauri::command]
-pub async fn set_apply_on_connect(
-    shell: State<'_, DesktopShell>,
-    lifecycle: State<'_, DesktopLifecycle>,
-    id: Option<ProfileId>,
-) -> Result<(), CommandError> {
-    marks::set_apply_on_connect(&shell, &lifecycle, id).await
-}
-
 /// The WebView never names a path: Rust opens the native dialog and uses only the path it returns.
 #[tauri::command]
 pub async fn export_profile(

@@ -12,6 +12,7 @@ use prismforge_openrgb::{ClientConfig, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 
 use crate::Module;
+use crate::support::ConnectsRule;
 use crate::support::lifecycle::{FakeEntry, FakeExit, FakeWindow, LifecycleRecorder};
 use crate::support::temp::TempDir;
 

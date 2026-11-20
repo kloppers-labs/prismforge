@@ -2800,6 +2800,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "ts-rs",
+ "windows",
  "windows-registry",
 ]
 
@@ -2819,6 +2820,7 @@ version = "0.1.0"
 dependencies = [
  "prismforge-core",
  "prismforge-testkit",
+ "serde_json",
  "thiserror 2.0.21",
  "tokio",
 ]

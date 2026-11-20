@@ -157,6 +157,14 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 }
                 self.answer(reply, Ok(()));
             }
+            OutputCommand::LightsOff { plan, reply } => {
+                let report = self.lights_off(plan).await;
+                self.answer(reply, Ok(report));
+            }
+            OutputCommand::KeepLights { reply } => {
+                self.keep_lights().await;
+                self.answer(reply, Ok(()));
+            }
             OutputCommand::SetFrameRate {
                 frame_rate,
                 origin,

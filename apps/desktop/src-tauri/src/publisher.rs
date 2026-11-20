@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use prismforge_core::automation::RuleRun;
 use prismforge_core::session::{LiveOutput, SessionSnapshot};
 use tokio::sync::watch;
 
@@ -28,6 +29,7 @@ impl<S: ViewSink> Publisher<S> {
                 applying: None,
                 connect_apply: None,
                 on_connect: OnConnect::NotApplicable,
+                rule_run: None,
             }),
             changes: watch::channel(0).0,
         }
@@ -66,6 +68,10 @@ impl<S: ViewSink> Publisher<S> {
 
     pub fn set_on_connect(&self, on_connect: OnConnect) -> ShellView {
         self.change(|view| view.on_connect = on_connect)
+    }
+
+    pub fn set_rule_run(&self, run: RuleRun) -> ShellView {
+        self.change(|view| view.rule_run = Some(run))
     }
 
     fn change(&self, edit: impl FnOnce(&mut ShellView)) -> ShellView {

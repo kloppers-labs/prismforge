@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, oneshot, watch};
 
+use crate::automation::{EventProfiles, LightsOffPlan, LightsOffReport};
 use crate::backend::RgbBackend;
 use crate::device::DeviceRef;
 use crate::error::BackendError;
@@ -126,6 +127,8 @@ pub(crate) enum Command {
         after: u64,
         reply: Reply<IntentLog>,
     },
+    EventProfiles(Reply<Option<EventProfiles>>),
+    Resync(Reply<()>),
 }
 
 pub(crate) enum OutputCommand {
@@ -174,6 +177,13 @@ pub(crate) enum OutputCommand {
         frame_rate: u32,
         origin: Origin,
         reply: Reply<u32, OutputError>,
+    },
+    LightsOff {
+        plan: LightsOffPlan,
+        reply: Reply<LightsOffReport, OutputError>,
+    },
+    KeepLights {
+        reply: Reply<(), OutputError>,
     },
 }
 
@@ -425,6 +435,31 @@ impl SessionHandle {
                 reply,
             })
         })
+    }
+
+    /// Writes black or the safe "Off" mode on each device of `plan`; effects end without a restore.
+    pub fn lights_off(
+        &self,
+        plan: LightsOffPlan,
+    ) -> impl Future<Output = Result<LightsOffReport, OutputError>> + Send + use<> {
+        self.send(move |reply| Command::Output(OutputCommand::LightsOff { plan, reply }))
+    }
+
+    /// Writes each effect's due frame once, then ends every effect where it is, so nothing is restored.
+    pub fn keep_lights(&self) -> impl Future<Output = Result<(), OutputError>> + Send + use<> {
+        self.send(move |reply| Command::Output(OutputCommand::KeepLights { reply }))
+    }
+
+    /// Treats the state of every device as unknown, so the next frames set Direct Mode and all colours again.
+    pub fn resync(&self) -> impl Future<Output = Result<(), SessionError>> + Send + use<> {
+        self.send(Command::Resync)
+    }
+
+    /// Reads OpenRGB's own event profiles; `None` when the server cannot tell.
+    pub fn event_profiles(
+        &self,
+    ) -> impl Future<Output = Result<Option<EventProfiles>, SessionError>> + Send + use<> {
+        self.send(Command::EventProfiles)
     }
 
     /// The user's intent records after `after`, answered by the session loop in command order.

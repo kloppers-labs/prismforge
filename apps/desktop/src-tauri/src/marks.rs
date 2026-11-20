@@ -3,9 +3,11 @@
 use std::path::PathBuf;
 
 use prismforge_core::RgbBackend;
+use prismforge_core::automation::{RuleAction, Trigger};
 use prismforge_core::profile::ProfileId;
 use prismforge_core::store::ImportReport;
 
+use crate::automation::{Automation, AutomationView};
 use crate::lifecycle::{Lifecycle, LifecycleSink};
 use crate::publisher::ViewSink;
 use crate::shell::Shell;
@@ -30,14 +32,17 @@ pub async fn stop<S: ViewSink, L: LifecycleSink>(
     view
 }
 
-pub async fn set_apply_on_connect<S: ViewSink, L: LifecycleSink>(
+pub async fn set_rule<S: ViewSink, L: LifecycleSink>(
     shell: &Shell<S>,
     lifecycle: &Lifecycle<L>,
-    id: Option<ProfileId>,
-) -> Result<(), CommandError> {
-    let marked = shell.set_apply_on_connect(id).await;
+    automation: &Automation,
+    trigger: Trigger,
+    enabled: bool,
+    action: RuleAction,
+) -> Result<AutomationView, CommandError> {
+    let changed = automation.set_rule(shell, trigger, enabled, action).await;
     lifecycle.publish(shell).await;
-    marked
+    changed
 }
 
 pub async fn rename_profile<S: ViewSink, L: LifecycleSink>(

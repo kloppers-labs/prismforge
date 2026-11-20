@@ -1,6 +1,8 @@
 #[cfg(target_os = "macos")]
 mod app_menu;
 mod apply_lock;
+mod automation;
+mod automation_commands;
 mod commands;
 mod effects;
 mod exit;
@@ -21,16 +23,26 @@ mod setup_commands;
 mod shell;
 mod stores;
 mod system_entry;
+mod system_events;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../tests/support/temp.rs"]
+mod temp;
 mod tray;
 mod view;
 
-use std::time::Duration;
+use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 
+pub use automation::{
+    Automation, AutomationView, OpenRgbCheck, ProfileChoice, QUIT_RULE_LIMIT, RULE_LOCK_WAIT,
+    RuleProfile, RuleView, SESSION_END_LIMIT, SLEEP_LIMIT, WAKE_APPLY_LIMIT,
+};
 pub use effects::{EffectCatalog, preview_effect};
 pub use exit::{
-    ExitGuard, QUIT_STOP_LIMIT, quit_then_exit, stop_at_exit, stop_then_exit, stop_within,
+    ExitGuard, LAST_STOP_LIMIT, QUIT_STOP_LIMIT, end_of_session, quit_then_exit, quit_with_rule,
+    stop_at_exit, stop_then_exit, stop_within,
 };
 pub use forward::forward;
 pub use groups::{GroupView, GroupsStore, GroupsView};
@@ -49,6 +61,9 @@ pub use setup::{
 pub use shell::{Shell, ShellConfig};
 pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};
 pub use system_entry::{SystemStartEntry, run_command, startup_disabled};
+pub use system_events::{
+    Dispatcher, Done, EventSink, EventSource, EventSupport, SystemEvent, platform_source,
+};
 pub use view::{
     ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, MarkProblem, Marked,
     OnConnect, SettingProblem, ShellView,
@@ -59,6 +74,7 @@ pub const LIVE_EVENT: &str = "live-output";
 
 type DesktopShell = Shell<WindowSink>;
 type DesktopLifecycle = Lifecycle<native::LifecycleWindowSink>;
+type DesktopAutomation = Automation;
 
 pub struct WindowSink(AppHandle);
 
@@ -71,9 +87,6 @@ impl ViewSink for WindowSink {
         let _ = self.0.emit(LIVE_EVENT, live);
     }
 }
-
-/// Below the 5 seconds after which Windows ends a hidden app at session end or lists it as blocking.
-const LAST_STOP_LIMIT: Duration = Duration::from_secs(4);
 
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -95,6 +108,9 @@ pub fn run() {
                 stores,
             ));
             app.manage(ExitGuard::default());
+            let events = platform_source();
+            app.manage(Automation::new(events.support()));
+            events.start(Arc::new(dispatcher(handle.clone())));
             let lifecycle = Lifecycle::new(
                 native::LifecycleWindowSink(handle.clone()),
                 SystemStartEntry,
@@ -157,12 +173,13 @@ pub fn run() {
             profile_commands::duplicate_profile,
             profile_commands::delete_profile,
             profile_commands::apply_profile,
-            profile_commands::set_apply_on_connect,
             profile_commands::export_profile,
             profile_commands::import_profile,
             profile_commands::set_device_name,
             profile_commands::set_zone_name,
             profile_commands::dismiss_store_notice,
+            automation_commands::automation,
+            automation_commands::set_rule,
             lifecycle_commands::lifecycle,
             lifecycle_commands::change_setting,
             lifecycle_commands::answer_close,
@@ -185,10 +202,23 @@ async fn start_up(app: AppHandle) {
             launched_by_system(std::env::args()),
             &window,
             |address| async move {
-                let _ = commands::connect(shell, &address.host, address.port).await;
+                let _ = commands::connect_at_start(shell, &address.host, address.port).await;
             },
         )
         .await;
+}
+
+/// Each system event runs on the async runtime; the event thread waits for it only as long as the event allows.
+fn dispatcher(app: AppHandle) -> Dispatcher {
+    let tauri::async_runtime::RuntimeHandle::Tokio(runtime) = tauri::async_runtime::handle();
+    Dispatcher::new(runtime, move |event| {
+        let app = app.clone();
+        Box::pin(async move {
+            let shell = app.state::<DesktopShell>();
+            let automation = app.state::<DesktopAutomation>();
+            automation.on_event(&shell, event).await;
+        })
+    })
 }
 
 fn on_run_event(app: &AppHandle, event: RunEvent) {
@@ -202,13 +232,18 @@ fn on_run_event(app: &AppHandle, event: RunEvent) {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
                 let shell = app.state::<DesktopShell>();
-                quit_then_exit(&shell, &app.state::<ExitGuard>(), || app.exit(0)).await;
+                let automation = app.state::<DesktopAutomation>();
+                quit_with_rule(&shell, &automation, &app.state::<ExitGuard>(), || {
+                    app.exit(0)
+                })
+                .await;
             });
         }
         RunEvent::Exit => {
             let shell = app.state::<DesktopShell>();
+            let automation = app.state::<DesktopAutomation>();
             let guard = app.state::<ExitGuard>();
-            tauri::async_runtime::block_on(stop_at_exit(&shell, &guard, LAST_STOP_LIMIT));
+            tauri::async_runtime::block_on(end_of_session(&shell, &automation, &guard));
         }
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => tray::act(app, tray::Action::Show),
