@@ -107,7 +107,7 @@ A test checks the rule for every command. `tests/command_locks.rs` drives each c
 A user command sent while a profile applies would get a sequence number before the apply's baseline and never count as a pending change. So the shell, not only the interface, refuses it:
 
 1. A profile apply, by the user or on connect, takes the lock. A second apply by the user is refused; the watcher waits for a user's apply to end.
-2. While it holds the lock, the shell answers `ProfileApplying` to every output command (apply or stop an effect, hardware mode, declare, hand back, frame rate, identify) and to saving, updating and deleting a profile.
+2. While it holds the lock, the shell answers `ProfileApplying` to every output command (apply or stop an effect, an effect across the setup, hardware mode, declare, hand back, frame rate, identify) and to saving, updating and deleting a profile.
 3. An output command already sent holds a permit until the session answers it. The apply waits for those permits before it sends anything.
 4. The lock is a guard value, released when it is dropped: after success, a partial result, an error, a cancelled command and the end of the session. Tests cover each path.
 5. The view carries the profile being applied, so the interface turns its output controls off with the reason. A marked profile that cannot be read is not shown as being applied, because nothing from it is applied.
@@ -243,6 +243,17 @@ A batch (Task 9) records like one command: every target it applied or stopped ge
 ## The setup
 
 The setup (Task 10) is one file per store, `setup.json`, written durably like every store file, with the same recovery, the same refusal of a newer major version and unknown fields kept at every level. `ProfileStore` holds it beside the profiles, because applying a profile needs it, and `Profiles::setup` and `Profiles::save_setup` reach it at the store's place in the lock order. It stays on this computer: it is not part of a profile, an export or a diagnostics copy. Its outputs are matched to devices by stored reference only, with the groups' states. While the file needs a newer PrismForge, `Profiles::setup` refuses with `NewerFile`, and effects across the setup in a profile are skipped with `NewerSetup`, not "setup changed". See `0006-setup-model.md`.
+
+**Commands (Task 11).** All four are in `tests/command_locks.rs`:
+
+| Command | Locks | Apply lock |
+|---|---|---|
+| `setup` | The session slot only to read the devices and the store kind, then the store (`Profiles::setup`), as the group commands. | Not refused: it sends nothing to a device. |
+| `save_setup` | The same as `setup`; then `Profiles::save_setup` checks new or changed outputs against the devices read. | Not refused: it stores a file and sends nothing. |
+| `apply_across` | An output permit taken under the session slot (`Shell::permitted`), then the store to read the saved setup, then the session. The permit is held until the session answers, like `create_profile`. | Refused with `ProfileApplying`; `tests/profiles.rs` checks it with the other output commands. |
+| `preview_across` | None. It plans the drawing it is given against no device and renders frames in Rust. | Not refused: it uses no session. |
+
+`apply_across` plans the **saved** setup, never a drawing the window holds, so a profile saved afterwards names a view whose places are stored. The interface refuses Apply while the drawing has unsaved changes.
 
 ## Groups
 

@@ -34,6 +34,16 @@ export const MIRRORS = {
   "profile.delete": "Delete on the profile page",
   "diagnostics.copy-section": "Copy section in each Diagnostics section",
   "diagnostics.copy-all": "Copy as text at the top of Diagnostics",
+  "component.select": "the component's row in the Setup list",
+  "component.turn": "Turn right 15° in the Setup editor",
+  "component.flip": "Flip in the Setup editor",
+  "component.identify": "Identify in the Setup editor",
+  "component.group": "Make a group from the selection in the Setup editor",
+  "component.take-out": "Take out of the view in the Setup editor",
+  "component.delete": "Delete component in the Setup editor",
+  "outline.select": "the outline's row in the Setup list",
+  "outline.turn": "Turn right 15° in the outline editor",
+  "outline.delete": "Delete outline in the outline editor",
 } as const;
 
 export type MirrorId = keyof typeof MIRRORS;

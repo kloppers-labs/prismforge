@@ -3,12 +3,17 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { LIFECYCLE_EVENT, LIVE_EVENT, VIEW_EVENT } from "../lib/api/client";
 import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
+import type { AcrossPreview } from "../lib/api/bindings/AcrossPreview";
+import type { AcrossPreviewRequest } from "../lib/api/bindings/AcrossPreviewRequest";
 import type { PreviewBatch } from "../lib/api/bindings/PreviewBatch";
+import { viewTargets } from "../features/setup/colors";
+import { span } from "../features/setup/wiring";
 import type { PreviewRequest } from "../lib/api/bindings/PreviewRequest";
 import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import { catalog } from "../test/fixtures/catalog";
 import { groupsEmpty } from "../test/fixtures/groups";
+import { setupDemoEmpty } from "../test/fixtures/setups";
 import { detailsEvening, detailsImported, detailsOffline } from "../test/fixtures/profileDetails";
 import { demoConnected, openRgbConnecting } from "../test/fixtures/sessions";
 import type { Scenario } from "./scenarios";
@@ -33,6 +38,21 @@ function preview(args: Record<string, unknown>): PreviewBatch {
     Array.from({ length: request.led_count }, (_, led) => hue(led / Math.max(request.led_count, 1) + frame / 50)),
   );
   return { led_count: request.led_count, start_ms: request.start_ms, interval_ms: request.interval_ms, is_static: false, frames };
+}
+
+/** Made-up colours for each target of the drawing; the drawing and the mapping to components are the real ones. */
+function previewAcross(args: Record<string, unknown>): AcrossPreview {
+  const request = args.request as AcrossPreviewRequest;
+  const setup = request.setup;
+  const targets = viewTargets(setup, request.view).map((target) => {
+    const outputs = setup.outputs.filter((output) => output.device === target.device && output.zone === target.zone);
+    const leds = Math.max(0, ...outputs.map((output) => output.first_led + span(setup, output)));
+    const frames = Array.from({ length: request.frame_count }, (_, frame) =>
+      Array.from({ length: leds }, (_, led) => hue((target.zone ?? 3) / 7 + led / Math.max(leds, 1) / 3 + frame / 50)),
+    );
+    return { target, frames };
+  });
+  return { start_ms: request.start_ms, interval_ms: request.interval_ms, is_static: false, targets };
 }
 
 /** Moves each zone's colours on by one LED per frame, so the live view animates as a real feed would. */
@@ -74,8 +94,11 @@ export function installTransport(scenario: Scenario) {
     profile_details: (args) => details[String(args.id)] ?? Promise.reject({ Profile: "NotFound" }),
     effect_catalog: () => catalog,
     groups: () => scenario.groups ?? { ...groupsEmpty, kind: scenario.store.kind },
+    setup: () => scenario.setup ?? { ...setupDemoEmpty, kind: scenario.store.kind },
+    save_setup: (args) => ({ ...(scenario.setup ?? setupDemoEmpty), setup: args.setup }),
     watch_live_output: liveFeed(scenario.live),
     preview_effect: preview,
+    preview_across: previewAcross,
     refresh: () => null,
     connect_openrgb: () => push(view(openRgbConnecting)),
     start_demo: () => push(view(demoConnected)),

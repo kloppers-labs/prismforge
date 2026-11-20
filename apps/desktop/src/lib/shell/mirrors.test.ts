@@ -8,6 +8,7 @@ import { storeTwo, storeUnsaved } from "../../test/fixtures/stores";
 import { groupsDemo } from "../../test/fixtures/groups";
 import { detailsEvening } from "../../test/fixtures/profileDetails";
 import { itemIds, mirrored } from "../../test/menus";
+import { componentRow, openSetup, setupHandlers } from "../../test/setup";
 import { connectionChip, findStrip, go, waitForConnection } from "../../test/shell";
 import { MIRRORS } from "./mirrors";
 
@@ -44,6 +45,18 @@ const PROFILE_IDS = [
   "profile.delete",
 ];
 const DIAGNOSTICS_IDS = ["diagnostics.copy-section", "diagnostics.copy-all"];
+const SETUP_IDS = [
+  "component.select",
+  "component.turn",
+  "component.flip",
+  "component.identify",
+  "component.group",
+  "component.take-out",
+  "component.delete",
+  "outline.select",
+  "outline.turn",
+  "outline.delete",
+];
 const EFFECT_IDS = [
   "target.choose",
   "target.stop",
@@ -148,6 +161,23 @@ test("every_diagnostics_menu_item_has_a_visible_counterpart_in_the_drawer", asyn
   expect(seen()).toEqual([...DIAGNOSTICS_IDS].sort());
 });
 
+test("every_setup_menu_item_has_a_visible_counterpart_on_the_setup_screen", async () => {
+  const { check: expectMirrored, seen } = checker();
+  fakeShell(demoConnected, setupHandlers());
+  render(App);
+  const list = await openSetup();
+  const row = componentRow(list, "Graphics card");
+
+  await fireEvent.click(row);
+  await expectMirrored(await itemIds(row));
+  await fireEvent.change(screen.getByRole("combobox", { name: "Outline" }), { target: { value: "Case" } });
+  await fireEvent.click(screen.getByRole("button", { name: "Add the outline" }));
+  const outline = within(list).getByRole("option", { name: "Case" });
+  await expectMirrored(await itemIds(outline));
+
+  expect(seen()).toEqual([...SETUP_IDS].sort());
+});
+
 test("the_registry_holds_only_items_that_a_menu_offers", () => {
-  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS, ...EFFECT_IDS, ...PROFILE_IDS, ...DIAGNOSTICS_IDS].sort());
+  expect(Object.keys(MIRRORS).sort()).toEqual([...STRIP_IDS, ...DEVICE_IDS, ...EFFECT_IDS, ...PROFILE_IDS, ...DIAGNOSTICS_IDS, ...SETUP_IDS].sort());
 });

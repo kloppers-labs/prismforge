@@ -9,17 +9,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use prismforge_core::profile::ProfileId;
+use prismforge_core::setup::{Setup, ViewId};
 use prismforge_core::store::{CloseAction, GroupId, NoticeEvent, StoreNotice};
 use prismforge_core::{DeviceRef, OutputTarget};
 use prismforge_desktop::{
-    AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores, TrayState, marks,
-    preview_effect, stop_then_exit,
+    AcrossPreviewRequest, AppSettingChange, Lifecycle, OnConnect, Shell, ShellConfig, Stores,
+    TrayState, marks, preview_across, preview_effect, stop_then_exit,
 };
-use prismforge_effects::{EffectInstance, PreviewRequest};
+use prismforge_effects::{EffectInstance, Flow, PreviewRequest};
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
 use prismforge_testkit::{DemoBackend, FakeServer, FixtureDevice};
 
 use support::lifecycle::{FakeEntry, FakeExit, FakeWindow, LifecycleRecorder};
+use support::setups::{fan, output, pc, place, setup, view};
 use support::temp::TempDir;
 use support::{Recorder, is_connected};
 
@@ -106,6 +108,32 @@ fn preview(name: &str) -> PreviewRequest {
     PreviewRequest {
         instance: effect(name),
         led_count: 12,
+        start_ms: 0,
+        frame_count: 30,
+        interval_ms: 33,
+    }
+}
+
+fn logo_setup() -> Setup {
+    setup(
+        vec![fan("c-logo", "Logo", 12)],
+        vec![output(
+            "o-logo",
+            &DeviceRef::new(GPU),
+            None,
+            "Demo Graphics Card",
+            &[&["c-logo"]],
+        )],
+        vec![view(pc(), "PC", vec![place("c-logo", 100, 100, 100, 0)])],
+    )
+}
+
+fn across_preview() -> AcrossPreviewRequest {
+    AcrossPreviewRequest {
+        setup: logo_setup(),
+        view: pc(),
+        flow: Flow::Along { angle: 0 },
+        instance: effect("rainbow-wave"),
         start_ms: 0,
         frame_count: 30,
         interval_ms: 33,
@@ -261,6 +289,39 @@ fn cases() -> Vec<Case> {
             .shell
             .delete_group(&unknown_group())
             .await),
+        case!("setup", "view", |f| f.shell.setup_view().await),
+        case!("save_setup", "logo", |f| f
+            .shell
+            .save_setup(logo_setup())
+            .await),
+        case!("save_setup", "not valid", |f| {
+            let mut setup = logo_setup();
+            setup.views[0].placements[0].size = 0;
+            f.shell.save_setup(setup).await
+        }),
+        case!("apply_across", "saved here", |f| {
+            let _ = f.shell.save_setup(logo_setup()).await;
+            f.shell
+                .apply_across(pc(), Flow::Along { angle: 0 }, effect("rainbow-wave"), None)
+                .await
+        }),
+        case!("apply_across", "unknown view", |f| f
+            .shell
+            .apply_across(
+                ViewId::parse("v-nowhere").expect("view id"),
+                Flow::Along { angle: 0 },
+                effect("rainbow-wave"),
+                Some(vec![gpu()])
+            )
+            .await),
+        case!("preview_across", "logo", |_f| preview_across(
+            across_preview()
+        )),
+        case!("preview_across", "unknown effect", |_f| {
+            let mut request = across_preview();
+            request.instance = effect("no-such-effect");
+            preview_across(request)
+        }),
         case!("profile_store", "store", |f| f.shell.store_view().await),
         case!("profile_details", "profile", |f| f
             .shell

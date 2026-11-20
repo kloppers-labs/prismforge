@@ -132,3 +132,40 @@ export const settingStartEntryNotKept: CommandError = {
 export const settingsInUse: CommandError = {
   "StoreUnavailable": "InUse"
 };
+
+export const errorSetupExceedsOutput: CommandError = {
+  "Store": {
+    "InvalidSetup": {
+      "problem": {
+        "ExceedsOutput": {
+          "output": "o-cooler",
+          "needed": 17,
+          "available": 16
+        }
+      }
+    }
+  }
+};
+
+export const errorSetupLedBounds: CommandError = {
+  "Store": {
+    "InvalidSetup": {
+      "problem": {
+        "LedCountOutsideBounds": {
+          "component": "c-front-fan-1",
+          "leds": 121,
+          "min": 1,
+          "max": 120
+        }
+      }
+    }
+  }
+};
+
+export const errorPlanUnknownView: CommandError = {
+  "Plan": {
+    "UnknownView": {
+      "view": "v-gone"
+    }
+  }
+};

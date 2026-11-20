@@ -1,4 +1,8 @@
 import type { GroupsView } from "../lib/api/bindings/GroupsView";
+import type { SetupStoreView } from "../lib/api/bindings/SetupStoreView";
+import { acrossDemoSkipped } from "../test/fixtures/acrossReports";
+import { liveRealAcross } from "../test/fixtures/live";
+import { setupDemoEmpty, setupDemoTower, setupDemoZoneChanged, setupRealEmpty, setupRealTower } from "../test/fixtures/setups";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
 import { batchDuringIdentify } from "../test/fixtures/batches";
@@ -14,7 +18,7 @@ import { storeEmpty, storeOffline, storeRecovered, storeSaved, storeTwo, storeUn
 import { viewApplying, viewArmedRetrying, viewConnectApplied } from "../test/fixtures/views";
 import type { Handler } from "./transport";
 
-export type Area = "Devices" | "Effects" | "Profiles" | "Settings";
+export type Area = "Devices" | "Effects" | "Setup" | "Profiles" | "Settings";
 
 export type Scenario = {
   label: string;
@@ -35,6 +39,14 @@ export type Scenario = {
   stage?: "live";
   live?: LiveOutput;
   rescan?: boolean;
+  setup?: SetupStoreView;
+  /** What the Setup area shows: a tab, a template added, components selected, an effect drafted, applied or live. */
+  setupTab?: "PC" | "Desk";
+  setupTemplate?: string;
+  setupSelect?: string[];
+  setupEffect?: string;
+  setupApply?: boolean;
+  scrollTo?: string;
 };
 
 function onConnect(session: SessionSnapshot | null): ShellView["on_connect"] {
@@ -174,5 +186,112 @@ export const SCENARIOS: Record<string, Scenario> = {
     effect: "Gradient",
   },
 };
+
+/** The demo tower with a case outline, the graphics card as a block and the board edge as a free line. */
+function demoLibrary(): SetupStoreView {
+  const view = structuredClone(setupDemoTower);
+  const pc = view.setup.views.find((each) => each.id === "v-pc")!;
+  pc.outlines = [{ id: "u-1", name: "Case", kind: "Case", x: 535, y: 350, width: 900, height: 640, rotation: 0 }];
+  const graphics = view.setup.components.find((component) => component.id === "c-graphics")!;
+  graphics.frame = { width: 112, height: 40 };
+  const edge = view.setup.components.find((component) => component.id === "c-board-edge")!;
+  edge.geometry = { Line: { leds: 6, points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 60 }], first: "AtStart" } };
+  return view;
+}
+
+/** The real tower whose desk view also draws the desk, the monitor and the PC. */
+function realDesk(): SetupStoreView {
+  const view = structuredClone(setupRealTower);
+  const desk = view.setup.views.find((each) => each.id === "v-desk")!;
+  desk.outlines = [
+    { id: "u-1", name: "Desk", kind: "Desk", x: 500, y: 660, width: 920, height: 40, rotation: 0 },
+    { id: "u-2", name: "Monitor", kind: "Monitor", x: 430, y: 200, width: 460, height: 280, rotation: 0 },
+    { id: "u-3", name: "PC", kind: "Pc", x: 840, y: 300, width: 170, height: 300, rotation: 0 },
+  ];
+  return view;
+}
+
+Object.assign(SCENARIOS, {
+  "setup-empty": { ...openRgb, label: "Setup, an empty PC view", view: view(sessions.openRgbSetupDevices), area: "Setup", setup: setupRealEmpty },
+  "setup-template": {
+    ...base,
+    label: "Setup, the Tower PC template being mapped",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoEmpty,
+    setupTemplate: "Tower PC",
+    scrollTo: "Not wired yet",
+  },
+  "setup-live": {
+    ...openRgb,
+    label: "Setup, a finished PC view with live colours",
+    view: view(sessions.openRgbAcrossRunning),
+    area: "Setup",
+    setup: setupRealTower,
+    stage: "live",
+    live: liveRealAcross,
+  },
+  "setup-mirror": {
+    ...base,
+    label: "Setup, a mirrored fan hub and a two-part cooler",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoTower,
+    setupSelect: ["c-front-fan-2"],
+    scrollTo: "Outputs",
+  },
+  "setup-desk": {
+    ...openRgb,
+    label: "Setup, the desk view",
+    view: view(sessions.openRgbAcrossRunning),
+    area: "Setup",
+    setup: realDesk(),
+    setupTab: "Desk",
+  },
+  "setup-library": {
+    ...base,
+    label: "Setup, a case outline, a block and a free line",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: demoLibrary(),
+    setupSelect: ["c-graphics"],
+  },
+  "setup-points": {
+    ...base,
+    label: "Setup, the points of a free line edited with number fields",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: demoLibrary(),
+    setupSelect: ["c-board-edge"],
+    scrollTo: "Points of the line",
+  },
+  "setup-draft": {
+    ...base,
+    label: "Setup, the draft preview across the setup",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoTower,
+    setupEffect: "rainbow-wave",
+  },
+  "setup-excluded": {
+    ...base,
+    label: "Setup, an apply with outputs that got nothing",
+    view: view(sessions.demoAcrossSkipped),
+    area: "Setup",
+    setup: setupDemoZoneChanged,
+    setupEffect: "rainbow-wave",
+    setupApply: true,
+    handlers: { apply_across: () => acrossDemoSkipped },
+    scrollTo: "Results for each target",
+  },
+  "setup-list": {
+    ...base,
+    label: "Setup, the list twin with two components selected",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: setupDemoTower,
+    setupSelect: ["c-cooler-left", "c-cooler-right"],
+  },
+});
 
 export const DEFAULT_SCENARIO = "demo";

@@ -38,7 +38,7 @@
   let ref = $derived(device ? reference(device) : null);
   let catalog = $derived(effects.catalog);
   let held = $derived(applyingText(app.view));
-  let blocked = $derived(device && target ? (held ?? applyBlocked(session, device, target.zone)) : null);
+  let blocked = $derived(device && target ? (held ?? applyBlocked(session, device, target.zone) ?? effects.split) : null);
   let left = $derived(ref === null ? null : declaredBy(session, ref));
   let running = $derived(session.output.scene.assignments.length > 0);
   let rows: StageRow[] = $derived(

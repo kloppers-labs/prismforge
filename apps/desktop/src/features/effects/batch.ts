@@ -5,13 +5,14 @@ import type { TargetResult } from "../../lib/api/bindings/TargetResult";
 import { failureText } from "../../lib/errors";
 import type { Names } from "../../lib/names";
 import { distinction } from "../devices/present";
+import { excludedText } from "../setup/present";
 import { retryable } from "./retry";
 import { deviceOf, runningOn, stopText, targetName } from "./present";
 import type { BatchFeedback } from "./state.svelte";
 
 export type RowState = "Applied" | "Stopped" | "Skipped" | "Failed" | "Covered";
 
-export type BatchRow = { key: string; label: string; state: RowState; text: string; settled: boolean };
+export type BatchRow = { key: string; label: string; state: RowState | "Not sent"; text: string; settled: boolean };
 
 export type BatchSummary = { headline: string; settled: boolean; rows: BatchRow[]; retry: number };
 
@@ -73,8 +74,15 @@ export function summarize(batch: BatchFeedback, session: SessionSnapshot, names:
   if (batch.kind === "failed") {
     return null;
   }
-  const rows = batch.report.results.map((result) => row(session, names, result, server));
-  const sent = rows.filter((each) => each.state !== "Covered");
+  const excluded: BatchRow[] = (batch.kind === "applied" ? (batch.excluded ?? []) : []).map((status) => ({
+    key: `excluded|${status.output}`,
+    label: status.label,
+    state: "Not sent",
+    text: excludedText(status),
+    settled: false,
+  }));
+  const rows = [...batch.report.results.map((result) => row(session, names, result, server)), ...excluded];
+  const sent = rows.filter((each) => each.state !== "Covered" && each.state !== "Not sent");
   const done = sent.filter((each) => each.state === "Applied" || each.state === "Stopped").length;
   const retry = batch.report.results.filter(
     (result) => typeof result.outcome === "object" && "Skipped" in result.outcome && retryable(result.outcome.Skipped.error),

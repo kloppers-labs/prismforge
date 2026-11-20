@@ -38,7 +38,7 @@ import {
   waitForConnection,
 } from "../../test/shell";
 
-const AREAS = ["Devices", "Effects", "Profiles", "Diagnostics", "Settings"];
+const AREAS = ["Devices", "Effects", "Setup", "Profiles", "Diagnostics", "Settings"];
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -362,9 +362,9 @@ test("area_shortcuts_follow_the_final_rail_order", async () => {
   await fireEvent.keyDown(document.body, { key: "4", code: "Digit4", ctrlKey: true });
   expect(current()).toEqual(["Profiles"]);
   await fireEvent.keyDown(document.body, { key: "3", code: "Digit3", ctrlKey: true });
-  expect(current()).toEqual(["Profiles"]);
+  expect(current()).toEqual(["Setup"]);
   await fireEvent.keyDown(document.body, { key: "5", code: "Digit5", ctrlKey: true });
-  expect(current()).toEqual(["Profiles"]);
+  expect(current()).toEqual(["Setup"]);
   await fireEvent.keyDown(document.body, { key: ",", code: "Comma", ctrlKey: true });
   expect(current()).toEqual(["Settings"]);
   await fireEvent.keyDown(document.body, { key: "&", code: "Digit1", ctrlKey: true });
@@ -373,6 +373,7 @@ test("area_shortcuts_follow_the_final_rail_order", async () => {
   expect(current()).toEqual(["Profiles"]);
   expect(railItem("Effects").getAttribute("aria-keyshortcuts")).toBe("Control+2");
   expect(railItem("Profiles").getAttribute("aria-keyshortcuts")).toBe("Control+4");
+  expect(railItem("Setup").getAttribute("aria-keyshortcuts")).toBe("Control+3");
 });
 
 test("area_shortcuts_do_not_fire_while_typing", async () => {

@@ -125,6 +125,7 @@ fn setup() -> Setup {
                 id: id(name),
                 name: name.trim_start_matches("c-").into(),
                 geometry,
+                frame: None,
                 extra: Map::new(),
             })
             .collect(),
@@ -149,12 +150,14 @@ fn setup() -> Setup {
                 id: ViewId::parse("v-pc").expect("view id"),
                 name: "PC".into(),
                 placements: placements(&all),
+                outlines: Vec::new(),
                 extra: Map::new(),
             },
             View {
                 id: ViewId::parse("v-desk").expect("view id"),
                 name: "Desk".into(),
                 placements: placements(&["c-card", "c-ram", "c-bar", "c-fan-1"]),
+                outlines: Vec::new(),
                 extra: Map::new(),
             },
         ],

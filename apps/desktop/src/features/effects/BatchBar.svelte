@@ -3,6 +3,7 @@
   import type { Names } from "../../lib/names";
   import { namesLine, replaced } from "./batch";
   import { canStop, type Mode } from "./present";
+  import AcrossMode from "../setup/AcrossMode.svelte";
   import type { EffectsState } from "./state.svelte";
 
   let { effects, session, names }: { effects: EffectsState; session: SessionSnapshot; names: Names } = $props();
@@ -65,6 +66,9 @@
       <span>{mode.text}</span>
     </p>
   </div>
+  {#if typeof effects.mode === "object"}
+    <AcrossMode view={effects.mode.AcrossSetup.view} flow={effects.mode.AcrossSetup.flow} />
+  {/if}
   {#if !stoppable}
     <p id="stop-none" class="note">Stop is off. No PrismForge effect runs on these targets.</p>
   {/if}

@@ -3,6 +3,7 @@ mod generated;
 mod group_fixtures;
 mod lifecycle_fixtures;
 mod profile_fixtures;
+mod setup_fixtures;
 mod support;
 
 use std::io;
@@ -354,6 +355,9 @@ async fn committed_fixtures_match_real_sessions() {
     profile_fixtures::generate(&mut profiles, &mut errors).await;
     let mut lifecycles = Module::new("LifecycleView");
     lifecycle_fixtures::generate(&mut lifecycles, &mut errors).await;
+    let mut setups = setup_fixtures::SetupModules::new();
+    setup_fixtures::generate(&mut setups, &mut sessions, &mut live, &mut errors).await;
+    setup_fixtures::geometry(&generated);
 
     generated.write("sessions.ts", &sessions.render());
     generated.write("outcomes.ts", &outcomes.render());
@@ -371,5 +375,8 @@ async fn committed_fixtures_match_real_sessions() {
     generated.write("imports.ts", &profiles.imports.render());
     generated.write("views.ts", &profiles.views.render());
     generated.write("lifecycles.ts", &lifecycles.render());
+    generated.write("setups.ts", &setups.setups.render());
+    generated.write("acrossReports.ts", &setups.reports.render());
+    generated.write("acrossPreviews.ts", &setups.previews.render());
     generated.compare_or_update();
 }

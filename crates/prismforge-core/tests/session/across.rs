@@ -48,6 +48,7 @@ fn strips(devices: &[(&str, u32)]) -> Setup {
                 first: FirstLed::AtStart,
                 extra: Map::new(),
             }),
+            frame: None,
             extra: Map::new(),
         });
         setup.outputs.push(SetupOutput {
@@ -74,6 +75,7 @@ fn strips(devices: &[(&str, u32)]) -> Setup {
         id: view_id(),
         name: "Desk".into(),
         placements,
+        outlines: Vec::new(),
         extra: Map::new(),
     });
     setup

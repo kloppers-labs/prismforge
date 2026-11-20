@@ -42,7 +42,8 @@ impl PlacedTarget {
 }
 
 /// Why there is no plan; nothing was placed or allocated for it.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, serde::Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum PlanError {
     #[error("the setup has no view {view}")]
     UnknownView { view: ViewId },

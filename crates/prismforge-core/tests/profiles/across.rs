@@ -52,6 +52,7 @@ fn desk() -> Setup {
                 first: FirstLed::AtStart,
                 extra: Map::new(),
             }),
+            frame: None,
             extra: Map::new(),
         });
         setup.outputs.push(SetupOutput {
@@ -78,6 +79,7 @@ fn desk() -> Setup {
         id: view(),
         name: "Desk".into(),
         placements,
+        outlines: Vec::new(),
         extra: Map::new(),
     });
     setup

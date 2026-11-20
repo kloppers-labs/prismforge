@@ -9,7 +9,7 @@ use crate::setup::problem::SetupProblem;
 
 /// One output against the devices of today, matched by its stored reference only; `problem` says why its parts do not fit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "SetupOutputStatus"))]
 pub struct OutputStatus {
     pub output: OutputId,
     pub target: OutputTarget,

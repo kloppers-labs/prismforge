@@ -2,6 +2,7 @@
 
 pub mod lifecycle;
 pub mod logged;
+pub mod setups;
 pub mod temp;
 
 use std::time::Duration;

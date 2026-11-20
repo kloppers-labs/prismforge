@@ -126,6 +126,7 @@ pub fn component(id: &str, geometry: Geometry) -> Component {
         id: component_id(id),
         name: id.trim_start_matches("c-").into(),
         geometry,
+        frame: None,
         extra: Map::new(),
     }
 }
@@ -164,6 +165,7 @@ pub fn view(id: &str, placements: Vec<Placement>) -> View {
         id: view_id(id),
         name: "PC".into(),
         placements,
+        outlines: Vec::new(),
         extra: Map::new(),
     }
 }

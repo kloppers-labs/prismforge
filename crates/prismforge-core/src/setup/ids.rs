@@ -40,3 +40,4 @@ macro_rules! setup_id {
 setup_id!(ComponentId, "c-");
 setup_id!(OutputId, "o-");
 setup_id!(ViewId, "v-");
+setup_id!(OutlineId, "u-");

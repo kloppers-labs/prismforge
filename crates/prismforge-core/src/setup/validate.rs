@@ -15,6 +15,10 @@ pub const OUTPUT_LIMIT: usize = MAX_BATCH_TARGETS;
 pub const VIEW_LIMIT: usize = 16;
 /// Most branches one output has.
 pub const BRANCH_LIMIT: usize = 16;
+/// Smallest and largest side of a frame, in percent of the LEDs' longer side.
+pub const FRAME_LIMITS: (u16, u16) = (10, 1000);
+/// Largest side of an unlit outline, in view units.
+pub const OUTLINE_SIZE_LIMIT: u32 = 4000;
 const TEXT_LIMIT: usize = 256;
 
 impl Setup {
@@ -30,7 +34,12 @@ impl Setup {
         self.check_ids()?;
         for component in &self.components {
             check_name(&component.name)?;
-            if !component.geometry.is_valid() {
+            let frame = component.frame.as_ref().is_none_or(|frame| {
+                [frame.width, frame.height]
+                    .iter()
+                    .all(|side| (FRAME_LIMITS.0..=FRAME_LIMITS.1).contains(side))
+            });
+            if !component.geometry.is_valid() || !frame {
                 return Err(SetupProblem::InvalidGeometry {
                     component: component.id.clone(),
                 });
@@ -131,8 +140,13 @@ impl Setup {
             .views
             .iter()
             .map(|item| (item.id.is_valid(), item.id.as_str()));
+        let outlines = self
+            .views
+            .iter()
+            .flat_map(|view| &view.outlines)
+            .map(|item| (item.id.is_valid(), item.id.as_str()));
         let mut seen = BTreeSet::new();
-        for (valid, id) in components.chain(outputs).chain(views) {
+        for (valid, id) in components.chain(outputs).chain(views).chain(outlines) {
             if !valid {
                 return Err(SetupProblem::InvalidId { id: id.to_owned() });
             }
@@ -209,6 +223,21 @@ impl Setup {
                     return Err(SetupProblem::InvalidPlacement {
                         view: view.id.clone(),
                         component: component.clone(),
+                    });
+                }
+            }
+            limit(view.outlines.len(), COMPONENT_LIMIT, SetupPart::Outlines)?;
+            for outline in &view.outlines {
+                check_name(&outline.name)?;
+                let sides = [outline.width, outline.height];
+                if sides
+                    .iter()
+                    .any(|side| !(1..=OUTLINE_SIZE_LIMIT).contains(side))
+                    || outline.rotation >= 360
+                {
+                    return Err(SetupProblem::InvalidOutline {
+                        view: view.id.clone(),
+                        outline: outline.id.clone(),
                     });
                 }
             }

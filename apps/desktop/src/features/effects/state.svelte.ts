@@ -2,6 +2,7 @@ import { api, type Answer, type Failure } from "../../lib/api/client";
 import type { DeviceRef } from "../../lib/api/bindings/DeviceRef";
 import type { EffectCatalog } from "../../lib/api/bindings/EffectCatalog";
 import type { OutputTarget } from "../../lib/api/bindings/OutputTarget";
+import type { SessionSnapshot } from "../../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../../lib/api/bindings/ShellView";
 import type { Names } from "../../lib/names";
 import { serverName } from "../connection/wording";
@@ -15,6 +16,9 @@ import {
 } from "./feedback";
 import type { BatchReport } from "../../lib/api/bindings/BatchReport";
 import type { EffectInstance } from "../../lib/api/bindings/EffectInstance";
+import type { AcrossReport } from "../../lib/api/bindings/AcrossReport";
+import type { ApplyMode } from "../../lib/api/bindings/ApplyMode";
+import type { SetupOutputStatus } from "../../lib/api/bindings/SetupOutputStatus";
 import { isLive } from "../devices/present";
 import { applyBlocked, applyingText, deviceOf, runningOn, sameTarget, targetName } from "./present";
 import { retryable } from "./retry";
@@ -22,6 +26,13 @@ import { addRange, effective, selectAll, toggle } from "./selection";
 import { check, initialFields, parseHex, problemText, START_COLOR, toHex, type Field, type Fields } from "./values";
 
 const REAPPLY_DELAY_MS = 300;
+const SPLIT_TEXT = {
+  mixed: "These targets run in different modes: some across the setup, some on each device. Select targets of one mode, or stop them first.",
+  pictures: "These targets run across the setup on different views or flows. Select targets of one view and flow, or stop them first.",
+  zones: "Its zones run an effect across the setup. An effect on the whole device would end that picture on them. Select its zones to keep it, or stop them first.",
+} as const;
+
+type Across = Extract<ApplyMode, { AcrossSetup: unknown }>["AcrossSetup"];
 
 function deviceHold(device: DeviceRef): string {
   return `device|${device}`;
@@ -35,11 +46,23 @@ export function targetsKey(targets: OutputTarget[]): string {
   return targets.map((target) => `${target.device}|${target.zone ?? "all"}`).join(",");
 }
 
+/** The mode the selected targets run in; a picture across the setup keeps its view and flow on every re-apply. */
+export type Mode = ApplyMode | keyof typeof SPLIT_TEXT;
+
 /** The result of the last command sent to several targets, or of Stop all. */
 export type BatchFeedback =
-  | { kind: "applied"; label: string; instance: EffectInstance; report: BatchReport }
+  | { kind: "applied"; label: string; instance: EffectInstance; report: BatchReport; across?: Across; excluded?: SetupOutputStatus[] }
   | { kind: "stopped"; all: boolean; report: BatchReport }
   | { kind: "failed"; error: Failure };
+
+/** A whole device with no effect of its own whose zones run one across the setup. */
+function zonesAcross(session: SessionSnapshot, target: OutputTarget): boolean {
+  return (
+    target.zone === null &&
+    runningOn(session, target) === null &&
+    session.output.scene.assignments.some((assignment) => assignment.target.device === target.device && typeof assignment.mode === "object")
+  );
+}
 
 export class EffectsState {
   catalog = $state<EffectCatalog | null>(null);
@@ -83,16 +106,36 @@ export class EffectsState {
     const session = this.view().session;
     return session && this.target ? runningOn(session, this.target) : null;
   });
+  mode = $derived.by((): Mode => {
+    const session = this.view().session;
+    if (!session) {
+      return "EachDevice";
+    }
+    if (this.targets.some((target) => zonesAcross(session, target))) {
+      return "zones";
+    }
+    const modes = this.targets.map((target) => runningOn(session, target)?.mode ?? "EachDevice");
+    const first = modes[0] ?? "EachDevice";
+    if (modes.every((mode) => JSON.stringify(mode) === JSON.stringify(first))) {
+      return first;
+    }
+    return modes.every((mode) => typeof mode === "object") ? "pictures" : "mixed";
+  });
+  split = $derived(typeof this.mode === "string" && this.mode !== "EachDevice" ? SPLIT_TEXT[this.mode] : null);
   blocked = $derived.by(() => {
     const session = this.view().session;
     if (this.several) {
-      return applyingText(this.view()) ?? (session && isLive(session) ? null : "PrismForge is not connected. Effects can start again after it reconnects.");
+      return (
+        applyingText(this.view()) ??
+        (session && isLive(session) ? null : "PrismForge is not connected. Effects can start again after it reconnects.") ??
+        this.split
+      );
     }
     const device = session && this.target ? deviceOf(session, this.target) : null;
     if (!session || !this.target || !device) {
       return "This device is not in the device list.";
     }
-    return applyingText(this.view()) ?? applyBlocked(session, device, this.target.zone);
+    return applyingText(this.view()) ?? applyBlocked(session, device, this.target.zone) ?? this.split;
   });
   allRun = $derived.by(() => {
     const session = this.view().session;
@@ -349,12 +392,22 @@ export class EffectsState {
       return;
     }
     this.working = "apply";
-    const answer = await this.call(
-      skipped.map((target) => target.device),
-      () => api.applyEffectBatch(skipped, batch.instance),
-    );
-    this.working = null;
-    this.afterBatch(answer, (report) => ({ kind: "applied", label: batch.label, instance: batch.instance, report }));
+    const across = batch.across;
+    if (across) {
+      const answer = await this.call(
+        skipped.map((target) => target.device),
+        () => api.applyAcross(across.view, across.flow, batch.instance, skipped),
+      );
+      this.working = null;
+      this.afterAcross(answer, batch.label, batch.instance, across);
+    } else {
+      const answer = await this.call(
+        skipped.map((target) => target.device),
+        () => api.applyEffectBatch(skipped, batch.instance),
+      );
+      this.working = null;
+      this.afterBatch(answer, (report) => ({ kind: "applied", label: batch.label, instance: batch.instance, report }));
+    }
     this.press(this.targets);
   }
 
@@ -407,6 +460,11 @@ export class EffectsState {
     if (!target || !instance || !definition) {
       return;
     }
+    const mode = this.mode;
+    if (typeof mode === "object") {
+      await this.sendAcross([target], instance, definition.label, mode.AcrossSetup);
+      return;
+    }
     this.working = "apply";
     const answer = await this.call([target.device], () => api.applyEffect(target, instance));
     this.working = null;
@@ -440,6 +498,14 @@ export class EffectsState {
     if (targets.length === 0 || !instance || !definition) {
       return;
     }
+    const mode = this.mode;
+    if (this.split !== null) {
+      return;
+    }
+    if (typeof mode === "object") {
+      await this.sendAcross(targets, instance, definition.label, mode.AcrossSetup);
+      return;
+    }
     this.working = "apply";
     const answer = await this.call(
       targets.map((target) => target.device),
@@ -455,6 +521,32 @@ export class EffectsState {
       this.edited = [];
     }
     this.afterBatch(answer, (report) => ({ kind: "applied", label: definition.label, instance, report }));
+  }
+
+  /** Sends the targets their effect across the view and flow they run in, never as each device. */
+  private async sendAcross(targets: OutputTarget[], instance: EffectInstance, label: string, across: Across) {
+    this.working = "apply";
+    const answer = await this.call(
+      targets.map((target) => target.device),
+      () => api.applyAcross(across.view, across.flow, instance, targets),
+    );
+    this.working = null;
+    if (answer.ok) {
+      this.rustProblems = {};
+      this.edited = [];
+    }
+    this.afterAcross(answer, label, instance, across);
+  }
+
+  private afterAcross(answer: Answer<AcrossReport>, label: string, instance: EffectInstance, across: Across) {
+    if (answer.ok) {
+      this.changed();
+      this.modeResult = null;
+      this.effectResult = null;
+      this.batch = { kind: "applied", label, instance, report: answer.value.report, across, excluded: answer.value.excluded };
+    } else {
+      this.batch = { kind: "failed", error: answer.error };
+    }
   }
 
   private afterBatch(answer: Answer<BatchReport>, feedback: (report: BatchReport) => BatchFeedback) {

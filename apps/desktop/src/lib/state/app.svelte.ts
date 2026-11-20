@@ -7,11 +7,13 @@ import { GroupsState } from "../../features/effects/groups.svelte";
 import { EffectsState } from "../../features/effects/state.svelte";
 import { ProfilesState } from "../../features/profiles/state.svelte";
 import { LifecycleState } from "../../features/settings/state.svelte";
+import { AcrossState } from "../../features/setup/across.svelte";
+import { SetupState } from "../../features/setup/state.svelte";
 import { isLive } from "../../features/devices/present";
 
 export type Work = "connect" | "demo" | "disconnect" | "refresh";
 
-export type Screen = "devices" | "effects" | "profiles" | "settings";
+export type Screen = "devices" | "effects" | "setup" | "profiles" | "settings";
 
 export type IdentifyTarget = { device: DeviceRef; zone: number | null };
 
@@ -39,6 +41,13 @@ export class AppState {
   readonly profiles = new ProfilesState();
   readonly lifecycle = new LifecycleState();
   readonly groups = new GroupsState();
+  readonly setup = new SetupState(() => this.view.session);
+  readonly across = new AcrossState(
+    () => this.view,
+    this.setup,
+    () => this.effects.catalog,
+    () => this.profiles.refreshSoon(),
+  );
   readonly effects = new EffectsState(
     () => this.view,
     () => this.profiles.names,
