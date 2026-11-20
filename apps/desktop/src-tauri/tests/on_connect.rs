@@ -426,7 +426,11 @@ async fn a_failed_delete_of_the_rules_profile_publishes_the_state_again_and_the_
         matches!(deleted, Err(CommandError::Store(StoreError::Remove { .. }))),
         "{deleted:?}"
     );
-    assert!(armed("Glow")(&shell.view()), "{:?}", shell.view().on_connect);
+    assert!(
+        armed("Glow")(&shell.view()),
+        "{:?}",
+        shell.view().on_connect
+    );
     drop(controls);
 }
 

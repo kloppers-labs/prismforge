@@ -1,10 +1,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use crate::automation::Automation;
+use crate::automation::{Automation, SESSION_END_LIMIT};
 use crate::publisher::ViewSink;
 use crate::shell::Shell;
-use crate::system_events::EventSupport;
 
 /// Holds the first exit request until the shell has stopped; later requests pass.
 #[derive(Default)]
@@ -74,8 +73,8 @@ pub async fn end_of_session<S: ViewSink>(
         return true;
     }
     let started = tokio::time::Instant::now();
-    if automation.support() == EventSupport::Available {
-        automation.at_session_end(shell).await;
+    if automation.support().delivers_events() {
+        let _ = tokio::time::timeout(SESSION_END_LIMIT, automation.at_session_end(shell)).await;
     }
     stop_within(shell, LAST_STOP_LIMIT.saturating_sub(started.elapsed())).await
 }

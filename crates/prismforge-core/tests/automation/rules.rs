@@ -81,29 +81,19 @@ fn only_a_switched_on_connects_rule_with_a_profile_is_a_mark() {
 }
 
 #[test]
-fn lights_off_is_only_for_sleep_session_end_and_quit() {
+fn every_event_allows_every_action_this_version_knows() {
     for trigger in Trigger::ALL {
-        let checked = on(RuleAction::LightsOff).check(trigger);
-        match trigger {
-            Trigger::Sleeps | Trigger::SessionEnds | Trigger::Quits => {
-                assert_eq!(checked, Ok(()), "{trigger:?}");
-            }
-            _ => assert_eq!(
-                checked,
-                Err(RuleProblem::LightsOffNotForThisEvent),
-                "{trigger:?}"
-            ),
-        }
+        assert_eq!(on(RuleAction::LightsOff).check(), Ok(()), "{trigger:?}");
         let profile = on(RuleAction::ApplyProfile { profile: id("p-a") });
-        assert_eq!(profile.check(trigger), Ok(()), "{trigger:?}");
-        assert_eq!(on(RuleAction::Nothing).check(trigger), Ok(()));
+        assert_eq!(profile.check(), Ok(()), "{trigger:?}");
+        assert_eq!(on(RuleAction::Nothing).check(), Ok(()));
     }
 }
 
 #[test]
 fn an_action_from_a_newer_version_cannot_be_set() {
     assert_eq!(
-        on(RuleAction::Newer).check(Trigger::Sleeps),
+        on(RuleAction::Newer).check(),
         Err(RuleProblem::NeedsNewerPrismForge)
     );
 }

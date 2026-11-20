@@ -4,6 +4,7 @@ import type { OpenRgbCheck } from "./OpenRgbCheck";
 import type { ProfileChoice } from "./ProfileChoice";
 import type { RuleView } from "./RuleView";
 import type { StoreKind } from "./StoreKind";
+import type { StoreNotice } from "./StoreNotice";
 
 /**
  * Everything the Automation screen shows: one rule per event, in a fixed order.
@@ -16,4 +17,8 @@ support: EventSupport, rules: Array<RuleView>,
 /**
  * The profiles a rule can apply, by name.
  */
-profiles: Array<ProfileChoice>, openrgb: OpenRgbCheck, };
+profiles: Array<ProfileChoice>, openrgb: OpenRgbCheck, 
+/**
+ * What the store could not do with the run file, such as a failed write of a run.
+ */
+notices: Array<StoreNotice>, };

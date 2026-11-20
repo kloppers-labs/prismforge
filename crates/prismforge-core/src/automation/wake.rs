@@ -12,11 +12,11 @@ pub const WAKE_BACKOFF: [Duration; 4] = [
     Duration::from_secs(2),
     Duration::from_secs(4),
 ];
-/// PrismForge stops waiting for OpenRGB this long after a wake.
+/// PrismForge stops waiting for OpenRGB and for the devices this long after a wake.
 pub const WAKE_RECONNECT_LIMIT: Duration = Duration::from_secs(30);
 /// Time between two reads of the device list while the devices come back.
 pub const WAKE_SETTLE_INTERVAL: Duration = Duration::from_secs(1);
-/// The device list is used as it is once this much time has passed, even if it still changes.
+/// The device list is used as it is once this much time has passed, or at the wake's deadline, even if it still changes.
 pub const WAKE_SETTLE_LIMIT: Duration = Duration::from_secs(15);
 
 /// The session after a wake, as the wake sequence sees it.
@@ -54,7 +54,8 @@ pub async fn wait_after_wake<T: WakeTarget>(target: &T, before: &[DeviceRef]) ->
                 waited: started.elapsed(),
             };
         }
-        let Some((devices, settled)) = settle(target).await else {
+        let deadline = started + WAKE_RECONNECT_LIMIT;
+        let Some((devices, settled)) = settle(target, deadline).await else {
             continue;
         };
         let missing = before
@@ -88,18 +89,19 @@ async fn reach<T: WakeTarget>(target: &T, started: Instant, tries: &mut usize) -
 }
 
 /// `None` when the connection was lost again while reading.
-async fn settle<T: WakeTarget>(target: &T) -> Option<(Vec<DeviceRef>, bool)> {
-    let started = Instant::now();
+async fn settle<T: WakeTarget>(target: &T, deadline: Instant) -> Option<(Vec<DeviceRef>, bool)> {
+    let stop = deadline.min(Instant::now() + WAKE_SETTLE_LIMIT);
     let mut last = sorted(target.devices().await);
     let mut known = last.clone();
     loop {
         if last.is_none() && !target.is_live().await {
             return None;
         }
-        if started.elapsed() >= WAKE_SETTLE_LIMIT {
+        let now = Instant::now();
+        if now >= stop {
             return Some((known.unwrap_or_default(), false));
         }
-        sleep(WAKE_SETTLE_INTERVAL.min(WAKE_SETTLE_LIMIT.saturating_sub(started.elapsed()))).await;
+        sleep(WAKE_SETTLE_INTERVAL.min(stop - now)).await;
         let next = sorted(target.devices().await);
         if next.is_some() && next == last {
             return Some((next.unwrap_or_default(), true));

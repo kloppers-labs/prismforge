@@ -66,7 +66,8 @@ export const demoNoRules: AutomationView = {
       "name": "Demo glow"
     }
   ],
-  "openrgb": "CannotTell"
+  "openrgb": "CannotTell",
+  "notices": []
 };
 
 export const demoNotOnThisSystem: AutomationView = {
@@ -134,10 +135,84 @@ export const demoNotOnThisSystem: AutomationView = {
       "name": "Demo glow"
     }
   ],
-  "openrgb": "CannotTell"
+  "openrgb": "CannotTell",
+  "notices": []
 };
 
-export const openRgbSleepAndWake: AutomationView = {
+export const demoEventsFailed: AutomationView = {
+  "store": "Demo",
+  "support": {
+    "Failed": {
+      "detail": "the event window could not be created: Access is denied."
+    }
+  },
+  "rules": [
+    {
+      "trigger": "Starts",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Connects",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Sleeps",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Wakes",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "SessionEnds",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Quits",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    }
+  ],
+  "profiles": [
+    {
+      "id": "p-0000000000000100",
+      "name": "Demo glow"
+    }
+  ],
+  "openrgb": "CannotTell",
+  "notices": []
+};
+
+export const openRgbSleepFailed: AutomationView = {
   "store": "Real",
   "support": "Available",
   "rules": [
@@ -165,22 +240,27 @@ export const openRgbSleepAndWake: AutomationView = {
       "action": "LightsOff",
       "profile": null,
       "problem": null,
-      "last_run": null,
+      "last_run": {
+        "trigger": "Sleeps",
+        "at_ms": 1795000000000,
+        "outcome": {
+          "Failed": {
+            "failure": {
+              "TimedOut": {
+                "limit_ms": 1000
+              }
+            }
+          }
+        },
+        "seen": false
+      },
       "openrgb_also": []
     },
     {
       "trigger": "Wakes",
-      "enabled": true,
-      "action": {
-        "ApplyProfile": {
-          "profile": "p-0000000000000101"
-        }
-      },
-      "profile": {
-        "Ready": {
-          "name": "Evening"
-        }
-      },
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
       "problem": null,
       "last_run": null,
       "openrgb_also": []
@@ -239,7 +319,251 @@ export const openRgbSleepAndWake: AutomationView = {
         }
       }
     }
-  }
+  },
+  "notices": []
+};
+
+export const openRgbRunNotWritten: AutomationView = {
+  "store": "Real",
+  "support": "Available",
+  "rules": [
+    {
+      "trigger": "Starts",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Connects",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Sleeps",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Wakes",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "SessionEnds",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Quits",
+      "enabled": true,
+      "action": "LightsOff",
+      "profile": null,
+      "problem": null,
+      "last_run": {
+        "trigger": "Quits",
+        "at_ms": 1795000000000,
+        "outcome": {
+          "LightsOff": {
+            "report": {
+              "devices": [
+                {
+                  "device": "dev-e87858a20206b8d3",
+                  "name": "Fixture Keyboard",
+                  "outcome": {
+                    "Skipped": {
+                      "reason": "NoDirectOrOffMode"
+                    }
+                  }
+                },
+                {
+                  "device": "dev-5ae0445e22cbba19",
+                  "name": "Fixture Strip",
+                  "outcome": "Black"
+                }
+              ]
+            }
+          }
+        },
+        "seen": false
+      },
+      "openrgb_also": []
+    }
+  ],
+  "profiles": [
+    {
+      "id": "p-0000000000000102",
+      "name": "Evening"
+    }
+  ],
+  "openrgb": {
+    "Read": {
+      "profiles": {
+        "open": {
+          "enabled": false,
+          "name": ""
+        },
+        "exit": {
+          "enabled": false,
+          "name": ""
+        },
+        "resume": {
+          "enabled": false,
+          "name": ""
+        },
+        "suspend": {
+          "enabled": false,
+          "name": ""
+        },
+        "service_startup": {
+          "enabled": false,
+          "name": ""
+        },
+        "service_shutdown": {
+          "enabled": false,
+          "name": ""
+        }
+      }
+    }
+  },
+  "notices": [
+    {
+      "file": "rule-runs.json",
+      "event": {
+        "WriteFailed": {
+          "failure": {
+            "file": "rule-runs.json",
+            "step": "Replace",
+            "detail": "Access is denied. (os error 5)"
+          }
+        }
+      }
+    }
+  ]
+};
+
+export const openRgbSleepAndWake: AutomationView = {
+  "store": "Real",
+  "support": "Available",
+  "rules": [
+    {
+      "trigger": "Starts",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Connects",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Sleeps",
+      "enabled": true,
+      "action": "LightsOff",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Wakes",
+      "enabled": true,
+      "action": {
+        "ApplyProfile": {
+          "profile": "p-0000000000000103"
+        }
+      },
+      "profile": {
+        "Ready": {
+          "name": "Evening"
+        }
+      },
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "SessionEnds",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    },
+    {
+      "trigger": "Quits",
+      "enabled": false,
+      "action": "Nothing",
+      "profile": null,
+      "problem": null,
+      "last_run": null,
+      "openrgb_also": []
+    }
+  ],
+  "profiles": [
+    {
+      "id": "p-0000000000000103",
+      "name": "Evening"
+    }
+  ],
+  "openrgb": {
+    "Read": {
+      "profiles": {
+        "open": {
+          "enabled": false,
+          "name": ""
+        },
+        "exit": {
+          "enabled": false,
+          "name": ""
+        },
+        "resume": {
+          "enabled": false,
+          "name": ""
+        },
+        "suspend": {
+          "enabled": false,
+          "name": ""
+        },
+        "service_startup": {
+          "enabled": false,
+          "name": ""
+        },
+        "service_shutdown": {
+          "enabled": false,
+          "name": ""
+        }
+      }
+    }
+  },
+  "notices": []
 };
 
 export const openRgbAfterSleepAndWake: AutomationView = {
@@ -294,7 +618,8 @@ export const openRgbAfterSleepAndWake: AutomationView = {
               ]
             }
           }
-        }
+        },
+        "seen": false
       },
       "openrgb_also": []
     },
@@ -303,7 +628,7 @@ export const openRgbAfterSleepAndWake: AutomationView = {
       "enabled": true,
       "action": {
         "ApplyProfile": {
-          "profile": "p-0000000000000101"
+          "profile": "p-0000000000000103"
         }
       },
       "profile": {
@@ -317,7 +642,7 @@ export const openRgbAfterSleepAndWake: AutomationView = {
         "at_ms": 1795000000000,
         "outcome": {
           "Applied": {
-            "profile": "p-0000000000000101",
+            "profile": "p-0000000000000103",
             "name": "Evening",
             "report": {
               "frame_rate": {
@@ -340,9 +665,11 @@ export const openRgbAfterSleepAndWake: AutomationView = {
                 }
               ]
             },
-            "missing": []
+            "missing": [],
+            "not_kept": null
           }
-        }
+        },
+        "seen": false
       },
       "openrgb_also": []
     },
@@ -367,7 +694,7 @@ export const openRgbAfterSleepAndWake: AutomationView = {
   ],
   "profiles": [
     {
-      "id": "p-0000000000000101",
+      "id": "p-0000000000000103",
       "name": "Evening"
     }
   ],
@@ -400,7 +727,8 @@ export const openRgbAfterSleepAndWake: AutomationView = {
         }
       }
     }
-  }
+  },
+  "notices": []
 };
 
 export const openRgbDeletedProfile: AutomationView = {
@@ -439,7 +767,7 @@ export const openRgbDeletedProfile: AutomationView = {
       "enabled": true,
       "action": {
         "ApplyProfile": {
-          "profile": "p-0000000000000102"
+          "profile": "p-0000000000000104"
         }
       },
       "profile": "Missing",
@@ -496,7 +824,8 @@ export const openRgbDeletedProfile: AutomationView = {
         }
       }
     }
-  }
+  },
+  "notices": []
 };
 
 export const openRgbAlsoActs: AutomationView = {
@@ -540,7 +869,7 @@ export const openRgbAlsoActs: AutomationView = {
       "enabled": true,
       "action": {
         "ApplyProfile": {
-          "profile": "p-0000000000000103"
+          "profile": "p-0000000000000105"
         }
       },
       "profile": {
@@ -578,7 +907,7 @@ export const openRgbAlsoActs: AutomationView = {
   ],
   "profiles": [
     {
-      "id": "p-0000000000000103",
+      "id": "p-0000000000000105",
       "name": "Evening"
     }
   ],
@@ -611,7 +940,8 @@ export const openRgbAlsoActs: AutomationView = {
         }
       }
     }
-  }
+  },
+  "notices": []
 };
 
 export const openRgbMigratedConnects: AutomationView = {
@@ -632,7 +962,7 @@ export const openRgbMigratedConnects: AutomationView = {
       "enabled": true,
       "action": {
         "ApplyProfile": {
-          "profile": "p-0000000000000104"
+          "profile": "p-0000000000000106"
         }
       },
       "profile": {
@@ -646,7 +976,7 @@ export const openRgbMigratedConnects: AutomationView = {
         "at_ms": 1795000000000,
         "outcome": {
           "Applied": {
-            "profile": "p-0000000000000104",
+            "profile": "p-0000000000000106",
             "name": "Evening",
             "report": {
               "frame_rate": {
@@ -669,9 +999,11 @@ export const openRgbMigratedConnects: AutomationView = {
                 }
               ]
             },
-            "missing": []
+            "missing": [],
+            "not_kept": null
           }
-        }
+        },
+        "seen": false
       },
       "openrgb_also": []
     },
@@ -714,7 +1046,7 @@ export const openRgbMigratedConnects: AutomationView = {
   ],
   "profiles": [
     {
-      "id": "p-0000000000000104",
+      "id": "p-0000000000000106",
       "name": "Evening"
     }
   ],
@@ -747,5 +1079,6 @@ export const openRgbMigratedConnects: AutomationView = {
         }
       }
     }
-  }
+  },
+  "notices": []
 };

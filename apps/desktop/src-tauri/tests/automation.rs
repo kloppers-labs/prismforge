@@ -11,12 +11,15 @@ use prismforge_core::profile::ProfileId;
 use prismforge_core::session::{ReconnectPolicy, SessionConfig};
 use prismforge_core::{DeviceRef, OutputTarget, Rgb};
 use prismforge_desktop::{
-    Automation, Dispatcher, EventSupport, ExitGuard, LAST_STOP_LIMIT, OpenRgbCheck, RuleProfile,
-    Shell, ShellConfig, Stores, SystemEvent, end_of_session, platform_source, quit_with_rule,
+    Automation, Dispatcher, EventSink, EventSupport, ExitGuard, LAST_STOP_LIMIT, OpenRgbCheck,
+    RuleProfile, Shell, ShellConfig, Stores, SystemEvent, end_of_session, platform_source,
+    quit_with_rule,
 };
 use prismforge_effects::EffectInstance;
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
-use prismforge_testkit::{DemoBackend, DemoControls, DemoOutput, FakeServer, FixtureDevice};
+use prismforge_testkit::{
+    DemoBackend, DemoControls, DemoOutput, FakeServer, FixtureDevice, FixtureMode, wire,
+};
 use tokio::time::Instant;
 
 use support::events::FakeEvents;
@@ -76,7 +79,10 @@ fn wire(shell: &Arc<Shell<Recorder>>, automation: &Arc<Automation>) -> FakeEvent
         let (shell, automation) = (shell.clone(), automation.clone());
         Box::pin(async move { automation.on_event(&shell, event).await })
     });
-    events.source().start(Arc::new(dispatcher));
+    assert_eq!(
+        events.source().start(Arc::new(dispatcher)),
+        EventSupport::Available
+    );
     events
 }
 
@@ -347,7 +353,17 @@ async fn without_session_events_on_this_system_the_end_of_a_session_runs_no_rule
 #[cfg(not(windows))]
 #[test]
 fn macos_and_linux_say_that_sleep_wake_and_session_end_are_not_reported() {
-    assert_eq!(platform_source().support(), EventSupport::NotOnThisSystem);
+    let sink = Dispatcher::new(
+        tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .handle()
+            .clone(),
+        |_| Box::pin(async {}),
+    );
+    assert_eq!(
+        platform_source().start(Arc::new(sink)),
+        EventSupport::NotOnThisSystem
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -442,4 +458,210 @@ async fn the_screen_says_when_openrgb_also_acts_on_an_event() {
     );
     assert!(server.received_with_id(252).is_empty());
     assert!(server.received_with_id(253).is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn both_session_end_signals_share_one_run_and_the_stop_restores_nothing_over_it() {
+    let dir = TempDir::new("session-end-both");
+    let (shell, recorder) = shell_on(&dir);
+    let automation = Arc::new(Automation::new(EventSupport::Available));
+    let controls = demo(&shell, &recorder).await;
+    shell.apply_effect(gpu(), rainbow()).await.expect("effect");
+    automation
+        .set_rule(&shell, Trigger::SessionEnds, true, RuleAction::LightsOff)
+        .await
+        .expect("rule");
+    let events = wire(&shell, &automation);
+
+    let _window = events.fire(SystemEvent::SessionEnd);
+    tokio::task::yield_now().await;
+    assert!(end_of_session(&shell, &automation, &ExitGuard::default()).await);
+
+    assert!(matches!(
+        shell.view().rule_run.map(|run| run.outcome),
+        Some(RunOutcome::LightsOff { .. })
+    ));
+    assert!(
+        controls
+            .outputs()
+            .iter()
+            .all(|output| !matches!(output, DemoOutput::ModeReapplied { .. })),
+        "the stop restored a device over the session-end rule"
+    );
+    let dark = gpu_frames(&controls).last().cloned().expect("a frame");
+    assert!(dark.iter().all(|color| *color == Rgb::new(0, 0, 0)));
+}
+
+fn direct_strip(label: &str) -> FixtureDevice {
+    strip(label)
+        .modes(vec![FixtureMode::direct(), FixtureMode::breathing()])
+        .active_mode(0)
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_wake_rule_sets_direct_mode_again_after_the_devices_settled() {
+    let dir = TempDir::new("wake-full-write");
+    let server = FakeServer::new();
+    server.add_device(0, direct_strip("a"));
+    let (shell, recorder, automation) = openrgb_with_wake_rule(&dir, &server).await;
+    let events = wire(&shell, &automation);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    events.fire(SystemEvent::Wake);
+    ran(&recorder, Trigger::Wakes).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let ids: Vec<u32> = server
+        .received()
+        .iter()
+        .map(|packet| packet.packet_id)
+        .collect();
+    let last_read = ids
+        .iter()
+        .rposition(|id| *id == wire::REQUEST_CONTROLLER_COUNT)
+        .expect("a device read");
+    let last_direct = ids
+        .iter()
+        .rposition(|id| *id == wire::SET_CUSTOM_MODE)
+        .expect("direct mode");
+    assert!(
+        last_direct > last_read,
+        "Direct Mode was not set after the settle"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_wake_without_a_sleep_names_no_device_from_an_older_list() {
+    let dir = TempDir::new("wake-no-sleep");
+    let server = FakeServer::new();
+    server.add_device(0, strip("a"));
+    server.add_device(1, strip("b"));
+    let (shell, recorder, automation) = openrgb_with_wake_rule(&dir, &server).await;
+    let events = wire(&shell, &automation);
+    events.fire(SystemEvent::Sleep);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    server.restart(vec![(0, strip("a").into())]);
+    events.fire(SystemEvent::Wake);
+    let first = ran(&recorder, Trigger::Wakes).await;
+
+    events.fire(SystemEvent::Wake);
+    let second = recorder
+        .wait_view(|view| {
+            view.rule_run
+                .as_ref()
+                .is_some_and(|run| run.trigger == Trigger::Wakes && *run != first)
+        })
+        .await
+        .rule_run
+        .expect("a run");
+
+    let RunOutcome::Applied { missing, .. } = &second.outcome else {
+        panic!("applied expected: {second:?}");
+    };
+    assert!(missing.is_empty(), "{missing:?}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_connects_rule_can_switch_the_lights_off() {
+    let dir = TempDir::new("connect-dark");
+    let (shell, recorder) = shell_on(&dir);
+    let automation = Automation::new(EventSupport::Available);
+    demo(&shell, &recorder).await;
+    automation
+        .set_rule(&shell, Trigger::Connects, true, RuleAction::LightsOff)
+        .await
+        .expect("rule");
+    shell.stop().await;
+
+    let backend = DemoBackend::new();
+    let controls = backend.controls();
+    shell.start(backend).await.expect("start");
+    let connected = ran(&recorder, Trigger::Connects).await;
+
+    assert!(matches!(connected.outcome, RunOutcome::LightsOff { .. }));
+    let dark = gpu_frames(&controls).last().cloned().expect("a frame");
+    assert!(dark.iter().all(|color| *color == Rgb::new(0, 0, 0)));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_profile_marked_by_an_earlier_version_applies_at_the_connect_at_start() {
+    let dir = TempDir::new("migrated-launch");
+    let server = FakeServer::new();
+    server.add_device(0, strip("a"));
+    let (shell, recorder, _) = openrgb_with_wake_rule(&dir, &server).await;
+    let id = shell.create_profile("Evening").await.expect("save").id;
+    shell.stop().await;
+    drop(shell);
+    let settings = serde_json::json!({
+        "format": "prismforge.settings",
+        "schema_version": {"major": 1, "minor": 0},
+        "apply_on_connect": id.as_str(),
+    });
+    std::fs::write(
+        dir.path().join("store").join("settings.json"),
+        serde_json::to_vec(&settings).expect("json"),
+    )
+    .expect("write");
+    drop(recorder);
+    let (shell, recorder) = shell_on(&dir);
+    let before = server.color_writes().len();
+
+    shell
+        .start_at_launch(openrgb(&server))
+        .await
+        .expect("launch");
+    let connected = ran(&recorder, Trigger::Connects).await;
+
+    assert!(matches!(&connected.outcome, RunOutcome::Applied { name, .. } if name == "Evening"));
+    server.wait_for_color_writes(before + 1).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_seam_that_could_not_start_says_so_and_no_session_end_rule_runs() {
+    let dir = TempDir::new("seam-failed");
+    let (shell, recorder) = shell_on(&dir);
+    let events = FakeEvents::failing("the event window could not be created");
+    let support = events.source().start(Arc::new(Dispatcher::new(
+        tokio::runtime::Handle::current(),
+        |_| Box::pin(async {}),
+    )));
+    let automation = Automation::new(support);
+    demo(&shell, &recorder).await;
+    automation
+        .set_rule(&shell, Trigger::SessionEnds, true, RuleAction::LightsOff)
+        .await
+        .expect("rule");
+
+    assert_eq!(
+        automation.view(&shell).await.expect("view").support,
+        EventSupport::Failed {
+            detail: "the event window could not be created".into()
+        }
+    );
+    assert!(end_of_session(&shell, &automation, &ExitGuard::default()).await);
+    assert_eq!(shell.view().rule_run, None);
+}
+
+#[test]
+fn the_event_thread_waits_for_work_only_as_long_as_its_limit() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_time()
+        .build()
+        .expect("runtime");
+    let dispatcher = Dispatcher::new(runtime.handle().clone(), |event| match event {
+        SystemEvent::Sleep => Box::pin(std::future::pending()),
+        _ => Box::pin(async {}),
+    });
+    let limit = Duration::from_millis(50);
+
+    let started = std::time::Instant::now();
+    assert!(!dispatcher.event(SystemEvent::Sleep).wait(limit));
+    let waited = started.elapsed();
+    assert!(waited >= limit && waited < limit * 10, "{waited:?}");
+    assert!(
+        dispatcher
+            .event(SystemEvent::Wake)
+            .wait(Duration::from_secs(5))
+    );
 }

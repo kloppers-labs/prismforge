@@ -1,5 +1,6 @@
 use prismforge_core::automation::{OpenRgbAct, RuleAction, RuleProblem, RuleRun, Trigger};
 use prismforge_core::profile::ProfileId;
+use prismforge_core::store::StoreNotice;
 use serde::Serialize;
 
 use crate::automation::OpenRgbCheck;
@@ -21,6 +22,8 @@ pub struct AutomationView {
     /// The profiles a rule can apply, by name.
     pub profiles: Vec<ProfileChoice>,
     pub openrgb: OpenRgbCheck,
+    /// What the store could not do with the run file, such as a failed write of a run.
+    pub notices: Vec<StoreNotice>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -55,6 +58,8 @@ pub struct ProfileChoice {
     pub id: ProfileId,
     pub name: String,
 }
+
+const RUN_FILE: &str = "rule-runs.json";
 
 pub(crate) async fn build<S: ViewSink>(
     shell: &Shell<S>,
@@ -111,7 +116,7 @@ pub(crate) async fn build<S: ViewSink>(
                 enabled: rule.enabled,
                 action: rule.action.clone(),
                 profile,
-                problem: rule.check(trigger).err(),
+                problem: rule.check().err(),
                 last_run: runs.iter().find(|run| run.trigger == trigger).cloned(),
                 openrgb_also: match &openrgb {
                     OpenRgbCheck::Read { profiles } => profiles.acting_on(trigger),
@@ -120,11 +125,17 @@ pub(crate) async fn build<S: ViewSink>(
             }
         })
         .collect();
+    let notices = summary
+        .notices
+        .into_iter()
+        .filter(|notice| notice.file == RUN_FILE)
+        .collect();
     Ok(AutomationView {
         store: kind,
         support,
         rules,
         profiles: choices,
         openrgb,
+        notices,
     })
 }

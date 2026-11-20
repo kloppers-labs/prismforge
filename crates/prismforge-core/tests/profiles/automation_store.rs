@@ -152,7 +152,7 @@ fn an_older_version_keeps_the_rules_it_does_not_know() {
     let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
     store
         .set_rule(Trigger::Wakes, lights_off())
-        .expect_err("refused");
+        .expect("set wake rule");
     store
         .set_rule(Trigger::Quits, lights_off())
         .expect("set quit rule");
@@ -167,7 +167,7 @@ fn an_older_version_keeps_the_rules_it_does_not_know() {
 }
 
 #[test]
-fn a_rule_must_name_a_profile_the_store_has_and_an_action_its_event_allows() {
+fn a_rule_must_name_a_profile_the_store_has_and_an_action_this_version_knows() {
     let (dir, id) = earlier_store("rule-checks", false);
     let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
     assert_eq!(
@@ -179,12 +179,20 @@ fn a_rule_must_name_a_profile_the_store_has_and_an_action_its_event_allows() {
             id: ProfileId::parse("p-none").expect("id")
         })
     );
+    let newer = Rule {
+        enabled: true,
+        action: RuleAction::Newer,
+        ..Rule::default()
+    };
     assert_eq!(
-        store.set_rule(Trigger::Connects, lights_off()),
+        store.set_rule(Trigger::Connects, newer),
         Err(StoreError::InvalidRule {
-            problem: RuleProblem::LightsOffNotForThisEvent
+            problem: RuleProblem::NeedsNewerPrismForge
         })
     );
+    store
+        .set_rule(Trigger::Connects, lights_off())
+        .expect("lights off when PrismForge connects");
     store.set_rule(Trigger::Wakes, apply(&id)).expect("set");
     assert_eq!(*store.rules().rule(Trigger::Wakes), apply(&id));
 }
@@ -247,7 +255,32 @@ fn failed(trigger: Trigger, at_ms: u64) -> RuleRun {
         outcome: RunOutcome::Failed {
             failure: RunFailure::TimedOut { limit_ms: 1000 },
         },
+        seen: false,
     }
+}
+
+#[test]
+fn a_run_is_unseen_until_the_user_saw_it_and_that_is_kept() {
+    let dir = TempDir::new("rule-runs-seen");
+    let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
+    store
+        .record_run(failed(Trigger::Sleeps, 1))
+        .expect("record");
+    store
+        .record_run(failed(Trigger::SessionEnds, 2))
+        .expect("record");
+    store.mark_runs_seen(&[Trigger::Sleeps]).expect("seen");
+
+    let reopened = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
+    let seen: Vec<(Trigger, bool)> = reopened
+        .runs()
+        .iter()
+        .map(|run| (run.trigger, run.seen))
+        .collect();
+    assert_eq!(
+        seen,
+        [(Trigger::Sleeps, true), (Trigger::SessionEnds, false)]
+    );
 }
 
 #[test]
@@ -283,4 +316,37 @@ fn a_damaged_run_file_is_set_aside_and_never_blocks_the_store() {
     );
     store.record_run(failed(Trigger::Quits, 5)).expect("record");
     assert_eq!(store.runs(), [failed(Trigger::Quits, 5)]);
+}
+
+/// The settings type of PrismForge before rules: the mark and whatever it does not know.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct EarlierSettings {
+    apply_on_connect: Option<ProfileId>,
+    #[serde(flatten)]
+    extra: serde_json::Map<String, Value>,
+}
+
+#[test]
+fn rules_survive_a_read_and_write_by_the_earlier_settings_type() {
+    let (dir, id) = earlier_store("earlier-round-trip", true);
+    {
+        let mut store = ProfileStore::open(dir.path(), StdFileOps).expect("open");
+        store
+            .set_rule(Trigger::Sleeps, lights_off())
+            .expect("sleep");
+    }
+    let mut fields = stored(&dir, SETTINGS);
+    let object = fields.as_object_mut().expect("object");
+    object.remove("format");
+    object.remove("schema_version");
+    let earlier: EarlierSettings = serde_json::from_value(fields).expect("earlier shape");
+    let mut written = serde_json::to_value(&earlier).expect("encode");
+    let object = written.as_object_mut().expect("object");
+    object.insert("format".into(), json!("prismforge.settings"));
+    object.insert("schema_version".into(), json!({"major": 1, "minor": 0}));
+    dir.write(SETTINGS, &serde_json::to_vec(&written).expect("json"));
+
+    let store = ProfileStore::open(dir.path(), StdFileOps).expect("reopen");
+    assert_eq!(*store.rules().rule(Trigger::Sleeps), lights_off());
+    assert_eq!(*store.rules().rule(Trigger::Connects), apply(&id));
 }

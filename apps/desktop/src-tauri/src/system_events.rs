@@ -23,12 +23,26 @@ pub enum SystemEvent {
     SessionEnd,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum EventSupport {
     Available,
+    /// The events arrive, but part of the set-up failed; `detail` says which and what it costs.
+    Limited {
+        detail: String,
+    },
+    /// The source could not start, so no sleep, wake or session-end event arrives.
+    Failed {
+        detail: String,
+    },
     /// This system's source does not report sleep, wake and session end yet.
     NotOnThisSystem,
+}
+
+impl EventSupport {
+    pub fn delivers_events(&self) -> bool {
+        matches!(self, Self::Available | Self::Limited { .. })
+    }
 }
 
 /// Takes the events of a source; the source decides how long it waits for each [`Done`].
@@ -37,10 +51,8 @@ pub trait EventSink: Send + Sync + 'static {
 }
 
 pub trait EventSource {
-    fn support(&self) -> EventSupport;
-
-    /// Starts delivering events to `sink` until the process ends.
-    fn start(self: Box<Self>, sink: Arc<dyn EventSink>);
+    /// Starts delivering events to `sink` until the process ends, and says whether that worked.
+    fn start(self: Box<Self>, sink: Arc<dyn EventSink>) -> EventSupport;
 }
 
 /// Finishes when the work for one event finished or gave up at its own limit.

@@ -9,4 +9,8 @@ export type RuleRun = { trigger: Trigger,
 /**
  * Milliseconds since the Unix epoch.
  */
-at_ms: number, outcome: RunOutcome, };
+at_ms: number, outcome: RunOutcome, 
+/**
+ * False until the user saw a failed run on the screen or in its notice.
+ */
+seen: boolean, };

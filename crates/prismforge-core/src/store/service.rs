@@ -262,6 +262,24 @@ impl Profiles {
         self.with(move |store| store.record_run(run)).await
     }
 
+    pub async fn mark_runs_seen(&self, triggers: Vec<Trigger>) -> Result<(), StoreError> {
+        self.with(move |store| store.mark_runs_seen(&triggers))
+            .await
+    }
+
+    /// Keeps a failed background write as a notice of the store, as the registry does.
+    pub async fn note_write_failure(&self, error: StoreError) {
+        if let StoreError::Write(failure) = error {
+            self.with(move |store| {
+                store.note(StoreNotice {
+                    file: failure.file.clone(),
+                    event: NoticeEvent::WriteFailed { failure },
+                });
+            })
+            .await;
+        }
+    }
+
     /// Applies profile `id` now; while not connected only a profile marked to apply on connect waits.
     pub async fn apply(
         &self,

@@ -234,3 +234,29 @@ async fn demo_mode_cannot_tell_what_openrgb_does_and_a_stopped_session_says_so()
     let refused: Result<_, OutputError> = handle.lights_off(Default::default()).await;
     assert!(refused.is_ok());
 }
+
+#[tokio::test(start_paused = true)]
+async fn lights_off_that_arrives_after_its_time_writes_nothing() {
+    let server = three_devices();
+    let handle = connected_openrgb(&server).await;
+    let plan = plan_lights_off(&handle.snapshot().devices);
+    let before = output_packets(&server).len();
+    let past = std::time::SystemTime::now() - Duration::from_secs(1);
+
+    let report = handle
+        .lights_off_until(plan, past)
+        .await
+        .expect("lights off");
+
+    assert!(report.devices.iter().all(|device| matches!(
+        device.outcome,
+        LightsOffOutcome::Skipped {
+            reason: LightsOffSkip::TooLate
+        } | LightsOffOutcome::Skipped { .. }
+    )));
+    assert!(report.devices.iter().any(|device| device.outcome
+        == LightsOffOutcome::Skipped {
+            reason: LightsOffSkip::TooLate
+        }));
+    assert_eq!(output_packets(&server).len(), before);
+}

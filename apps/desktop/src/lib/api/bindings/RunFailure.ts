@@ -3,4 +3,4 @@ import type { OutputError } from "./OutputError";
 import type { ProfileId } from "./ProfileId";
 import type { StoreError } from "./StoreError";
 
-export type RunFailure = { "ProfileMissing": { profile: ProfileId, } } | { "ProfileNeedsNewer": { profile: ProfileId, } } | "Busy" | "NotConnected" | { "TimedOut": { limit_ms: number, } } | { "OpenRgbNotBack": { waited_ms: number, } } | { "Output": { error: OutputError, } } | { "Store": { error: StoreError, } };
+export type RunFailure = { "ProfileMissing": { profile: ProfileId, } } | { "ProfileNeedsNewer": { profile: ProfileId, } } | "Busy" | "NotConnected" | "TooLate" | { "TimedOut": { limit_ms: number, } } | { "OpenRgbNotBack": { waited_ms: number, } } | { "Output": { error: OutputError, } } | { "Store": { error: StoreError, } } | { "StoreUnavailable": { detail: string, } };

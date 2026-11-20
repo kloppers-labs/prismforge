@@ -115,6 +115,8 @@ pub enum CommandError {
         limit: usize,
     },
     ProfileApplying,
+    /// An automation rule is switching the lights off; it ends within a second or two.
+    RuleRunning,
     NotConnected,
     Store(StoreError),
     StoreUnavailable(StoreUnavailable),

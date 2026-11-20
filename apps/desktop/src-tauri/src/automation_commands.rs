@@ -24,3 +24,12 @@ pub async fn set_rule(
 ) -> Result<AutomationView, CommandError> {
     marks::set_rule(&shell, &lifecycle, &automation, trigger, enabled, action).await
 }
+
+#[tauri::command]
+pub async fn mark_runs_seen(
+    shell: State<'_, DesktopShell>,
+    automation: State<'_, DesktopAutomation>,
+    triggers: Vec<Trigger>,
+) -> Result<AutomationView, CommandError> {
+    automation.mark_runs_seen(&shell, triggers).await
+}

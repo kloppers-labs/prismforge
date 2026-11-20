@@ -50,6 +50,7 @@
     "allow-dismiss-store-notice",
     "allow-automation",
     "allow-set-rule",
+    "allow-mark-runs-seen",
     "allow-lifecycle",
     "allow-change-setting",
     "allow-answer-close",

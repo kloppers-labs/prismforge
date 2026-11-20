@@ -1,7 +1,9 @@
 #![allow(unsafe_code)]
 
+use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, OnceLock};
 use std::thread;
+use std::time::Duration;
 
 use windows::Win32::Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -19,36 +21,82 @@ use crate::automation::{SESSION_END_LIMIT, SLEEP_LIMIT};
 
 /// In the "application first" range, so Windows closes PrismForge before an OpenRGB at the default 0x280.
 const SHUTDOWN_LEVEL: u32 = 0x300;
+/// How long the app waits for the event window to come up at start.
+const START_LIMIT: Duration = Duration::from_secs(2);
 const CLASS: PCWSTR = w!("PrismForgeSystemEvents");
 
 static SINK: OnceLock<Arc<dyn EventSink>> = OnceLock::new();
+
+/// What the event window reports once it is up: `None`, or a part that failed and what it costs.
+type Started = Result<Option<String>, String>;
 
 /// A hidden window on its own thread with its own message loop; it never shows and never blocks a shutdown.
 pub struct WindowsSource;
 
 impl EventSource for WindowsSource {
-    fn support(&self) -> EventSupport {
-        EventSupport::Available
-    }
-
-    fn start(self: Box<Self>, sink: Arc<dyn EventSink>) {
+    fn start(self: Box<Self>, sink: Arc<dyn EventSink>) -> EventSupport {
         if SINK.set(sink).is_err() {
-            return;
+            return EventSupport::Failed {
+                detail: "the event window was already started".into(),
+            };
         }
-        unsafe {
-            let _ = SetProcessShutdownParameters(SHUTDOWN_LEVEL, 0);
-        }
-        let _ = thread::Builder::new()
+        let level = unsafe { SetProcessShutdownParameters(SHUTDOWN_LEVEL, 0) }.err();
+        let (report, started) = sync_channel(1);
+        let spawned = thread::Builder::new()
             .name("system-events".into())
-            .spawn(pump);
+            .spawn(move || pump(&report));
+        if let Err(error) = spawned {
+            return EventSupport::Failed {
+                detail: format!("the event thread could not start: {error}"),
+            };
+        }
+        let window = started
+            .recv_timeout(START_LIMIT)
+            .unwrap_or_else(|_| Err("the event window did not start in time".into()));
+        let level = level.map(|error| {
+            format!("Windows may close OpenRGB before PrismForge at shutdown: {error}")
+        });
+        match window {
+            Err(detail) => EventSupport::Failed { detail },
+            Ok(limited) => match limited
+                .into_iter()
+                .chain(level)
+                .reduce(|a, b| format!("{a} {b}"))
+            {
+                Some(detail) => EventSupport::Limited { detail },
+                None => EventSupport::Available,
+            },
+        }
     }
 }
 
-fn pump() {
-    unsafe {
-        let Ok(module) = GetModuleHandleW(None) else {
+fn pump(report: &SyncSender<Started>) {
+    let window = match create_window() {
+        Ok(window) => window,
+        Err(detail) => {
+            let _ = report.send(Err(detail));
             return;
-        };
+        }
+    };
+    let registered =
+        unsafe { RegisterSuspendResumeNotification(HANDLE(window.0), DEVICE_NOTIFY_WINDOW_HANDLE) };
+    let limited = registered
+        .err()
+        .map(|error| format!("Sleep may not be reported on PCs with Modern Standby: {error}"));
+    let _ = report.send(Ok(limited));
+    let mut message = MSG::default();
+    while unsafe { GetMessageW(&mut message, None, 0, 0) }.0 > 0 {
+        unsafe {
+            let _ = TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+    }
+}
+
+fn create_window() -> Result<HWND, String> {
+    unsafe {
+        let module =
+            GetModuleHandleW(None).map_err(|error| format!("no module handle: {error}"))?;
         let class = WNDCLASSW {
             lpfnWndProc: Some(window_proc),
             hInstance: module.into(),
@@ -56,9 +104,12 @@ fn pump() {
             ..Default::default()
         };
         if RegisterClassW(&class) == 0 {
-            return;
+            return Err(format!(
+                "the window class could not be registered: {}",
+                windows::core::Error::from_thread()
+            ));
         }
-        let Ok(window) = CreateWindowExW(
+        CreateWindowExW(
             WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
             CLASS,
             w!("PrismForge system events"),
@@ -71,16 +122,8 @@ fn pump() {
             None,
             Some(module.into()),
             None,
-        ) else {
-            return;
-        };
-        let _registration =
-            RegisterSuspendResumeNotification(HANDLE(window.0), DEVICE_NOTIFY_WINDOW_HANDLE);
-        let mut message = MSG::default();
-        while GetMessageW(&mut message, None, 0, 0).as_bool() {
-            let _ = TranslateMessage(&message);
-            DispatchMessageW(&message);
-        }
+        )
+        .map_err(|error| format!("the event window could not be created: {error}"))
     }
 }
 

@@ -26,11 +26,6 @@ impl Trigger {
         Self::SessionEnds,
         Self::Quits,
     ];
-
-    /// Switching the lights off is for events after which the lights should stay dark.
-    pub fn allows_lights_off(self) -> bool {
-        matches!(self, Self::Sleeps | Self::SessionEnds | Self::Quits)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -49,8 +44,6 @@ pub enum RuleAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum RuleProblem {
-    #[error("switching the lights off is not an action for this event")]
-    LightsOffNotForThisEvent,
     #[error("this action needs a newer PrismForge")]
     NeedsNewerPrismForge,
 }
@@ -66,20 +59,17 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub fn check(&self, trigger: Trigger) -> Result<(), RuleProblem> {
+    pub fn check(&self) -> Result<(), RuleProblem> {
         match self.action {
             RuleAction::Newer => Err(RuleProblem::NeedsNewerPrismForge),
-            RuleAction::LightsOff if !trigger.allows_lights_off() => {
-                Err(RuleProblem::LightsOffNotForThisEvent)
-            }
             _ => Ok(()),
         }
     }
 
     /// The action to run now, if the rule is on and this version can run it.
-    pub fn due(&self, trigger: Trigger) -> Option<&RuleAction> {
+    pub fn due(&self) -> Option<&RuleAction> {
         let runnable = self.enabled && self.action != RuleAction::Nothing;
-        (runnable && self.check(trigger).is_ok()).then_some(&self.action)
+        (runnable && self.check().is_ok()).then_some(&self.action)
     }
 }
 
@@ -177,7 +167,7 @@ impl Rules {
 
     /// The profile the connects rule applies, written beside the rules for versions that know only the mark.
     pub fn mark(&self) -> Option<&ProfileId> {
-        match self.connects.due(Trigger::Connects) {
+        match self.connects.due() {
             Some(RuleAction::ApplyProfile { profile }) => Some(profile),
             _ => None,
         }

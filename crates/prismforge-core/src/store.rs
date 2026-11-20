@@ -279,7 +279,7 @@ impl ProfileStore {
 
     /// Replaces the rule for `trigger`; a rule switched on must name a profile the store has now.
     pub fn set_rule(&mut self, trigger: Trigger, rule: Rule) -> Result<(), StoreError> {
-        rule.check(trigger)
+        rule.check()
             .map_err(|problem| StoreError::InvalidRule { problem })?;
         if let (true, RuleAction::ApplyProfile { profile }) = (rule.enabled, &rule.action) {
             self.profile(profile)?;
@@ -310,6 +310,17 @@ impl ProfileStore {
     /// Keeps the run in memory, then writes it; a failed write is returned and the run is still shown.
     pub fn record_run(&mut self, run: RuleRun) -> Result<(), StoreError> {
         self.runs.record(run);
+        self.write_runs()
+    }
+
+    pub fn mark_runs_seen(&mut self, triggers: &[Trigger]) -> Result<(), StoreError> {
+        if !self.runs.mark_seen(triggers) {
+            return Ok(());
+        }
+        self.write_runs()
+    }
+
+    fn write_runs(&mut self) -> Result<(), StoreError> {
         let file = self.runs_file();
         self.unlocked(&file, self.runs_lock.as_ref())?;
         let bytes = envelope::seal(RULE_RUNS_FORMAT, Map::new(), &self.runs);

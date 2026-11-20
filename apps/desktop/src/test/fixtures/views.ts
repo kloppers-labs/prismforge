@@ -2279,9 +2279,11 @@ export const viewConnectApplied: ShellView = {
             }
           ]
         },
-        "missing": []
+        "missing": [],
+        "not_kept": null
       }
-    }
+    },
+    "seen": false
   }
 };
 
@@ -2789,9 +2791,11 @@ export const viewFiredRetrying: ShellView = {
             }
           ]
         },
-        "missing": []
+        "missing": [],
+        "not_kept": null
       }
-    }
+    },
+    "seen": false
   }
 };
 
@@ -2906,8 +2910,10 @@ export const viewStoppedArmed: ShellView = {
             }
           ]
         },
-        "missing": []
+        "missing": [],
+        "not_kept": null
       }
-    }
+    },
+    "seen": false
   }
 };

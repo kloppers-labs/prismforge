@@ -180,6 +180,7 @@ pub(crate) enum OutputCommand {
     },
     LightsOff {
         plan: LightsOffPlan,
+        not_after: Option<std::time::SystemTime>,
         reply: Reply<LightsOffReport, OutputError>,
     },
     KeepLights {
@@ -442,7 +443,28 @@ impl SessionHandle {
         &self,
         plan: LightsOffPlan,
     ) -> impl Future<Output = Result<LightsOffReport, OutputError>> + Send + use<> {
-        self.send(move |reply| Command::Output(OutputCommand::LightsOff { plan, reply }))
+        self.send(move |reply| {
+            Command::Output(OutputCommand::LightsOff {
+                plan,
+                not_after: None,
+                reply,
+            })
+        })
+    }
+
+    /// Like [`Self::lights_off`]; a session that reaches it after `not_after` writes nothing, also across a system sleep.
+    pub fn lights_off_until(
+        &self,
+        plan: LightsOffPlan,
+        not_after: std::time::SystemTime,
+    ) -> impl Future<Output = Result<LightsOffReport, OutputError>> + Send + use<> {
+        self.send(move |reply| {
+            Command::Output(OutputCommand::LightsOff {
+                plan,
+                not_after: Some(not_after),
+                reply,
+            })
+        })
     }
 
     /// Writes each effect's due frame once, then ends every effect where it is, so nothing is restored.

@@ -157,8 +157,12 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
                 }
                 self.answer(reply, Ok(()));
             }
-            OutputCommand::LightsOff { plan, reply } => {
-                let report = self.lights_off(plan).await;
+            OutputCommand::LightsOff {
+                plan,
+                not_after,
+                reply,
+            } => {
+                let report = self.lights_off(plan, not_after).await;
                 self.answer(reply, Ok(report));
             }
             OutputCommand::KeepLights { reply } => {

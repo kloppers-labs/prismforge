@@ -20,5 +20,6 @@ thiserror = "=2.0.21"
 ts-rs = { version = "=12.0.1", features = ["no-serde-warnings"] }
 tokio = { version = "=1.54.1", default-features = false }
 
+# Denied, not forbidden, so the Win32 module of the desktop app can allow it; `tests/unsafe_code.rs` keeps it to that file.
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"

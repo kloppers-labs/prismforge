@@ -439,6 +439,10 @@ fn cases() -> Vec<Case> {
             )
             .await
         }),
+        case!("mark_runs_seen", "sleep and session end", |f| f
+            .automation
+            .mark_runs_seen(&f.shell, vec![Trigger::Sleeps, Trigger::SessionEnds])
+            .await),
         case!("set_rule", "unknown profile at wake", |f| {
             let action = RuleAction::ApplyProfile {
                 profile: f.unknown.clone(),

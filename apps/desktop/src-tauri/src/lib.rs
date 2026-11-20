@@ -36,8 +36,9 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 
 pub use automation::{
-    Automation, AutomationView, OpenRgbCheck, ProfileChoice, QUIT_RULE_LIMIT, RULE_LOCK_WAIT,
-    RuleProfile, RuleView, SESSION_END_LIMIT, SLEEP_LIMIT, WAKE_APPLY_LIMIT,
+    Automation, AutomationView, OpenRgbCheck, ProfileChoice, QUIT_RULE_LIMIT, RECORD_LIMIT,
+    RULE_LOCK_WAIT, RuleProfile, RuleView, SESSION_END_LIMIT, SLEEP_LIMIT, WAKE_APPLY_LIMIT,
+    WAKE_STEP_LIMIT,
 };
 pub use effects::{EffectCatalog, preview_effect};
 pub use exit::{
@@ -108,9 +109,8 @@ pub fn run() {
                 stores,
             ));
             app.manage(ExitGuard::default());
-            let events = platform_source();
-            app.manage(Automation::new(events.support()));
-            events.start(Arc::new(dispatcher(handle.clone())));
+            let support = platform_source().start(Arc::new(dispatcher(handle.clone())));
+            app.manage(Automation::new(support));
             let lifecycle = Lifecycle::new(
                 native::LifecycleWindowSink(handle.clone()),
                 SystemStartEntry,
@@ -180,6 +180,7 @@ pub fn run() {
             profile_commands::dismiss_store_notice,
             automation_commands::automation,
             automation_commands::set_rule,
+            automation_commands::mark_runs_seen,
             lifecycle_commands::lifecycle,
             lifecycle_commands::change_setting,
             lifecycle_commands::answer_close,
@@ -214,8 +215,12 @@ fn dispatcher(app: AppHandle) -> Dispatcher {
     Dispatcher::new(runtime, move |event| {
         let app = app.clone();
         Box::pin(async move {
-            let shell = app.state::<DesktopShell>();
-            let automation = app.state::<DesktopAutomation>();
+            let (Some(shell), Some(automation)) = (
+                app.try_state::<DesktopShell>(),
+                app.try_state::<DesktopAutomation>(),
+            ) else {
+                return;
+            };
             automation.on_event(&shell, event).await;
         })
     })

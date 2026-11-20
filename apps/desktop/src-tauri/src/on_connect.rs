@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-use prismforge_core::automation::{RuleAction, RuleRun, RunFailure, RunOutcome, Trigger};
+use prismforge_core::automation::{RuleAction, Rules, RunFailure, RunOutcome, Trigger};
 use prismforge_core::profile::{ApplyError, ProfileId};
 use prismforge_core::session::SessionHandle;
 use prismforge_core::store::{ApplyOutcome, ConnectTrigger, Profiles};
 use tokio::sync::Mutex;
 
 use crate::apply_lock::ApplyLock;
-use crate::automation::{OpenRgbChecks, now_ms};
+use crate::automation::OpenRgbChecks;
+use crate::automation::run::{lights_off, publish, record, run_of};
 use crate::publisher::{Publisher, ViewSink};
 use crate::view::{ApplyingProfile, ConnectApply, ConnectOutcome, MarkProblem, Marked, OnConnect};
 
@@ -92,13 +93,8 @@ impl<S: ViewSink> Report<S> {
 /// The profile the next live session applies: at launch the starts rule if it applies one, else the connects rule.
 pub(crate) async fn marked(profiles: &Profiles, launch: bool) -> Option<Mark> {
     let rules = profiles.rules().await;
-    let starts = match rules.rule(Trigger::Starts).due(Trigger::Starts) {
-        Some(RuleAction::ApplyProfile { profile }) if launch => Some(profile.clone()),
-        _ => None,
-    };
-    let (trigger, id) = match starts {
-        Some(id) => (Trigger::Starts, id),
-        None => (Trigger::Connects, rules.mark()?.clone()),
+    let (trigger, RuleAction::ApplyProfile { profile: id }) = due_rule(&rules, launch)? else {
+        return None;
     };
     let summary = profiles.summary(None).await;
     if let Some(profile) = summary.profiles.iter().find(|profile| profile.id == id) {
@@ -112,7 +108,17 @@ pub(crate) async fn marked(profiles: &Profiles, launch: bool) -> Option<Mark> {
     Some(Mark::Unreadable(trigger, id, problem))
 }
 
-/// Runs beside one session: applies the rule's profile once each time the session becomes live.
+/// The rule that runs when the session becomes live: at launch the starts rule if it is on, else the connects rule.
+fn due_rule(rules: &Rules, launch: bool) -> Option<(Trigger, RuleAction)> {
+    let due = |trigger: Trigger| rules.rule(trigger).due().cloned();
+    let starts = launch.then(|| due(Trigger::Starts)).flatten();
+    match starts {
+        Some(action) => Some((Trigger::Starts, action)),
+        None => Some((Trigger::Connects, due(Trigger::Connects)?)),
+    }
+}
+
+/// Runs beside one session: runs the starts or connects rule once each time the session becomes live.
 pub(crate) async fn apply_on_connect<S: ViewSink>(
     report: Arc<Report<S>>,
     handle: SessionHandle,
@@ -127,7 +133,16 @@ pub(crate) async fn apply_on_connect<S: ViewSink>(
         let snapshot = updates.borrow_and_update().clone();
         if trigger.due(&snapshot) {
             checks.refresh(&handle).await;
-            let ran = apply_marked(&report, launch, &handle, &lock, &publisher).await;
+            let rules = report.profiles.rules().await;
+            let ran = match due_rule(&rules, launch) {
+                Some((rule, RuleAction::LightsOff)) => {
+                    let outcome = lights_off(&lock, &handle, None, &|| false).await;
+                    record(&report.profiles, run_of(rule, outcome.clone())).await;
+                    publish(&publisher, run_of(rule, outcome));
+                    None
+                }
+                _ => apply_marked(&report, launch, &handle, &lock, &publisher).await,
+            };
             launch = false;
             report.set(Phase::Fired { ran }).await;
         } else if !trigger.fired() {
@@ -170,18 +185,15 @@ async fn apply_marked<S: ViewSink>(
             name: name.clone().unwrap_or_default(),
             report: report.clone(),
             missing: Vec::new(),
+            not_kept: None,
         },
         Err(error) => RunOutcome::Failed {
             failure: RunFailure::of_apply(&id, error.clone()),
         },
     };
-    let run = RuleRun {
-        trigger: rule,
-        at_ms: now_ms(),
-        outcome,
-    };
-    let _ = report.profiles.record_run(run.clone()).await;
-    publisher.set_rule_run(run);
+    let run = run_of(rule, outcome);
+    record(&report.profiles, run.clone()).await;
+    publish(publisher, run);
     let outcome = match applied {
         Ok(report) => ConnectOutcome::Applied { report },
         Err(error) => ConnectOutcome::Failed { error },

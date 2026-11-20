@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use prismforge_effects::Rgb;
 use tokio::time::Instant;
 
@@ -34,10 +36,19 @@ impl<B: RgbBackend + Send + 'static> Session<B> {
         }
     }
 
-    pub(super) async fn lights_off(&mut self, plan: LightsOffPlan) -> LightsOffReport {
+    pub(super) async fn lights_off(
+        &mut self,
+        plan: LightsOffPlan,
+        not_after: Option<SystemTime>,
+    ) -> LightsOffReport {
         let mut devices = plan.skipped;
         for step in plan.steps {
-            let outcome = self.switch_off(&step).await;
+            let late = not_after.is_some_and(|limit| SystemTime::now() > limit);
+            let outcome = if late {
+                skipped(LightsOffSkip::TooLate)
+            } else {
+                self.switch_off(&step).await
+            };
             devices.push(DeviceLightsOff {
                 device: Some(step.device),
                 name: step.name,

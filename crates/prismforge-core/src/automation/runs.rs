@@ -13,6 +13,9 @@ pub struct RuleRun {
     /// Milliseconds since the Unix epoch.
     pub at_ms: u64,
     pub outcome: RunOutcome,
+    /// False until the user saw a failed run on the screen or in its notice.
+    #[serde(default)]
+    pub seen: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +27,9 @@ pub enum RunOutcome {
         report: ApplyReport,
         /// Devices that were there before a sleep and did not come back in time.
         missing: Vec<String>,
+        /// Why the profile's last frame could not be kept as PrismForge ended; the stop may put back the earlier lighting.
+        #[serde(default)]
+        not_kept: Option<OutputError>,
     },
     LightsOff {
         report: LightsOffReport,
@@ -46,6 +52,8 @@ pub enum RunFailure {
     /// PrismForge was applying a profile for the user and the rule did not wait longer.
     Busy,
     NotConnected,
+    /// The event was over before the rule could write, for example a wake came first; nothing was written.
+    TooLate,
     /// The work did not finish within the time the event allows.
     TimedOut {
         limit_ms: u64,
@@ -59,6 +67,10 @@ pub enum RunFailure {
     },
     Store {
         error: StoreError,
+    },
+    /// The store could not be opened, so PrismForge could not read its rules and none ran.
+    StoreUnavailable {
+        detail: String,
     },
 }
 
@@ -87,6 +99,17 @@ pub(crate) struct RunLog {
 }
 
 impl RunLog {
+    pub fn mark_seen(&mut self, triggers: &[Trigger]) -> bool {
+        let mut changed = false;
+        for run in &mut self.runs {
+            if triggers.contains(&run.trigger) && !run.seen {
+                run.seen = true;
+                changed = true;
+            }
+        }
+        changed
+    }
+
     pub fn record(&mut self, run: RuleRun) {
         match self
             .runs

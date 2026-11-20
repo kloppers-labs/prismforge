@@ -67,6 +67,8 @@ pub enum LightsOffSkip {
         label: String,
     },
     Identifying,
+    /// The event's time had passed when the session came to it, so nothing was written.
+    TooLate,
 }
 
 pub fn plan_lights_off(devices: &[SessionDevice]) -> LightsOffPlan {

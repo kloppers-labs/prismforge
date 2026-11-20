@@ -13,6 +13,7 @@ use tokio::time::Instant;
 struct Scripted {
     started: Instant,
     live_after: Duration,
+    down: Option<(Duration, Duration)>,
     reads: Mutex<Vec<Option<Vec<&'static str>>>>,
     reconnects: AtomicUsize,
     read_at: Mutex<Vec<Duration>>,
@@ -23,6 +24,7 @@ impl Scripted {
         Self {
             started: Instant::now(),
             live_after,
+            down: None,
             reads: Mutex::new(reads),
             reconnects: AtomicUsize::new(0),
             read_at: Mutex::new(Vec::new()),
@@ -32,7 +34,9 @@ impl Scripted {
 
 impl WakeTarget for Scripted {
     async fn is_live(&self) -> bool {
-        self.started.elapsed() >= self.live_after
+        let now = self.started.elapsed();
+        let down = self.down.is_some_and(|(from, to)| now >= from && now < to);
+        now >= self.live_after && !down
     }
 
     async fn reconnect(&self) {
@@ -41,6 +45,9 @@ impl WakeTarget for Scripted {
 
     async fn devices(&self) -> Option<Vec<DeviceRef>> {
         self.read_at.lock().unwrap().push(self.started.elapsed());
+        if !self.is_live().await {
+            return None;
+        }
         let mut reads = self.reads.lock().unwrap();
         let next = if reads.len() > 1 {
             reads.remove(0)
@@ -162,4 +169,42 @@ async fn openrgb_that_never_answers_gives_up_at_the_cap() {
     );
     assert_eq!(started.elapsed(), WAKE_RECONNECT_LIMIT);
     assert!(target.read_at.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn waiting_for_openrgb_and_for_the_devices_share_one_deadline() {
+    let target = Scripted::new(
+        Duration::from_secs(25),
+        (0..40)
+            .map(|round| {
+                Some(if round % 2 == 0 {
+                    vec!["a"]
+                } else {
+                    vec!["a", "b"]
+                })
+            })
+            .collect(),
+    );
+    let started = Instant::now();
+    let ready = wait_after_wake(&target, &refs(&["a", "b"])).await;
+    assert_eq!(started.elapsed(), WAKE_RECONNECT_LIMIT);
+    assert!(matches!(ready, WakeReady::Ready { settled: false, .. }));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_connection_lost_while_the_devices_settle_is_reached_again_inside_the_deadline() {
+    let mut target = Scripted::new(Duration::ZERO, vec![Some(vec!["a"])]);
+    target.down = Some((Duration::from_millis(500), Duration::from_secs(4)));
+    let started = Instant::now();
+    let ready = wait_after_wake(&target, &refs(&["a"])).await;
+    assert!(started.elapsed() < WAKE_RECONNECT_LIMIT);
+    assert!(target.reconnects.load(Ordering::SeqCst) > 0);
+    assert_eq!(
+        ready,
+        WakeReady::Ready {
+            devices: refs(&["a"]),
+            missing: Vec::new(),
+            settled: true,
+        }
+    );
 }

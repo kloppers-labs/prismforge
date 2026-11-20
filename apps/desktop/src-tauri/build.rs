@@ -44,6 +44,7 @@ fn main() {
         "dismiss_store_notice",
         "automation",
         "set_rule",
+        "mark_runs_seen",
         "lifecycle",
         "change_setting",
         "answer_close",

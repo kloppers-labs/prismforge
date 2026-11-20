@@ -50,6 +50,12 @@ impl AutomationModules {
         }
         let mut value: Value = serde_json::from_str(&json).expect("fixture json");
         crate::fixed_run_times(&mut value);
+        for notice in value["notices"].as_array_mut().into_iter().flatten() {
+            if let Some(failure) = notice.pointer_mut("/event/WriteFailed/failure") {
+                failure["step"] = "Replace".into();
+                failure["detail"] = "Access is denied. (os error 5)".into();
+            }
+        }
         self.views.add(name, &value);
     }
 }
@@ -150,6 +156,44 @@ pub async fn generate(modules: &mut AutomationModules) {
     modules.add(
         "demoNotOnThisSystem",
         &unsupported.view(&demo).await.expect("view"),
+    );
+    let failed = Automation::new(EventSupport::Failed {
+        detail: "the event window could not be created: Access is denied.".into(),
+    });
+    modules.add("demoEventsFailed", &failed.view(&demo).await.expect("view"));
+
+    let dir = TempDir::new("automation-sleep-failed");
+    let server = desk();
+    let (shell, _) = openrgb(&dir, &server).await;
+    available
+        .set_rule(&shell, Trigger::Sleeps, true, RuleAction::LightsOff)
+        .await
+        .expect("sleep");
+    server.silence(prismforge_testkit::wire::SET_CUSTOM_MODE);
+    available.at_sleep(&shell).await;
+    modules.add(
+        "openRgbSleepFailed",
+        &available.view(&shell).await.expect("view"),
+    );
+
+    let dir = TempDir::new("automation-run-unwritten");
+    let server = desk();
+    let (shell, _) = openrgb(&dir, &server).await;
+    available
+        .set_rule(&shell, Trigger::Quits, true, RuleAction::LightsOff)
+        .await
+        .expect("quit");
+    std::fs::create_dir_all(
+        dir.path()
+            .join("store")
+            .join("rule-runs.json")
+            .join("blocker"),
+    )
+    .expect("a folder in the file's place");
+    available.at_quit(&shell).await;
+    modules.add(
+        "openRgbRunNotWritten",
+        &available.view(&shell).await.expect("view"),
     );
 
     let dir = TempDir::new("automation-sleep-wake");
