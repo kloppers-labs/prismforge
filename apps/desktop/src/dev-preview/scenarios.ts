@@ -304,6 +304,17 @@ Object.assign(SCENARIOS, {
 
 export const DEFAULT_SCENARIO = "demo";
 
+function lateLightsOff(): AutomationView {
+  const late = structuredClone(automations.openRgbAfterSleepAndWake);
+  const run = late.rules.find((rule) => rule.trigger === "Sleeps")?.last_run;
+  if (run && "LightsOff" in run.outcome) {
+    run.outcome.LightsOff.report.devices = run.outcome.LightsOff.report.devices.map((device) =>
+      device.outcome === "Black" ? { ...device, outcome: { Skipped: { reason: "TooLate" } } } : device,
+    );
+  }
+  return late;
+}
+
 Object.assign(SCENARIOS, {
   "automation-off": { ...base, label: "Automation, no rule on", view: view(sessions.demoConnected), area: "Automation", automation: automations.demoNoRules },
   "automation-sleep-wake": {
@@ -320,6 +331,14 @@ Object.assign(SCENARIOS, {
     area: "Automation",
     automation: automations.openRgbAfterSleepAndWake,
     rule: "wakes",
+  },
+  "automation-failed-skip": {
+    ...openRgb,
+    label: "Automation, a lights-off run that came too late with a skipped device",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: lateLightsOff(),
+    rule: "sleeps",
   },
   "automation-deleted-profile": {
     ...openRgb,

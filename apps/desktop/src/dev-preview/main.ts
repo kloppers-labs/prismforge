@@ -53,7 +53,7 @@ async function arrange() {
   }
   if (rail && scenario.area === "Automation" && scenario.rule) {
     await wait(200);
-    document.getElementById(`rule-${scenario.rule}-title`)?.scrollIntoView({ block: "start" });
+    document.getElementById(`rule-${scenario.rule}`)?.scrollIntoView({ block: "start" });
   }
   if (params.has("open")) {
     await wait(100);
