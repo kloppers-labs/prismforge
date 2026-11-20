@@ -91,7 +91,7 @@ export function startPathText(path: StartPath): string {
   const missing = [
     ...(path.system ? [] : ["start PrismForge when you sign in"]),
     ...(path.connect ? [] : ["connect to OpenRGB when PrismForge starts"]),
-    ...(path.profile !== null ? [] : ["a profile marked to apply when PrismForge connects"]),
+    ...(path.profile !== null ? [] : ["a rule that applies a profile when PrismForge starts or connects"]),
   ];
   return `Your lights do not change by themselves at system start. Not set: ${missing.join(", ")}.`;
 }

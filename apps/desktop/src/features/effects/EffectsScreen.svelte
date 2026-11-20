@@ -156,7 +156,7 @@
                 <p>A PrismForge effect is computed by PrismForge, not by the device.</p>
                 <p>{closing} When you stop an effect or quit, PrismForge asks {serverName(session)} to put back the earlier lighting.</p>
                 <p>PrismForge saves nothing by itself. To keep this lighting, save it as a profile on the Profiles screen. Profiles are saved on this computer, not on the device.</p>
-                <p>After PrismForge starts again, no effect runs until you apply one, or until a profile marked to apply on connect is applied.</p>
+                <p>After PrismForge starts again, no effect runs until you apply one, or until a rule applies a profile.</p>
               </Details>
             </div>
             <section class="other" aria-labelledby="other-title">

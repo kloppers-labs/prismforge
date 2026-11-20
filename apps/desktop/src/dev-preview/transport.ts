@@ -16,6 +16,9 @@ import { groupsEmpty } from "../test/fixtures/groups";
 import { setupDemoEmpty } from "../test/fixtures/setups";
 import { detailsEvening, detailsImported, detailsOffline } from "../test/fixtures/profileDetails";
 import { demoConnected, openRgbConnecting } from "../test/fixtures/sessions";
+import type { AutomationView } from "../lib/api/bindings/AutomationView";
+import type { RuleAction } from "../lib/api/bindings/RuleAction";
+import { demoNoRules } from "../test/fixtures/automations";
 import type { Scenario } from "./scenarios";
 
 export type Handler = (args: Record<string, unknown>) => unknown;
@@ -79,6 +82,27 @@ function liveFeed(live: LiveOutput | undefined) {
   };
 }
 
+/** Keeps the rule change in the page only; the real store and its checks are in Rust. */
+function rules(start: AutomationView) {
+  let current = structuredClone(start);
+  return {
+    view: () => current,
+    set: (args: Record<string, unknown>) => {
+      const action = args.action as RuleAction;
+      const profile = typeof action === "object" ? current.profiles.find((choice) => choice.id === action.ApplyProfile.profile) : undefined;
+      current = {
+        ...current,
+        rules: current.rules.map((rule) =>
+          rule.trigger === args.trigger
+            ? { ...rule, enabled: args.enabled as boolean, action, profile: profile ? { Ready: { name: profile.name } } : null, problem: null }
+            : rule,
+        ),
+      };
+      return current;
+    },
+  };
+}
+
 /** Stands in for the Tauri transport so the real App runs in a browser; nothing reaches Rust or hardware. */
 export function installTransport(scenario: Scenario) {
   let revision = scenario.view.revision;
@@ -87,8 +111,11 @@ export function installTransport(scenario: Scenario) {
     void emit(VIEW_EVENT, next);
     return next;
   };
+  const automation = rules(scenario.automation ?? demoNoRules);
   const defaults: Record<string, Handler> = {
     view: () => scenario.view,
+    automation: automation.view,
+    set_rule: automation.set,
     lifecycle: () => scenario.lifecycle,
     profile_store: () => scenario.store,
     profile_details: (args) => details[String(args.id)] ?? Promise.reject({ Profile: "NotFound" }),

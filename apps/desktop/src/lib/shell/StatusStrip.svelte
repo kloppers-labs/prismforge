@@ -9,7 +9,7 @@
 
   let connection = $derived(connectionStatus(app.session));
   let start = $derived(app.lifecycle.view?.start_profile ?? null);
-  let profile = $derived(profileStatus(app.view, app.profiles.store, start !== null && typeof start === "object" && "Marked" in start ? start.Marked.name : null));
+  let profile = $derived(profileStatus(app.view, app.profiles.store, start !== null && typeof start === "object" && "Marked" in start && start.Marked.trigger === "Connects" ? start.Marked.name : null));
   let background = $derived(
     app.lifecycle.settings?.on_close === "Background" && app.lifecycle.trayAvailable
       ? "Closing the window keeps PrismForge running in the background."

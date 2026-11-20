@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
+import { demoNoRules } from "../../test/fixtures/automations";
 import type { StoreView } from "../../lib/api/bindings/StoreView";
 import { fakeShell, refuse } from "../../test/backend";
 import { connectionAction, expandNotices, findDemoMarker, openProfileChip } from "../../test/shell";
@@ -181,7 +182,7 @@ test("a_marked_profile_that_waits_for_a_connection_says_what_the_trigger_will_do
   await fireEvent.click(within(article).getByRole("button", { name: "Apply profile" }));
 
   await waitFor(() => expect(result().textContent).toMatch(/Evening was not applied now: PrismForge is not connected\./));
-  expect(result().textContent).toMatch(/PrismForge applied Evening when it connected\. All 4 settings were accepted\. Apply on connect does not run again by itself in this session/);
+  expect(result().textContent).toMatch(/PrismForge applied Evening when it connected\. All 4 settings were accepted\. The rule “When PrismForge connects” does not run again by itself in this session/);
   await shell.pushView({ ...shell.view(demoConnected), revision: 60, on_connect: { Armed: { id: EVENING, name: "Evening" } } });
   await waitFor(() => expect(result().textContent).toMatch(/^\s*Evening will be applied as soon as PrismForge has read the devices\./));
 });
@@ -257,21 +258,16 @@ test("export_states_what_the_file_holds_before_a_destination_is_chosen", async (
   await waitFor(() => expect(result().textContent).toMatch(/Exported Evening\./));
 });
 
-test("apply_on_connect_is_off_by_default_and_its_text_is_exact", async () => {
-  const shell = fakeShell(demoConnected, handlers(storeSaved, { set_apply_on_connect: () => null }));
+test("the_rule_that_applies_a_profile_on_connect_is_set_in_automation_and_named_on_the_profile", async () => {
+  fakeShell(demoConnected, handlers(storeSaved, { automation: () => demoNoRules }));
   render(App);
   const article = await chooseProfile("Evening");
 
-  const toggle = within(article).getByRole("switch", { name: "Apply this profile when PrismForge connects" });
-  expect(toggle.getAttribute("aria-checked")).toBe("false");
-  expect(toggle.getAttribute("aria-describedby")).toBeTruthy();
-  const description = document.getElementById(toggle.getAttribute("aria-describedby") ?? "");
-  expect(description?.textContent?.trim()).toBe(
-    "When PrismForge connects, it applies this profile once. PrismForge connects by itself only when “Connect to OpenRGB when PrismForge starts” is on in Settings.",
-  );
-  await fireEvent.click(toggle);
+  expect(within(article).queryByRole("switch")).toBeNull();
+  expect(within(article).getByText("No rule applies this profile when PrismForge connects. Rules are set in Automation.")).toBeTruthy();
+  await fireEvent.click(within(article).getByRole("button", { name: "Open Automation" }));
 
-  expect(called(shell, "set_apply_on_connect").map((call) => call.args)).toEqual([{ id: EVENING }]);
+  expect(await screen.findByRole("heading", { level: 1, name: "Automation" })).toBeTruthy();
 });
 
 test("recovery_notices_stay_until_dismissed_and_carry_the_instructions", async () => {
@@ -392,7 +388,7 @@ test("not_connected_lists_what_still_works_and_turns_apply_and_save_off", async 
   expect(within(article).getByText(/Apply is off\. PrismForge is not connected\./)).toBeTruthy();
   expect(within(article).getByText(/Not checked: PrismForge is not connected\./)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Save as new profile" })).toBeNull();
-  expect(within(article).getByRole("switch", { name: "Apply this profile when PrismForge connects" }).getAttribute("aria-checked")).toBe("true");
+  expect(within(article).getByText("The rule “When PrismForge connects” applies this profile. Rules are set in Automation.")).toBeTruthy();
 
   await fireEvent.click(within(article).getByRole("button", { name: "Rename" }));
   await fireEvent.input(within(article).getByRole("textbox", { name: "New name" }), { target: { value: "Desk lights" } });
@@ -476,7 +472,7 @@ test("results_go_after_disconnect_and_reconnect", async () => {
     demoConnected,
     handlers(storeTwo, {
       apply_profile: () => appliedFully,
-      disconnect: () => ({ revision: 100, session: null, applying: null, connect_apply: null, on_connect: "NotApplicable" }),
+      disconnect: () => ({ revision: 100, session: null, applying: null, connect_apply: null, on_connect: "NotApplicable", rule_run: null }),
     }),
   );
   render(App);
@@ -487,7 +483,7 @@ test("results_go_after_disconnect_and_reconnect", async () => {
   expect(screen.getByRole("textbox", { name: "New name" })).toBeTruthy();
 
   await connectionAction("Disconnect");
-  await shell.pushView({ revision: 200, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable" });
+  await shell.pushView({ revision: 200, session: demoConnected, applying: null, connect_apply: null, on_connect: "NotApplicable", rule_run: null });
 
   await waitFor(() => expect(screen.getByRole("navigation", { name: "Main" }).textContent).toMatch(/Devices/));
   expect(result().textContent?.trim()).toBe("");
@@ -521,7 +517,7 @@ test("a_fired_profile_is_said_not_to_apply_again_while_the_session_retries", asy
 
   await waitFor(() =>
     expect(onConnect().textContent?.trim()).toBe(
-      "PrismForge applied Desk when it connected. Its setting was accepted. Apply on connect does not run again by itself in this session, also not when the connection comes back. You can still apply a profile yourself. After you disconnect and connect, PrismForge applies Desk by itself.",
+      "PrismForge applied Desk when it connected. Its setting was accepted. The rule “When PrismForge connects” does not run again by itself in this session, also not when the connection comes back. You can still apply a profile yourself. After you disconnect and connect, PrismForge applies Desk by itself.",
     ),
   );
 });
@@ -542,7 +538,7 @@ test("without_a_marked_profile_nothing_is_promised", async () => {
 
   await waitFor(() =>
     expect(onConnect().textContent?.trim()).toBe(
-      "No profile is marked to apply on connect. A profile you mark before PrismForge has read the devices is applied then.",
+      "No rule applies a profile when PrismForge connects. A rule you set before PrismForge has read the devices applies then.",
     ),
   );
 });
@@ -630,7 +626,7 @@ test("a_failed_apply_on_connect_reads_the_same_in_the_status_and_the_notice", as
     ),
   );
 
-  const headline = "PrismForge could not apply the profile marked to apply on connect when it connected.";
+  const headline = "PrismForge could not apply the profile of the rule “When PrismForge connects” when it connected.";
   expect(status.startsWith(headline)).toBe(true);
   expect(notice).toContain(headline);
   expect(status).toMatch(/needs a newer PrismForge/);
@@ -641,7 +637,7 @@ test("an_unreadable_marked_profile_says_nothing_is_applied_and_why", async () =>
 
   await waitFor(() =>
     expect(onConnect().textContent?.trim()).toBe(
-      "The profile marked to apply on connect needs a newer PrismForge, so this version cannot read it. Nothing is applied when PrismForge connects.",
+      "The profile of the rule “When PrismForge connects” needs a newer PrismForge, so this version cannot read it. Nothing is applied when PrismForge connects.",
     ),
   );
 });
@@ -651,7 +647,7 @@ test("a_missing_marked_profile_says_nothing_is_applied_and_why", async () => {
 
   await waitFor(() =>
     expect(onConnect().textContent?.trim()).toBe(
-      "The profile marked to apply on connect is not in the store any more. Nothing is applied when PrismForge connects.",
+      "The profile of the rule “When PrismForge connects” is not in the store any more. Nothing is applied when PrismForge connects.",
     ),
   );
 });

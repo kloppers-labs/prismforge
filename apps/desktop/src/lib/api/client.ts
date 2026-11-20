@@ -28,6 +28,9 @@ import type { Saved } from "./bindings/Saved";
 import type { Setup } from "./bindings/Setup";
 import type { SetupStoreView } from "./bindings/SetupStoreView";
 import type { AppSettingChange } from "./bindings/AppSettingChange";
+import type { AutomationView } from "./bindings/AutomationView";
+import type { RuleAction } from "./bindings/RuleAction";
+import type { Trigger } from "./bindings/Trigger";
 import type { ShellView } from "./bindings/ShellView";
 import type { StoreNotice } from "./bindings/StoreNotice";
 import type { StoreView } from "./bindings/StoreView";
@@ -105,13 +108,15 @@ export const api = {
   duplicateProfile: (id: ProfileId) => call<ProfileId>("duplicate_profile", { id }),
   deleteProfile: (id: ProfileId) => call<null>("delete_profile", { id }),
   applyProfile: (id: ProfileId) => call<ApplyOutcome>("apply_profile", { id }),
-  setApplyOnConnect: (id: ProfileId | null) => call<null>("set_apply_on_connect", { id }),
   exportProfile: (id: ProfileId) => call<ExportReport | null>("export_profile", { id }),
   importProfile: () => call<ImportReport | null>("import_profile"),
   setDeviceName: (device: DeviceRef, name: string | null) => call<null>("set_device_name", { device, name }),
   setZoneName: (device: DeviceRef, zone: number, name: string | null) =>
     call<null>("set_zone_name", { device, zone, name }),
   dismissStoreNotice: (notice: StoreNotice) => call<boolean>("dismiss_store_notice", { notice }),
+  automation: () => call<AutomationView>("automation"),
+  setRule: (trigger: Trigger, enabled: boolean, action: RuleAction) =>
+    call<AutomationView>("set_rule", { trigger, enabled, action }),
   lifecycle: () => call<LifecycleView>("lifecycle"),
   changeSetting: (change: AppSettingChange) => call<LifecycleView>("change_setting", { change }),
   answerClose: (choice: CloseAction | null) => call<null>("answer_close", { choice }),

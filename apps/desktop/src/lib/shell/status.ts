@@ -103,8 +103,8 @@ export function profileStatus(view: ShellView, store: StoreView | null, marked: 
   if (applying) {
     return {
       title: `Applying ${applying.name}`,
-      detail: applying.automatic ? "on connect" : null,
-      name: `Profile: applying ${applying.name}${applying.automatic ? " on connect" : ""}`,
+      detail: applying.automatic ? "by a rule" : null,
+      name: `Profile: applying ${applying.name}${applying.automatic ? " by a rule" : ""}`,
       lines: [applyingText(view) ?? ""],
       busy: true,
       saveable: null,

@@ -3,6 +3,7 @@ import type { DeviceRef } from "../api/bindings/DeviceRef";
 import type { IdentifyOutcome } from "../api/bindings/IdentifyOutcome";
 import type { ProfileId } from "../api/bindings/ProfileId";
 import type { ShellView } from "../api/bindings/ShellView";
+import { AutomationState } from "../../features/automation/state.svelte";
 import { GroupsState } from "../../features/effects/groups.svelte";
 import { EffectsState } from "../../features/effects/state.svelte";
 import { ProfilesState } from "../../features/profiles/state.svelte";
@@ -13,7 +14,7 @@ import { isLive } from "../../features/devices/present";
 
 export type Work = "connect" | "demo" | "disconnect" | "refresh";
 
-export type Screen = "devices" | "effects" | "setup" | "profiles" | "settings";
+export type Screen = "devices" | "effects" | "setup" | "profiles" | "automation" | "settings";
 
 export type IdentifyTarget = { device: DeviceRef; zone: number | null };
 
@@ -26,7 +27,7 @@ export type IdentifyState =
   | { kind: "failed"; target: IdentifyTarget; error: Failure };
 
 export class AppState {
-  view = $state<ShellView>({ revision: 0, session: null, applying: null, connect_apply: null, on_connect: "NotApplicable" });
+  view = $state<ShellView>({ revision: 0, session: null, applying: null, connect_apply: null, on_connect: "NotApplicable", rule_run: null });
   working = $state<Work | null>(null);
   problem = $state<Failure | null>(null);
   identify = $state<IdentifyState | null>(null);
@@ -40,6 +41,7 @@ export class AppState {
   connectApplyDismissed = $state(false);
   readonly profiles = new ProfilesState();
   readonly lifecycle = new LifecycleState();
+  readonly automation = new AutomationState();
   readonly groups = new GroupsState();
   readonly setup = new SetupState(() => this.view.session);
   readonly across = new AcrossState(
@@ -98,7 +100,11 @@ export class AppState {
     if (view.revision <= this.view.revision) {
       return;
     }
+    const ran = JSON.stringify(view.rule_run) !== JSON.stringify(this.view.rule_run);
     this.view = view;
+    if (ran) {
+      void this.automation.reload();
+    }
     if (view.session !== null) {
       void this.effects.load();
     }
@@ -114,6 +120,7 @@ export class AppState {
     if (key !== this.storeKey) {
       this.storeKey = key;
       this.storeChanged();
+      void this.automation.reload();
     }
   }
 

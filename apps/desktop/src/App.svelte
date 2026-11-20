@@ -5,6 +5,7 @@
   import DiagnosticsDrawer from "./features/diagnostics/DiagnosticsDrawer.svelte";
   import Inventory from "./features/devices/Inventory.svelte";
   import EffectsScreen from "./features/effects/EffectsScreen.svelte";
+  import AutomationScreen from "./features/automation/AutomationScreen.svelte";
   import ProfilesScreen from "./features/profiles/ProfilesScreen.svelte";
   import SetupScreen from "./features/setup/SetupScreen.svelte";
   import ClosePrompt from "./features/settings/ClosePrompt.svelte";
@@ -167,7 +168,9 @@
 
     <main id="content" tabindex="-1" inert={covered} bind:this={main} onfocusin={trackPageFocus}>
       {#if app.screen === "settings"}
-        <SettingsScreen {app} lifecycle={app.lifecycle} onprofiles={() => app.openProfiles()} />
+        <SettingsScreen {app} lifecycle={app.lifecycle} onautomation={() => app.go("automation")} />
+      {:else if app.screen === "automation"}
+        <AutomationScreen {app} />
       {:else if app.screen === "profiles"}
         <ProfilesScreen {app} />
       {:else if app.screen === "setup"}

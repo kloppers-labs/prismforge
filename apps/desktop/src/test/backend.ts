@@ -10,6 +10,7 @@ import type { ShellView } from "../lib/api/bindings/ShellView";
 import { groupsEmpty } from "./fixtures/groups";
 import { setupDemoEmpty } from "./fixtures/setups";
 import { storeEmpty } from "./fixtures/stores";
+import { demoNoRules } from "./fixtures/automations";
 
 export type Call = { command: string; args: Record<string, unknown> };
 type Handler = (args: Record<string, unknown>) => unknown;
@@ -29,13 +30,14 @@ export function fakeShell(initial: SessionSnapshot | null, handlers: Record<stri
     applying: null,
     connect_apply: null,
     on_connect: "NotApplicable",
+    rule_run: null,
   });
   mockIPC(
     (command, args) => {
       const plain = (args ?? {}) as Record<string, unknown>;
       calls.push({ command, args: plain });
       if (command === "view") {
-        return { revision: 1, session: initial, applying: null, connect_apply: null, on_connect: "NotApplicable" };
+        return { revision: 1, session: initial, applying: null, connect_apply: null, on_connect: "NotApplicable", rule_run: null };
       }
       const handler = handlers[command] ?? defaults[command];
       if (!handler) {
@@ -61,6 +63,7 @@ const defaults: Record<string, Handler> = {
   profile_store: () => storeEmpty,
   lifecycle: () => lifecycleFresh,
   setup: () => setupDemoEmpty,
+  automation: () => demoNoRules,
 };
 
 export function refuse(error: unknown): Handler {

@@ -21,7 +21,7 @@ import {
 import { demoConnected } from "../../test/fixtures/sessions";
 
 const AUTOMATIC =
-  "Connecting alone writes nothing to your devices. Without a click in a session, PrismForge changes your lighting only when “Connect to OpenRGB when PrismForge starts” is on and a profile is set to “Apply this profile when PrismForge connects”. Then PrismForge applies that profile as soon as the connection is made.";
+  "Connecting alone writes nothing to your devices. Without a click, PrismForge changes your lighting only through a rule you switched on in Automation: when PrismForge starts or connects, when the system sleeps, wakes or ends your session, or when PrismForge quits. At system start that needs “Connect to OpenRGB when PrismForge starts” and a rule that applies a profile when PrismForge starts or connects.";
 
 function at(view: LifecycleView, revision: number): LifecycleView {
   return { ...view, revision };
@@ -280,27 +280,28 @@ test("the_start_up_path_shows_each_step_and_the_profile_it_applies", async () =>
   expect(within(items[1]!).getByRole("switch").getAttribute("aria-checked")).toBe("false");
   expect(within(items[2]!).getByRole("switch").getAttribute("aria-checked")).toBe("true");
   expect(within(items[3]!).getByText("Evening")).toBeTruthy();
+  expect(within(items[3]!).getByText(/by the rule “When PrismForge connects”, once, as soon as the connection is made\./)).toBeTruthy();
   expect(screen.getByText("With steps 1, 3 and 4 on, your lights change at system start without a click. Every step is off until you turn it on.")).toBeTruthy();
   expect(screen.getByRole("status", { name: "Start-up result" }).textContent?.trim()).toBe(
     "When you sign in, PrismForge starts, connects to OpenRGB at 127.0.0.1:6742 and applies Evening. Your lights change at system start without a click.",
   );
 });
 
-test("without_a_marked_profile_the_start_up_path_says_none_and_links_to_profiles", async () => {
+test("without_a_rule_that_applies_a_profile_the_start_up_path_says_none_and_links_to_automation", async () => {
   const shell = fakeShell(null);
   render(App);
   await openSettings();
 
   const steps = await screen.findByRole("list", { name: "Start-up steps" });
   const last = within(steps).getAllByRole("listitem")[3]!;
-  expect(within(last).getByText("None marked.")).toBeTruthy();
+  expect(within(last).getByText("No rule applies a profile when PrismForge starts or connects.")).toBeTruthy();
   expect(screen.getByRole("status", { name: "Start-up result" }).textContent?.trim()).toBe(
-    "Your lights do not change by themselves at system start. Not set: start PrismForge when you sign in, connect to OpenRGB when PrismForge starts, a profile marked to apply when PrismForge connects.",
+    "Your lights do not change by themselves at system start. Not set: start PrismForge when you sign in, connect to OpenRGB when PrismForge starts, a rule that applies a profile when PrismForge starts or connects.",
   );
-  await fireEvent.click(within(last).getByRole("button", { name: "Open Profiles" }));
+  await fireEvent.click(within(last).getByRole("button", { name: "Open Automation" }));
 
-  await screen.findByRole("navigation", { name: "Profiles" }).catch(() => null);
-  expect(called(shell, "profile_store").length).toBeGreaterThan(0);
+  await screen.findByRole("heading", { level: 1, name: "Automation" });
+  expect(called(shell, "automation").length).toBeGreaterThan(0);
   expect(screen.queryByRole("heading", { level: 1, name: "Settings" })).toBeNull();
 });
 

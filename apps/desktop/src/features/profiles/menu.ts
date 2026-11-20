@@ -11,7 +11,6 @@ export function profileMenu(context: ProfilesMenuContext, profile: ProfileSummar
   const { profiles, live, applying } = context;
   const id = profile.id;
   const busy = profiles.working === null ? null : WORKING;
-  const marked = summary.apply_on_connect === id;
   const items: MenuItem[] = [
     {
       id: "profile.apply",
@@ -46,15 +45,6 @@ export function profileMenu(context: ProfilesMenuContext, profile: ProfileSummar
       },
     },
     { id: "profile.export", label: "Export…", run: (origin) => profiles.ask(id, "export", origin) },
-    {
-      id: "profile.apply-on-connect",
-      label: "Apply this profile when PrismForge connects",
-      checked: marked,
-      run: async () => {
-        await profiles.show(id);
-        await profiles.setApplyOnConnect(marked ? null : id);
-      },
-    },
     { id: "profile.delete", label: "Delete", danger: true, reason: applying, run: (origin) => profiles.ask(id, "delete", origin) },
   );
   return { label: `Actions for ${profile.name}`, items };

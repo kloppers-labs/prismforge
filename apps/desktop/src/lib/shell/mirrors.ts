@@ -30,7 +30,6 @@ export const MIRRORS = {
   "profile.rename": "Rename on the profile page",
   "profile.duplicate": "Duplicate on the profile page",
   "profile.export": "Export on the profile page",
-  "profile.apply-on-connect": "the Apply this profile when PrismForge connects switch",
   "profile.delete": "Delete on the profile page",
   "diagnostics.copy-section": "Copy section in each Diagnostics section",
   "diagnostics.copy-all": "Copy as text at the top of Diagnostics",

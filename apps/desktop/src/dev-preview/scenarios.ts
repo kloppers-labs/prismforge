@@ -1,4 +1,6 @@
+import type { AutomationView } from "../lib/api/bindings/AutomationView";
 import type { GroupsView } from "../lib/api/bindings/GroupsView";
+import * as automations from "../test/fixtures/automations";
 import type { SetupStoreView } from "../lib/api/bindings/SetupStoreView";
 import { acrossDemoSkipped } from "../test/fixtures/acrossReports";
 import { liveRealAcross } from "../test/fixtures/live";
@@ -18,7 +20,7 @@ import { storeEmpty, storeOffline, storeRecovered, storeSaved, storeTwo, storeUn
 import { viewApplying, viewArmedRetrying, viewConnectApplied } from "../test/fixtures/views";
 import type { Handler } from "./transport";
 
-export type Area = "Devices" | "Effects" | "Setup" | "Profiles" | "Settings";
+export type Area = "Devices" | "Effects" | "Setup" | "Profiles" | "Automation" | "Settings";
 
 export type Scenario = {
   label: string;
@@ -40,6 +42,9 @@ export type Scenario = {
   live?: LiveOutput;
   rescan?: boolean;
   setup?: SetupStoreView;
+  automation?: AutomationView;
+  /** The rule the Automation screen scrolls to, by its trigger in lower case. */
+  rule?: string;
   /** What the Setup area shows: a tab, a template added, components selected, an effect drafted, applied or live. */
   setupTab?: "PC" | "Desk";
   setupTemplate?: string;
@@ -57,7 +62,7 @@ function onConnect(session: SessionSnapshot | null): ShellView["on_connect"] {
 }
 
 function view(session: SessionSnapshot | null, extra: Partial<ShellView> = {}): ShellView {
-  return { revision: 1, session, applying: null, connect_apply: null, on_connect: onConnect(session), ...extra };
+  return { revision: 1, session, applying: null, connect_apply: null, on_connect: onConnect(session), rule_run: null, ...extra };
 }
 
 const base = { store: storeEmpty, lifecycle: lifecycleFresh };
@@ -295,3 +300,53 @@ Object.assign(SCENARIOS, {
 });
 
 export const DEFAULT_SCENARIO = "demo";
+
+Object.assign(SCENARIOS, {
+  "automation-off": { ...base, label: "Automation, no rule on", view: view(sessions.demoConnected), area: "Automation", automation: automations.demoNoRules },
+  "automation-sleep-wake": {
+    ...openRgb,
+    label: "Automation, lights off at sleep and a profile at wake",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbSleepAndWake,
+  },
+  "automation-last-runs": {
+    ...openRgb,
+    label: "Automation, last runs with a skipped device",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbAfterSleepAndWake,
+    rule: "wakes",
+  },
+  "automation-deleted-profile": {
+    ...openRgb,
+    label: "Automation, a rule whose profile was deleted",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbDeletedProfile,
+    rule: "wakes",
+  },
+  "automation-openrgb-also": {
+    ...openRgb,
+    label: "Automation, OpenRGB also acts",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbAlsoActs,
+    rule: "sleeps",
+  },
+  "automation-not-here": {
+    ...base,
+    label: "Automation on macOS or Linux",
+    view: view(sessions.demoConnected),
+    area: "Automation",
+    automation: automations.demoNotOnThisSystem,
+    rule: "sleeps",
+  },
+  "automation-migrated": {
+    ...openRgb,
+    label: "Automation, the connects rule from an earlier mark",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbMigratedConnects,
+  },
+} satisfies Record<string, Scenario>);
