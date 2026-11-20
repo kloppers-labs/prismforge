@@ -14,11 +14,30 @@ export class AutomationState {
   failure = $state<RuleFailure | null>(null);
   loadFailure = $state<Failure | null>(null);
 
+  private dismissed = $state<string[]>([]);
+
   /** Failed sleep and session-end runs the user has not seen yet; the start notice shows them. */
   get unseenFailures(): RuleRun[] {
-    return (this.view?.rules ?? [])
-      .map((rule) => rule.last_run)
-      .filter((run): run is RuleRun => run !== null && !run.seen && (run.trigger === "Sleeps" || run.trigger === "SessionEnds") && runFailed(run));
+    return (this.view?.rules ?? []).map((rule) => rule.last_run).filter((run): run is RuleRun => run !== null && this.noticeable(run));
+  }
+
+  /** Adds the run just published when the store has not recorded it, as when its record ran out of time. */
+  unseenWith(published: RuleRun | null): RuleRun[] {
+    const recorded = this.unseenFailures;
+    const known = (this.view?.rules ?? []).some((rule) => rule.last_run !== null && key(rule.last_run) === (published && key(published)));
+    if (published === null || known || !this.noticeable(published) || this.dismissed.includes(key(published))) {
+      return recorded;
+    }
+    return [...recorded.filter((run) => run.trigger !== published.trigger), published];
+  }
+
+  async dismiss(runs: RuleRun[]) {
+    this.dismissed = [...this.dismissed, ...runs.map(key)];
+    await this.markSeen(runs.map((run) => run.trigger));
+  }
+
+  private noticeable(run: RuleRun): boolean {
+    return !run.seen && (run.trigger === "Sleeps" || run.trigger === "SessionEnds") && runFailed(run);
   }
 
   async load() {
@@ -56,4 +75,8 @@ export class AutomationState {
       this.failure = { trigger, error: answer.error };
     }
   }
+}
+
+function key(run: RuleRun): string {
+  return `${run.trigger}:${run.at_ms}`;
 }

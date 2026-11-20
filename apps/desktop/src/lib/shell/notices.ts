@@ -45,7 +45,7 @@ export function activeNotices(app: AppState): NoticeItem[] {
     const tone: Tone = "Applied" in outcome ? (fullyApplied(outcome.Applied.report) ? "ok" : "warning") : "problem";
     items.push({ kind: "connectApply", tone, title: connectResultText(applied) });
   }
-  const failed = app.screen === "automation" ? [] : app.automation.unseenFailures;
+  const failed = app.screen === "automation" ? [] : app.automation.unseenWith(app.view.rule_run);
   if (failed.length > 0) {
     items.push({ kind: "automation", tone: "warning", title: failed.map(failedRunTitle).join(" ") });
   }

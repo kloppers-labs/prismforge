@@ -12,6 +12,7 @@
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { SettingKey, LifecycleState } from "./state.svelte";
   import { EVENTS } from "../automation/wording";
+  import type { StartProfile } from "../../lib/api/bindings/StartProfile";
   import type { Trigger } from "../../lib/api/bindings/Trigger";
   import { MACHINE_ENTRY_REMOVAL, addressText, quitShortcut, settingsNoticeText, startPathText, trayName } from "./wording";
 
@@ -38,7 +39,7 @@
       hidden: settings?.start_hidden ?? false,
       connect: settings?.connect_at_start ?? false,
       address: settings?.address ? addressText(settings.address) : null,
-      profile: startProfile !== null && typeof startProfile === "object" && "Marked" in startProfile ? startProfile.Marked.name : null,
+      action: startAction(startProfile),
     }),
   );
   let trayDetail = $derived(view && typeof view.tray === "object" ? view.tray.Unavailable.detail : null);
@@ -46,6 +47,16 @@
   let quitting = $derived(lifecycle.pending === "quit" || (view?.quitting ?? false));
   let backgroundEnabled = $derived(ready && tray);
   let closeFocus = $derived<CloseAction>(backgroundEnabled && settings?.on_close !== "Quit" ? "Background" : "Quit");
+
+  function startAction(start: StartProfile | null): string | null {
+    if (start === null || typeof start !== "object") {
+      return null;
+    }
+    if ("Marked" in start) {
+      return `applies ${start.Marked.name}`;
+    }
+    return "LightsOff" in start ? "switches the lights off" : null;
+  }
 
   function ruleEvent(trigger: Trigger): string {
     return EVENTS[trigger];
@@ -216,10 +227,12 @@
       </li>
 
       <li>
-        <p class="step-title">Apply a profile by a rule in Automation</p>
+        <p class="step-title">Apply a profile or switch the lights off by a rule in Automation</p>
         <div class="profile">
           {#if startProfile === null || startProfile === "NotMarked"}
-            <p>No rule applies a profile when PrismForge starts or connects.</p>
+            <p>No rule applies a profile or switches the lights off when PrismForge starts or connects.</p>
+          {:else if "LightsOff" in startProfile}
+            <p>Switches the lights off by the rule “When {ruleEvent(startProfile.LightsOff.trigger)}”, once, as soon as the connection is made.</p>
           {:else if "Marked" in startProfile}
             <p>Applies <strong>{startProfile.Marked.name}</strong> by the rule “When {ruleEvent(startProfile.Marked.trigger)}”, once, as soon as the connection is made.</p>
           {:else if "Unreadable" in startProfile}

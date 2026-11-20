@@ -46,7 +46,7 @@
     } else if (notice.kind === "connectApply") {
       app.connectApplyDismissed = true;
     } else if (notice.kind === "automation") {
-      void app.automation.markSeen(app.automation.unseenFailures.map((run) => run.trigger));
+      void app.automation.dismiss(app.automation.unseenWith(app.view.rule_run));
     }
   }
 </script>

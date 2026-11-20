@@ -279,3 +279,42 @@ test("a_command_refused_while_the_lights_go_off_says_so", async () => {
   const { failureText } = await import("../../lib/errors");
   expect(failureText("RuleRunning")).toBe("An automation rule is switching the lights off. Try again in a moment.");
 });
+
+test("a_sleep_rule_whose_lights_off_came_too_late_counts_as_failed", async () => {
+  const { runFailed } = await import("./wording");
+  const late: RuleRun = {
+    trigger: "Sleeps",
+    at_ms: 1,
+    seen: false,
+    outcome: {
+      LightsOff: {
+        report: {
+          devices: [
+            { device: "dev-a", name: "Strip", outcome: { Skipped: { reason: "TooLate" } } },
+            { device: "dev-k", name: "Keyboard", outcome: { Skipped: { reason: "NoDirectOrOffMode" } } },
+          ],
+        },
+      },
+    },
+  };
+  expect(runFailed(late)).toBe(true);
+  const nothingPlanned: RuleRun = {
+    ...late,
+    outcome: { LightsOff: { report: { devices: [{ device: "dev-k", name: "Keyboard", outcome: { Skipped: { reason: "NoDirectOrOffMode" } } }] } } },
+  };
+  expect(runFailed(nothingPlanned)).toBe(false);
+});
+
+test("a_failed_sleep_run_that_was_not_recorded_still_raises_the_start_notice", async () => {
+  const shell = fakeShell(demoConnected, { automation: () => demoNoRules });
+  render(App);
+  await screen.findByRole("navigation", { name: "Main" });
+  const run: RuleRun = { trigger: "Sleeps", at_ms: 7, seen: false, outcome: { Failed: { failure: { TimedOut: { limit_ms: 1000 } } } } };
+
+  await shell.pushView({ ...shell.view(demoConnected), rule_run: run });
+
+  const notice = await screen.findByRole("status", { name: "Automation" });
+  expect(notice.textContent).toContain("When the system went to sleep, the rule did not do what it should:");
+  await fireEvent.click(within(notice).getByRole("button", { name: /Dismiss/ }));
+  await waitFor(() => expect(screen.queryByRole("status", { name: "Automation" })).toBeNull());
+});

@@ -14,6 +14,7 @@ import {
   lifecycleQuitting,
   lifecycleNoTray,
   lifecycleRecovered,
+  lifecycleStartLightsOff,
   lifecycleStartPath,
   lifecycleTrayStopBusy,
   lifecycleTrayStopped,
@@ -294,9 +295,9 @@ test("without_a_rule_that_applies_a_profile_the_start_up_path_says_none_and_link
 
   const steps = await screen.findByRole("list", { name: "Start-up steps" });
   const last = within(steps).getAllByRole("listitem")[3]!;
-  expect(within(last).getByText("No rule applies a profile when PrismForge starts or connects.")).toBeTruthy();
+  expect(within(last).getByText("No rule applies a profile or switches the lights off when PrismForge starts or connects.")).toBeTruthy();
   expect(screen.getByRole("status", { name: "Start-up result" }).textContent?.trim()).toBe(
-    "Your lights do not change by themselves at system start. Not set: start PrismForge when you sign in, connect to OpenRGB when PrismForge starts, a rule that applies a profile when PrismForge starts or connects.",
+    "Your lights do not change by themselves at system start. Not set: start PrismForge when you sign in, connect to OpenRGB when PrismForge starts, a rule that applies a profile or switches the lights off when PrismForge starts or connects.",
   );
   await fireEvent.click(within(last).getByRole("button", { name: "Open Automation" }));
 
@@ -407,4 +408,17 @@ test("each_switch_states_its_consequence_in_one_line_with_more_behind_details", 
     "Where PrismForge keeps its files",
     "Quit PrismForge",
   ]);
+});
+
+test("a_rule_that_switches_the_lights_off_at_start_is_named_in_step_4_and_the_start_path", async () => {
+  fakeShell(null, { lifecycle: () => lifecycleStartLightsOff });
+  render(App);
+  await openSettings();
+
+  const steps = await screen.findByRole("list", { name: "Start-up steps" });
+  const last = within(steps).getAllByRole("listitem")[3]!;
+  expect(within(last).getByText("Switches the lights off by the rule “When PrismForge starts”, once, as soon as the connection is made.")).toBeTruthy();
+  expect(screen.getByRole("status", { name: "Start-up result" }).textContent?.trim()).toBe(
+    "When you sign in, PrismForge starts, connects to OpenRGB at 127.0.0.1:6742 and switches the lights off. Your lights change at system start without a click.",
+  );
 });

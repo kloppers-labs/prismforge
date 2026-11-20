@@ -14,7 +14,7 @@ import type { SessionSnapshot } from "../lib/api/bindings/SessionSnapshot";
 import type { ShellView } from "../lib/api/bindings/ShellView";
 import type { StoreView } from "../lib/api/bindings/StoreView";
 import { isLive } from "../features/devices/present";
-import { lifecycleChosen, lifecycleFresh, lifecycleStartPath, lifecycleTrayStopped } from "../test/fixtures/lifecycles";
+import { lifecycleChosen, lifecycleFresh, lifecycleStartLightsOff, lifecycleStartPath, lifecycleTrayStopped } from "../test/fixtures/lifecycles";
 import * as sessions from "../test/fixtures/sessions";
 import { storeEmpty, storeOffline, storeRecovered, storeSaved, storeTwo, storeUnsaved } from "../test/fixtures/stores";
 import { viewApplying, viewArmedRetrying, viewConnectApplied } from "../test/fixtures/views";
@@ -125,6 +125,9 @@ export const SCENARIOS: Record<string, Scenario> = {
     rescan: true,
   },
   settings: { ...openRgb, label: "Settings", view: view(sessions.openRgbConnected), lifecycle: lifecycleStartPath, area: "Settings" },
+  "settings-start-profile": { ...openRgb, label: "Settings, a rule applies a profile at start", view: view(sessions.openRgbConnected), lifecycle: lifecycleStartPath, area: "Settings", scrollTo: "start-title" },
+  "settings-start-lights-off": { ...openRgb, label: "Settings, a rule switches the lights off at start", view: view(sessions.openRgbConnected), lifecycle: lifecycleStartLightsOff, area: "Settings", scrollTo: "start-title" },
+  "settings-start-none": { ...openRgb, label: "Settings, no rule at start", view: view(sessions.openRgbConnected), area: "Settings", scrollTo: "start-title" },
   "settings-background": { ...base, label: "Settings, keep running chosen", view: view(sessions.demoConnected), lifecycle: lifecycleChosen, area: "Settings" },
   diagnostics: { ...openRgb, label: "Diagnostics drawer", view: view(sessions.openRgbDegraded), diagnostics: true },
   "long-names": { ...base, label: "Long server address and profile name", view: view(long.session), store: long.store },
