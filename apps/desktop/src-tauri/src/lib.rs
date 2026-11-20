@@ -23,7 +23,6 @@ mod setup_commands;
 mod shell;
 mod stores;
 mod system_entry;
-mod system_events;
 #[cfg(test)]
 #[allow(dead_code)]
 #[path = "../tests/support/temp.rs"]
@@ -42,8 +41,8 @@ pub use automation::{
 };
 pub use effects::{EffectCatalog, preview_effect};
 pub use exit::{
-    ExitGuard, LAST_STOP_LIMIT, QUIT_STOP_LIMIT, end_of_session, quit_then_exit, quit_with_rule,
-    stop_at_exit, stop_then_exit, stop_within,
+    ExitGuard, LAST_STOP_LIMIT, QUIT_STOP_LIMIT, SESSION_END_WAIT, end_of_session, quit_then_exit,
+    quit_with_rule, stop_at_exit, stop_then_exit, stop_within,
 };
 pub use forward::forward;
 pub use groups::{GroupView, GroupsStore, GroupsView};
@@ -52,6 +51,10 @@ pub use lifecycle::{
     LifecycleSink, LifecycleView, SettingsState, SettingsView, StartEntry, StartEntryState,
     StartProfile, StartupPlan, StopReport, StopResult, TrayModel, TrayState, WindowControl,
     decide_close, launched_by_system, read_entry, startup_plan, switch_entry, tray_model,
+};
+use prismforge_system_events as system_events;
+pub use prismforge_system_events::{
+    Dispatcher, Done, EventSink, EventSource, EventSupport, SystemEvent, platform_source,
 };
 pub use publisher::{Publisher, ViewSink};
 pub use settings::SettingsStore;
@@ -62,9 +65,6 @@ pub use setup::{
 pub use shell::{Shell, ShellConfig};
 pub use stores::{StoreKind, StoreUnavailable, StoreView, Stores};
 pub use system_entry::{SystemStartEntry, run_command, startup_disabled};
-pub use system_events::{
-    Dispatcher, Done, EventSink, EventSource, EventSupport, SystemEvent, platform_source,
-};
 pub use view::{
     ApplyingProfile, CommandError, ConnectApply, ConnectOutcome, FileRule, MarkProblem, Marked,
     OnConnect, SettingProblem, ShellView,

@@ -1,4 +1,4 @@
-//! The one seam for power and session events; each platform has a module, the rules live elsewhere.
+//! The one seam for power and session events; each platform has a module, the rules live in the app.
 
 #[cfg(not(windows))]
 mod unsupported;
@@ -12,6 +12,11 @@ use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::time::Duration;
 
 use serde::Serialize;
+
+/// Windows allows about two seconds at sleep; PrismForge gives up after one.
+pub const SLEEP_LIMIT: Duration = Duration::from_secs(1);
+/// Part of the four seconds PrismForge takes at the end of a session; the release gets the rest.
+pub const SESSION_END_LIMIT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]

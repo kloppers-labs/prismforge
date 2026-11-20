@@ -21,12 +21,9 @@ use crate::view::CommandError;
 
 pub use checks::OpenRgbCheck;
 pub(crate) use checks::OpenRgbChecks;
+pub use prismforge_system_events::{SESSION_END_LIMIT, SLEEP_LIMIT};
 pub use view::{AutomationView, ProfileChoice, RuleProfile, RuleView};
 
-/// Windows allows about two seconds at sleep; PrismForge gives up after one.
-pub const SLEEP_LIMIT: Duration = Duration::from_secs(1);
-/// Part of the four seconds PrismForge takes at the end of a session; the release gets the rest.
-pub const SESSION_END_LIMIT: Duration = Duration::from_secs(1);
 /// A quit rule runs before the quit's own stop.
 pub const QUIT_RULE_LIMIT: Duration = Duration::from_secs(2);
 /// The wake rule's own work, after the devices are back.

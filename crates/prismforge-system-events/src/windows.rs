@@ -16,8 +16,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{PCWSTR, w};
 
-use super::{EventSink, EventSource, EventSupport, SystemEvent};
-use crate::automation::{SESSION_END_LIMIT, SLEEP_LIMIT};
+use super::{EventSink, EventSource, EventSupport, SESSION_END_LIMIT, SLEEP_LIMIT, SystemEvent};
 
 /// In the "application first" range, so Windows closes PrismForge before an OpenRGB at the default 0x280.
 const SHUTDOWN_LEVEL: u32 = 0x300;

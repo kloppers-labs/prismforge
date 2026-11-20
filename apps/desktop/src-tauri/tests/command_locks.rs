@@ -908,7 +908,7 @@ fn glue_actions() -> BTreeSet<String> {
 }
 
 fn system_events() -> BTreeSet<String> {
-    let events = source("src/system_events.rs");
+    let events = source("../../../crates/prismforge-system-events/src/lib.rs");
     let (_, body) = events
         .split_once("pub enum SystemEvent {")
         .expect("the system event enum");

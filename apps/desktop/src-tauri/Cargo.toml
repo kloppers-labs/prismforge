@@ -12,7 +12,7 @@ repository.workspace = true
 name = "prismforge_desktop"
 
 [features]
-ts = ["dep:ts-rs", "prismforge-core/ts", "prismforge-effects/ts"]
+ts = ["dep:ts-rs", "prismforge-core/ts", "prismforge-effects/ts", "prismforge-system-events/ts"]
 
 [build-dependencies]
 tauri-build = { version = "=2.7.5", features = [] }
@@ -21,6 +21,7 @@ tauri-build = { version = "=2.7.5", features = [] }
 prismforge-core.workspace = true
 prismforge-effects.workspace = true
 prismforge-openrgb.workspace = true
+prismforge-system-events.workspace = true
 prismforge-testkit.workspace = true
 serde.workspace = true
 tauri = { version = "=2.12.6", features = ["tray-icon"] }
@@ -30,14 +31,6 @@ tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 ts-rs = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "=0.62.2", features = [
-    "Win32_Foundation",
-    "Win32_Graphics_Gdi",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Power",
-    "Win32_System_Threading",
-    "Win32_UI_WindowsAndMessaging",
-] }
 windows-registry = "=0.6.1"
 
 [target.'cfg(not(windows))'.dependencies]
