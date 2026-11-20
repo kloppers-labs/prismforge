@@ -22,6 +22,9 @@ export function failureText(failure: Failure): string {
   if (failure === "NotConnected") {
     return "PrismForge is not connected, so the profile was not applied.";
   }
+  if (failure === "RuleRunning") {
+    return "An automation rule is switching the lights off. Try again in a moment.";
+  }
   if ("Unexpected" in failure) {
     return `PrismForge could not run this request: ${failure.Unexpected}`;
   }
@@ -136,9 +139,7 @@ export function storeErrorText(error: StoreError): string {
     return "PrismForge did not write the file, because the result would not be valid. The previous version is still in place.";
   }
   if ("InvalidRule" in error) {
-    return error.InvalidRule.problem === "LightsOffNotForThisEvent"
-      ? "Switching the lights off is not an action for this event."
-      : "This rule was set by a newer PrismForge, so this version cannot change its action.";
+    return "This rule was set by a newer PrismForge, so this version cannot change its action.";
   }
   if ("NotActive" in error) {
     return "This profile was not applied or saved in this session, so PrismForge cannot tell which changes belong to it.";

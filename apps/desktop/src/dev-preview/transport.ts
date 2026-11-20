@@ -116,6 +116,7 @@ export function installTransport(scenario: Scenario) {
     view: () => scenario.view,
     automation: automation.view,
     set_rule: automation.set,
+    mark_runs_seen: automation.view,
     lifecycle: () => scenario.lifecycle,
     profile_store: () => scenario.store,
     profile_details: (args) => details[String(args.id)] ?? Promise.reject({ Profile: "NotFound" }),

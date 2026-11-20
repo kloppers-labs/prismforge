@@ -94,6 +94,7 @@ export class AppState {
       this.accept(current.value);
     }
     await this.lifecycle.load();
+    await this.automation.load();
   }
 
   accept(view: ShellView) {
@@ -115,12 +116,12 @@ export class AppState {
     if (session !== this.sessionKey) {
       this.sessionKey = session;
       this.profiles.endScope();
+      void this.automation.reload();
     }
     const key = storeKey(view);
     if (key !== this.storeKey) {
       this.storeKey = key;
       this.storeChanged();
-      void this.automation.reload();
     }
   }
 

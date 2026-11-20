@@ -5,17 +5,23 @@
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { AppState } from "../../lib/state/app.svelte";
   import RuleItem from "./RuleItem.svelte";
-  import { NOTE, UNSUPPORTED } from "./wording";
+  import { NOTE, blockedText, runNoticeText, supportText } from "./wording";
 
   let { app }: { app: AppState } = $props();
 
   let automation = $derived(app.automation);
   let view = $derived(automation.view);
-  let supported = $derived(view?.support !== "NotOnThisSystem");
+  let blocked = $derived(view ? blockedText(view.support) : null);
+  let support = $derived(view ? supportText(view.support) : null);
 
   onMount(() => {
-    void app.automation.load();
+    void opened();
   });
+
+  async function opened() {
+    await app.automation.load();
+    await app.automation.markSeen(app.automation.unseenFailures.map((run) => run.trigger));
+  }
 
   function checkText(check: OpenRgbCheck): string | null {
     if (check === "NotChecked") {
@@ -48,18 +54,24 @@
   {/if}
 
   {#if view}
-    {#if !supported}
+    {#if support}
       <div class="notice warning" role="status">
         <ToneIcon tone="warning" />
-        <p>{UNSUPPORTED}</p>
+        <p>{support}</p>
       </div>
     {/if}
+    {#each view.notices as notice, index (index)}
+      <div class="notice warning">
+        <ToneIcon tone="warning" />
+        <p>{runNoticeText(notice)}</p>
+      </div>
+    {/each}
     {#if checkText(view.openrgb)}
       <p class="check">{checkText(view.openrgb)}</p>
     {/if}
     <ol class="rules" aria-label="Rules">
       {#each view.rules as rule (rule.trigger)}
-        <RuleItem {rule} profiles={view.profiles} {automation} {supported} />
+        <RuleItem {rule} profiles={view.profiles} {automation} {blocked} />
       {/each}
     </ol>
   {/if}

@@ -6,9 +6,20 @@
     on,
     disabled = false,
     describedby,
+    labelledby,
     mirror,
     onchange,
-  }: { label: string; on: boolean; disabled?: boolean; describedby: string; mirror?: MirrorId; onchange: (on: boolean) => void } = $props();
+  }: {
+    label: string;
+    on: boolean;
+    disabled?: boolean;
+    describedby: string;
+    labelledby?: string;
+    mirror?: MirrorId;
+    onchange: (on: boolean) => void;
+  } = $props();
+
+  const labelId = `switch-label-${Math.random().toString(36).slice(2)}`;
 </script>
 
 <button
@@ -16,12 +27,13 @@
   role="switch"
   aria-checked={on ? "true" : "false"}
   aria-describedby={describedby}
+  aria-labelledby={labelledby ? `${labelledby} ${labelId}` : undefined}
   data-mirror={mirror}
   {disabled}
   onclick={() => onchange(!on)}
 >
   <span class="track" aria-hidden="true"><span class="thumb"></span></span>
-  <span class="label">{label}</span>
+  <span class="label" id={labelId}>{label}</span>
   <span class="state" aria-hidden="true">{on ? "On" : "Off"}</span>
 </button>
 

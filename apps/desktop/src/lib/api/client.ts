@@ -53,7 +53,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
   }
 }
 
-const PLAIN_ERRORS = ["NoSession", "EmptyHost", "ProfileApplying", "NotConnected"];
+const PLAIN_ERRORS = ["NoSession", "EmptyHost", "ProfileApplying", "RuleRunning", "NotConnected"];
 const SHAPED_ERRORS = ["Session", "InvalidEffect", "NoEffect", "TooManyTargets", "Store", "StoreUnavailable", "Unreadable", "File", "Setting", "Plan", "PreviewTooLarge"];
 
 function asFailure(error: unknown): Failure {
@@ -117,6 +117,7 @@ export const api = {
   automation: () => call<AutomationView>("automation"),
   setRule: (trigger: Trigger, enabled: boolean, action: RuleAction) =>
     call<AutomationView>("set_rule", { trigger, enabled, action }),
+  markRunsSeen: (triggers: Trigger[]) => call<AutomationView>("mark_runs_seen", { triggers }),
   lifecycle: () => call<LifecycleView>("lifecycle"),
   changeSetting: (change: AppSettingChange) => call<LifecycleView>("change_setting", { change }),
   answerClose: (choice: CloseAction | null) => call<null>("answer_close", { choice }),

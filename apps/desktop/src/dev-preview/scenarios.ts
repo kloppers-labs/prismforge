@@ -342,6 +342,27 @@ Object.assign(SCENARIOS, {
     automation: automations.demoNotOnThisSystem,
     rule: "sleeps",
   },
+  "automation-events-failed": {
+    ...base,
+    label: "Automation, the event window could not start",
+    view: view(sessions.demoConnected),
+    area: "Automation",
+    automation: automations.demoEventsFailed,
+    rule: "sleeps",
+  },
+  "automation-run-not-written": {
+    ...openRgb,
+    label: "Automation, a run the store could not write",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: automations.openRgbRunNotWritten,
+  },
+  "automation-failed-notice": {
+    ...openRgb,
+    label: "Start notice for a failed sleep rule",
+    view: view(sessions.openRgbConnected),
+    automation: automations.openRgbSleepFailed,
+  },
   "automation-migrated": {
     ...openRgb,
     label: "Automation, the connects rule from an earlier mark",

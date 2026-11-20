@@ -7,6 +7,8 @@ import type { RuleRun } from "../../lib/api/bindings/RuleRun";
 import type { RuleView } from "../../lib/api/bindings/RuleView";
 import type { RunFailure } from "../../lib/api/bindings/RunFailure";
 import type { Trigger } from "../../lib/api/bindings/Trigger";
+import type { EventSupport } from "../../lib/api/bindings/EventSupport";
+import type { StoreNotice } from "../../lib/api/bindings/StoreNotice";
 import { sessionErrorText, storeErrorText } from "../../lib/errors";
 import { applyHeadline, count } from "../profiles/present";
 
@@ -33,10 +35,6 @@ export const LIGHTS_OFF =
 
 export function isSystemEvent(trigger: Trigger): boolean {
   return trigger === "Sleeps" || trigger === "Wakes" || trigger === "SessionEnds";
-}
-
-export function allowsLightsOff(trigger: Trigger): boolean {
-  return trigger === "Sleeps" || trigger === "SessionEnds" || trigger === "Quits";
 }
 
 export function actionKind(action: RuleAction): ActionKind {
@@ -94,7 +92,7 @@ export function promiseText(trigger: Trigger, action: RuleAction): string {
     case "Sleeps":
       return `PrismForge tries to ${infinitive} before the PC sleeps. Sleep and hibernate are one event in Windows. Windows gives about two seconds and may skip the notice on low battery; PrismForge gives up after one second.`;
     case "Wakes":
-      return `PrismForge ${present} once your devices are back, within about 30 seconds. It first waits for OpenRGB and for the device list to stop changing, then sets every mode and colour again.`;
+      return `PrismForge ${present} once your devices are back, within about 30 seconds: it waits for OpenRGB and for the device list to stop changing, and uses the devices that are back by then.${actionKind(action) === "ApplyProfile" ? " It sets every mode and colour again." : ""}`;
     case "SessionEnds":
       return `PrismForge tries to ${infinitive}. Windows closes programs one by one and can end PrismForge or OpenRGB before the change reaches your devices. Devices that keep power after a shutdown may stay lit.`;
     case "Quits":
@@ -142,6 +140,7 @@ const SKIPS: Record<string, string> = {
   NoDirectOrOffMode: "it has no Direct Mode and no “Off” mode that leaves its memory alone",
   OffModeSavesToDevice: "its “Off” mode saves to device memory, and frequent writes there wear it",
   Identifying: "it was being identified",
+  TooLate: "the event was over before PrismForge came to it",
 };
 
 function skipText(reason: LightsOffSkip): string {
@@ -165,6 +164,12 @@ export function failureText(failure: RunFailure): string {
   }
   if (failure === "NotConnected") {
     return "Did not run: PrismForge was not connected.";
+  }
+  if (failure === "TooLate") {
+    return "Did not run: the event was over before the rule could write, so nothing was written.";
+  }
+  if ("StoreUnavailable" in failure) {
+    return `No rule ran: PrismForge could not open its rules. ${failure.StoreUnavailable.detail}`;
   }
   if ("ProfileMissing" in failure) {
     return "Nothing was applied: the profile of this rule was deleted.";
@@ -196,10 +201,14 @@ export function runLines(run: RuleRun): string[] {
     return [failureText(outcome.Failed.failure)];
   }
   if ("Applied" in outcome) {
-    const { name, report, missing } = outcome.Applied;
+    const { name, report, missing, not_kept } = outcome.Applied;
     const lines = [applyHeadline(name, report)];
     if (missing.length > 0) {
       lines.push(`Not back after the wake, so not changed: ${missing.join(", ")}.`);
+    }
+    if (not_kept) {
+      const detail = "Session" in not_kept ? sessionErrorText(not_kept.Session) : "PrismForge refused the change.";
+      lines.push(`PrismForge could not keep the profile's last frame as it ended, so the stop may have put back the earlier lighting. ${detail}`);
     }
     return lines;
   }
@@ -217,4 +226,61 @@ export function runLines(run: RuleRun): string[] {
     }
   }
   return lines;
+}
+
+/** A run that did not do what the rule says: a failure, a device not switched off, or a frame that was not kept. */
+export function runFailed(run: RuleRun): boolean {
+  const outcome = run.outcome;
+  if ("Failed" in outcome) {
+    return true;
+  }
+  if ("Applied" in outcome) {
+    return outcome.Applied.not_kept !== null;
+  }
+  return outcome.LightsOff.report.devices.some((device) => typeof device.outcome === "object" && "Failed" in device.outcome);
+}
+
+const PAST: Partial<Record<Trigger, string>> = {
+  Sleeps: "When the system went to sleep",
+  SessionEnds: "When you signed out or the system shut down or restarted",
+};
+
+/** The notice at start for a failed sleep or session-end run the user has not seen. */
+export function failedRunTitle(run: RuleRun): string {
+  return `${PAST[run.trigger] ?? `When ${EVENTS[run.trigger]}`}, the rule did not do what it should: ${runLines(run)[0] ?? ""}`;
+}
+
+export function supportText(support: EventSupport): string | null {
+  if (support === "Available") {
+    return null;
+  }
+  if (support === "NotOnThisSystem") {
+    return UNSUPPORTED;
+  }
+  if ("Failed" in support) {
+    return `PrismForge could not start receiving sleep, wake and session end, so those rules do nothing until PrismForge starts again: ${support.Failed.detail}`;
+  }
+  return `Part of PrismForge's set-up for system events failed. ${support.Limited.detail}`;
+}
+
+/** Why the sleep, wake and session-end rules cannot run here, or `null` when they can. */
+export function blockedText(support: EventSupport): string | null {
+  if (support === "NotOnThisSystem") {
+    return NOT_HERE;
+  }
+  if (typeof support === "object" && "Failed" in support) {
+    return "Off: PrismForge could not start receiving this event. The note at the top says why.";
+  }
+  return null;
+}
+
+export function runNoticeText(notice: StoreNotice): string {
+  const event = notice.event;
+  if ("WriteFailed" in event) {
+    return `PrismForge could not save ${event.WriteFailed.failure.file}: ${event.WriteFailed.failure.detail}. The last runs below are shown until PrismForge ends.`;
+  }
+  if ("LeftUntouched" in event) {
+    return `${notice.file} needs a newer PrismForge, so this version does not record runs.`;
+  }
+  return `PrismForge could not read ${notice.file}, so earlier runs are not shown. The damaged file was set aside.`;
 }

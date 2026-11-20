@@ -20,7 +20,7 @@ function watched(calls: Call[]) {
 }
 
 function writes(calls: Call[]): string[] {
-  const reads = ["view", "lifecycle", "groups", "effect_catalog", "preview_effect", "profile_store", "watch_live_output"];
+  const reads = ["view", "lifecycle", "automation", "groups", "effect_catalog", "preview_effect", "profile_store", "watch_live_output"];
   return calls.map((call) => call.command).filter((command) => !reads.includes(command));
 }
 

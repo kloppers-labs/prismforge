@@ -5,8 +5,11 @@ import type { AutomationView } from "../../lib/api/bindings/AutomationView";
 import type { RuleRun } from "../../lib/api/bindings/RuleRun";
 import { fakeShell, refuse } from "../../test/backend";
 import {
+  demoEventsFailed,
   demoNoRules,
   demoNotOnThisSystem,
+  openRgbRunNotWritten,
+  openRgbSleepFailed,
   openRgbAfterSleepAndWake,
   openRgbAlsoActs,
   openRgbDeletedProfile,
@@ -87,7 +90,7 @@ test("switching_a_rule_on_and_choosing_its_action_are_explicit_commands", async 
   await openAutomation();
 
   const sleep = await waitFor(() => rule("When the system goes to sleep, do nothing."));
-  await fireEvent.change(within(sleep).getByRole("combobox", { name: "Action" }), { target: { value: "LightsOff" } });
+  await fireEvent.change(within(sleep).getByRole("combobox", { name: /Action$/ }), { target: { value: "LightsOff" } });
   await waitFor(() => expect(called(shell, "set_rule")).toHaveLength(1));
   expect(called(shell, "set_rule")[0]!.args).toEqual({ trigger: "Sleeps", enabled: false, action: "LightsOff" });
 
@@ -96,11 +99,11 @@ test("switching_a_rule_on_and_choosing_its_action_are_explicit_commands", async 
   expect(called(shell, "set_rule")[1]!.args).toEqual({ trigger: "Sleeps", enabled: true, action: "Nothing" });
 
   const wake = rule("When the system wakes, do nothing.");
-  const action = within(wake).getByRole("combobox", { name: "Action" }) as HTMLSelectElement;
-  expect([...action.options].map((option) => option.textContent)).toEqual(["Do nothing", "Apply a profile"]);
+  const action = within(wake).getByRole("combobox", { name: /Action$/ }) as HTMLSelectElement;
+  expect([...action.options].map((option) => option.textContent)).toEqual(["Do nothing", "Switch the lights off", "Apply a profile"]);
   await fireEvent.change(action, { target: { value: "ApplyProfile" } });
   expect(called(shell, "set_rule")).toHaveLength(2);
-  const profile = within(wake).getByRole("combobox", { name: "Profile" }) as HTMLSelectElement;
+  const profile = within(wake).getByRole("combobox", { name: /Profile$/ }) as HTMLSelectElement;
   const glow = demoNoRules.profiles[0]!;
   await fireEvent.change(profile, { target: { value: glow.id } });
   await waitFor(() => expect(called(shell, "set_rule")).toHaveLength(3));
@@ -132,9 +135,10 @@ test("a_rule_whose_profile_was_deleted_says_so_and_never_names_another_profile",
   await openAutomation();
 
   const wake = await waitFor(() => rule("When the system wakes, apply a profile that was deleted."));
-  expect(within(wake).getByRole("alert").textContent).toBe(
-    "The profile of this rule was deleted, so the rule applies nothing. Choose another profile or switch the rule off.",
-  );
+  expect(within(wake).queryByRole("alert")).toBeNull();
+  expect(
+    within(wake).getByText("The profile of this rule was deleted, so the rule applies nothing. Choose another profile or switch the rule off."),
+  ).toBeTruthy();
 });
 
 test("the_screen_warns_when_openrgb_also_acts_on_the_same_event", async () => {
@@ -200,8 +204,78 @@ test("a_new_rule_run_reloads_the_rules", async () => {
   await new Promise((resolve) => setTimeout(resolve, 50));
   const before = loads;
 
-  const run: RuleRun = { trigger: "Sleeps", at_ms: 1, outcome: { Failed: { failure: "NotConnected" } } };
+  const run: RuleRun = { trigger: "Sleeps", at_ms: 1, outcome: { Failed: { failure: "NotConnected" } }, seen: true };
   await shell.pushView({ ...shell.view(demoConnected), rule_run: run });
 
   await waitFor(() => expect(loads).toBe(before + 1));
+});
+
+test("each_rule_control_is_named_by_its_sentence", async () => {
+  fakeShell(null, { automation: () => openRgbSleepAndWake });
+  render(App);
+  await openAutomation();
+
+  await screen.findByRole("switch", { name: "When the system goes to sleep, switch the lights off. Use this rule" });
+  expect(screen.getByRole("combobox", { name: "When the system wakes, apply the profile Evening. Action" })).toBeTruthy();
+  expect(screen.getByRole("combobox", { name: "When the system wakes, apply the profile Evening. Profile" })).toBeTruthy();
+});
+
+test("a_seam_that_failed_to_start_is_shown_and_the_system_event_rules_are_off", async () => {
+  fakeShell(null, { automation: () => demoEventsFailed });
+  render(App);
+  await openAutomation();
+
+  const failed = await screen.findByText(/PrismForge could not start receiving sleep, wake and session end/);
+  expect(failed.textContent).toContain("the event window could not be created: Access is denied.");
+  const sleep = rule("When the system goes to sleep, do nothing.");
+  expect((within(sleep).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
+  expect(within(sleep).getByText("Off: PrismForge could not start receiving this event. The note at the top says why.")).toBeTruthy();
+  expect(within(sleep).queryByText(/Windows only/)).toBeNull();
+  expect((within(rule("When PrismForge quits, do nothing.")).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("a_run_the_store_could_not_write_is_shown", async () => {
+  fakeShell(null, { automation: () => openRgbRunNotWritten });
+  render(App);
+  await openAutomation();
+
+  expect(await screen.findByText(/PrismForge could not save rule-runs.json/)).toBeTruthy();
+});
+
+test("a_failed_sleep_run_is_a_notice_at_start_until_the_user_dismisses_it", async () => {
+  let current = openRgbSleepFailed;
+  const shell = fakeShell(null, {
+    automation: () => current,
+    mark_runs_seen: (args) => {
+      expect(args).toEqual({ triggers: ["Sleeps"] });
+      current = structuredClone(openRgbSleepFailed);
+      current.rules.forEach((each) => each.last_run && (each.last_run.seen = true));
+      return current;
+    },
+  });
+  render(App);
+
+  const notice = await screen.findByRole("status", { name: "Automation" });
+  expect(notice.textContent).toContain("When the system went to sleep, the rule did not do what it should:");
+  expect(notice.textContent).toContain("Stopped after 1 s, the time this event allows.");
+  await fireEvent.click(within(notice).getByRole("button", { name: /Dismiss/ }));
+
+  await waitFor(() => expect(called(shell, "mark_runs_seen")).toHaveLength(1));
+  await waitFor(() => expect(screen.queryByRole("status", { name: "Automation" })).toBeNull());
+});
+
+test("opening_automation_marks_a_failed_run_seen", async () => {
+  const shell = fakeShell(null, {
+    automation: () => openRgbSleepFailed,
+    mark_runs_seen: () => openRgbSleepFailed,
+  });
+  render(App);
+  await openAutomation();
+
+  await waitFor(() => expect(called(shell, "mark_runs_seen").map((call) => call.args)).toEqual([{ triggers: ["Sleeps"] }]));
+});
+
+test("a_command_refused_while_the_lights_go_off_says_so", async () => {
+  const { failureText } = await import("../../lib/errors");
+  expect(failureText("RuleRunning")).toBe("An automation rule is switching the lights off. Try again in a moment.");
 });

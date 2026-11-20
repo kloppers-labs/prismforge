@@ -8,9 +8,7 @@
   import type { AutomationState } from "./state.svelte";
   import {
     LIGHTS_OFF,
-    NOT_HERE,
     actionKind,
-    allowsLightsOff,
     endingProfileText,
     isSystemEvent,
     openRgbAlsoText,
@@ -27,8 +25,8 @@
     rule,
     profiles,
     automation,
-    supported,
-  }: { rule: RuleView; profiles: ProfileChoice[]; automation: AutomationState; supported: boolean } = $props();
+    blocked,
+  }: { rule: RuleView; profiles: ProfileChoice[]; automation: AutomationState; blocked: string | null } = $props();
 
   let id = $derived(`rule-${rule.trigger.toLowerCase()}`);
   let chosen = $state<ActionKind | null>(null);
@@ -36,7 +34,7 @@
   let kind = $derived(chosen ?? stored);
   let profile = $derived(profileOf(rule.action));
   let known = $derived(profile !== null && profiles.some((choice) => choice.id === profile));
-  let available = $derived(supported || !isSystemEvent(rule.trigger));
+  let available = $derived(blocked === null || !isSystemEvent(rule.trigger));
   let busy = $derived(automation.pending === rule.trigger);
   let locked = $derived(!available || busy || stored === "Newer");
   let failure = $derived(automation.failure?.trigger === rule.trigger ? failureText(automation.failure.error) : null);
@@ -71,18 +69,17 @@
   <div class="controls">
     <Switch
       label="Use this rule"
+      labelledby="{id}-title"
       on={rule.enabled}
       disabled={locked}
       describedby="{id}-promise"
       onchange={(on) => automation.setRule(rule.trigger, on, rule.action)}
     />
     <label class="field">
-      <span>Action</span>
-      <select value={kind} disabled={locked} onchange={chooseAction}>
+      <span id="{id}-action">Action</span>
+      <select value={kind} disabled={locked} aria-labelledby="{id}-title {id}-action" onchange={chooseAction}>
         <option value="Nothing">Do nothing</option>
-        {#if allowsLightsOff(rule.trigger)}
-          <option value="LightsOff">Switch the lights off</option>
-        {/if}
+        <option value="LightsOff">Switch the lights off</option>
         <option value="ApplyProfile">Apply a profile</option>
         {#if stored === "Newer"}
           <option value="Newer" disabled>Set by a newer PrismForge</option>
@@ -91,8 +88,13 @@
     </label>
     {#if kind === "ApplyProfile"}
       <label class="field">
-        <span>Profile</span>
-        <select value={known && chosen === null ? profile : ""} disabled={locked || profiles.length === 0} onchange={chooseProfile}>
+        <span id="{id}-profile">Profile</span>
+        <select
+          value={known && chosen === null ? profile : ""}
+          disabled={locked || profiles.length === 0}
+          aria-labelledby="{id}-title {id}-profile"
+          onchange={chooseProfile}
+        >
           <option value="" disabled>{profiles.length === 0 ? "No profiles saved yet" : "Choose a profile"}</option>
           {#each profiles as choice (choice.id)}
             <option value={choice.id}>{choice.name}</option>
@@ -107,7 +109,7 @@
     <p class="hint">{ending}</p>
   {/if}
   {#if !available}
-    <p class="hint unavailable">{NOT_HERE}</p>
+    <p class="hint unavailable">{blocked}</p>
   {/if}
   {#if kind === "LightsOff"}
     <Details summary="What switching the lights off does">
@@ -115,7 +117,7 @@
     </Details>
   {/if}
   {#if problem}
-    <div class="notice problem" role="alert"><ToneIcon tone="problem" /><p>{problem}</p></div>
+    <div class="notice problem"><ToneIcon tone="problem" /><p>{problem}</p></div>
   {/if}
   {#each rule.openrgb_also as act (act.setting)}
     <div class="notice warning"><ToneIcon tone="warning" /><p>{openRgbAlsoText(act)}</p></div>

@@ -1,7 +1,9 @@
 import { api, type Failure } from "../../lib/api/client";
 import type { AutomationView } from "../../lib/api/bindings/AutomationView";
 import type { RuleAction } from "../../lib/api/bindings/RuleAction";
+import type { RuleRun } from "../../lib/api/bindings/RuleRun";
 import type { Trigger } from "../../lib/api/bindings/Trigger";
+import { runFailed } from "./wording";
 
 export type RuleFailure = { trigger: Trigger; error: Failure };
 
@@ -11,10 +13,15 @@ export class AutomationState {
   pending = $state<Trigger | null>(null);
   failure = $state<RuleFailure | null>(null);
   loadFailure = $state<Failure | null>(null);
-  private opened = false;
+
+  /** Failed sleep and session-end runs the user has not seen yet; the start notice shows them. */
+  get unseenFailures(): RuleRun[] {
+    return (this.view?.rules ?? [])
+      .map((rule) => rule.last_run)
+      .filter((run): run is RuleRun => run !== null && !run.seen && (run.trigger === "Sleeps" || run.trigger === "SessionEnds") && runFailed(run));
+  }
 
   async load() {
-    this.opened = true;
     const answer = await api.automation();
     if (answer.ok) {
       this.view = answer.value;
@@ -24,10 +31,17 @@ export class AutomationState {
     }
   }
 
-  /** Reads the rules again only once the screen was opened, so a run elsewhere never opens a store. */
   async reload() {
-    if (this.opened) {
-      await this.load();
+    await this.load();
+  }
+
+  async markSeen(triggers: Trigger[]) {
+    if (triggers.length === 0) {
+      return;
+    }
+    const answer = await api.markRunsSeen(triggers);
+    if (answer.ok) {
+      this.view = answer.value;
     }
   }
 
