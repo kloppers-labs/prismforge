@@ -21,7 +21,7 @@ enum Act {
     LightsOff,
 }
 
-/// Runs the rule for `trigger` once if it is on, records and shows the run; everything, the session slot included, ends by `limit`.
+/// Runs the rule for `trigger` once if it is on and was read in time, then records and shows the run, all by `limit`.
 /// `fresh` turns false once the event is over (a wake after a sleep); nothing is written after that.
 pub(crate) async fn run_rule<S: ViewSink>(
     shell: &Shell<S>,
@@ -46,25 +46,18 @@ pub(crate) async fn run_rule<S: ViewSink>(
             });
             return Some(publish(&shell.publisher, run_of(trigger, outcome)));
         }
-        Err(_) => return Some(publish(&shell.publisher, run_of(trigger, timed_out()))),
+        Err(_) => return None,
     };
-    let act = match timeout_at(work_deadline, profiles.rules()).await {
-        Err(_) => None,
-        Ok(rules) => match rules.rule(trigger).due()? {
-            RuleAction::ApplyProfile { profile } => Some(Act::Apply(profile.clone())),
-            RuleAction::LightsOff => Some(Act::LightsOff),
-            RuleAction::Nothing | RuleAction::Newer => return None,
-        },
+    let rules = timeout_at(work_deadline, profiles.rules()).await.ok()?;
+    let act = match rules.rule(trigger).due()? {
+        RuleAction::ApplyProfile { profile } => Act::Apply(profile.clone()),
+        RuleAction::LightsOff => Act::LightsOff,
+        RuleAction::Nothing | RuleAction::Newer => return None,
     };
-    let outcome = match act {
-        None => timed_out(),
-        Some(act) => {
-            let work = act_now(shell, &profiles, trigger, act, missing, &fresh, not_after);
-            timeout_at(work_deadline, work)
-                .await
-                .unwrap_or_else(|_| timed_out())
-        }
-    };
+    let work = act_now(shell, &profiles, trigger, act, missing, &fresh, not_after);
+    let outcome = timeout_at(work_deadline, work)
+        .await
+        .unwrap_or_else(|_| timed_out());
     let run = run_of(trigger, outcome);
     let _ = timeout_at(deadline, record(&profiles, run.clone())).await;
     Some(publish(&shell.publisher, run))

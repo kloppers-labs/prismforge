@@ -405,3 +405,41 @@ async fn a_failed_run_stays_unseen_until_the_user_saw_it() {
     assert_eq!(sleeps(&unseen), Some(false));
     assert_eq!(sleeps(&seen), Some(true));
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_rule_whose_state_could_not_be_read_in_time_records_and_shows_nothing() {
+    let dir = TempDir::new("rule-state-unknown");
+    let (shell, _) = demo_with(&dir, &[]).await;
+    let before = shell.view().rule_run.clone();
+
+    let run = run::run_rule(&shell, Trigger::Sleeps, Duration::ZERO, Vec::new(), || true).await;
+
+    assert_eq!(run, None);
+    assert_eq!(shell.view().rule_run, before);
+    let view = Automation::new(EventSupport::Available)
+        .view(&shell)
+        .await
+        .expect("view");
+    assert!(view.rules.iter().all(|rule| rule.last_run.is_none()));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_late_second_session_end_signal_gets_the_first_run_and_starts_nothing() {
+    let dir = TempDir::new("rule-end-late");
+    let (shell, _, controls) = demo_watched(&dir, &[(Trigger::SessionEnds, true)]).await;
+    let automation = Automation::new(EventSupport::Available);
+    let held = shell.current().await.0.expect("a session");
+
+    crate::exit::end_of_session(&shell, &automation, &crate::exit::ExitGuard::default()).await;
+    drop(held);
+    let first = shell.view().rule_run.clone();
+    let revision = shell.view().revision;
+    let writes = controls.outputs().len();
+    let second = automation.at_session_end(&shell).await;
+
+    assert!(crate::exit::SESSION_END_WAIT > SESSION_END_LIMIT);
+    assert!(first.is_some());
+    assert_eq!(second, first);
+    assert_eq!(shell.view().revision, revision, "the rule ran again");
+    assert_eq!(controls.outputs().len(), writes);
+}

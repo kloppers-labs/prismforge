@@ -109,7 +109,7 @@ pub(crate) async fn marked(profiles: &Profiles, launch: bool) -> Option<Mark> {
 }
 
 /// The rule that runs when the session becomes live: at launch the starts rule if it is on, else the connects rule.
-fn due_rule(rules: &Rules, launch: bool) -> Option<(Trigger, RuleAction)> {
+pub(crate) fn due_rule(rules: &Rules, launch: bool) -> Option<(Trigger, RuleAction)> {
     let due = |trigger: Trigger| rules.rule(trigger).due().cloned();
     let starts = launch.then(|| due(Trigger::Starts)).flatten();
     match starts {

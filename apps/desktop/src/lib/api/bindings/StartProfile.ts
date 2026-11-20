@@ -4,6 +4,6 @@ import type { StoreUnavailable } from "./StoreUnavailable";
 import type { Trigger } from "./Trigger";
 
 /**
- * The profile a rule applies at the connect at start: "When PrismForge starts", or else "When PrismForge connects".
+ * What a rule does at the connect at start: "When PrismForge starts", or else "When PrismForge connects".
  */
-export type StartProfile = "NotMarked" | { "Marked": { name: string, trigger: Trigger, } } | { "Unreadable": { problem: MarkProblem, trigger: Trigger, } } | { "Unavailable": { reason: StoreUnavailable, } };
+export type StartProfile = "NotMarked" | { "Marked": { name: string, trigger: Trigger, } } | { "Unreadable": { problem: MarkProblem, trigger: Trigger, } } | { "LightsOff": { trigger: Trigger, } } | { "Unavailable": { reason: StoreUnavailable, } };

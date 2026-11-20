@@ -94,19 +94,24 @@ impl<S: ViewSink> Shell<S> {
         self.current().await.0.map(|handle| handle.snapshot())
     }
 
-    /// The profile that connect at start applies, from the rules of the real store, which opens if needed.
+    /// What connect at start does by the rules of the real store, which opens if needed.
     pub async fn start_profile(&self) -> crate::lifecycle::StartProfile {
         use crate::lifecycle::StartProfile;
-        use crate::on_connect::{Mark, marked};
-        match self.stores.profiles(StoreKind::Real).await {
-            Err(reason) => StartProfile::Unavailable { reason },
-            Ok(profiles) => match marked(&profiles, true).await {
-                None => StartProfile::NotMarked,
-                Some(Mark::Ready(trigger, _, name)) => StartProfile::Marked { name, trigger },
-                Some(Mark::Unreadable(trigger, _, problem)) => {
-                    StartProfile::Unreadable { problem, trigger }
-                }
-            },
+        use crate::on_connect::{Mark, due_rule, marked};
+        use prismforge_core::automation::RuleAction;
+        let profiles = match self.stores.profiles(StoreKind::Real).await {
+            Err(reason) => return StartProfile::Unavailable { reason },
+            Ok(profiles) => profiles,
+        };
+        if let Some((trigger, RuleAction::LightsOff)) = due_rule(&profiles.rules().await, true) {
+            return StartProfile::LightsOff { trigger };
+        }
+        match marked(&profiles, true).await {
+            None => StartProfile::NotMarked,
+            Some(Mark::Ready(trigger, _, name)) => StartProfile::Marked { name, trigger },
+            Some(Mark::Unreadable(trigger, _, problem)) => {
+                StartProfile::Unreadable { problem, trigger }
+            }
         }
     }
 

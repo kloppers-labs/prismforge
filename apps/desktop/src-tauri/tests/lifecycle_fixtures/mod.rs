@@ -334,6 +334,19 @@ async fn start_path(views: &mut Module) {
         "lifecycleStartPath",
         &stable(s.lifecycle.publish(&s.shell).await),
     );
+    prismforge_desktop::Automation::new(prismforge_desktop::EventSupport::NotOnThisSystem)
+        .set_rule(
+            &s.shell,
+            prismforge_core::automation::Trigger::Starts,
+            true,
+            prismforge_core::automation::RuleAction::LightsOff,
+        )
+        .await
+        .expect("starts rule");
+    views.add(
+        "lifecycleStartLightsOff",
+        &stable(s.lifecycle.publish(&s.shell).await),
+    );
 }
 
 pub async fn generate(views: &mut Module, errors: &mut Module) {

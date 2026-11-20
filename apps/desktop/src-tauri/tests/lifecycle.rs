@@ -891,3 +891,52 @@ async fn every_change_to_the_marked_profile_publishes_the_start_profile() {
     marks::stop(&shell, &lifecycle).await;
     assert_eq!(views.views().len(), published + 1);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_rule_that_switches_the_lights_off_at_start_counts_as_the_start_action() {
+    let (shell, recorder, _dir) = shell("start-lights-off");
+    let entry = FakeEntry::default();
+    let (lifecycle, _) = lifecycle(&entry);
+    let automation = Automation::new(EventSupport::NotOnThisSystem);
+    marks::start(
+        &shell,
+        &lifecycle,
+        OpenRgbBackend::new(Local(desk_server()), ClientConfig::default()),
+    )
+    .await
+    .expect("start");
+    recorder.wait_for(is_connected).await;
+
+    marks::set_rule(
+        &shell,
+        &lifecycle,
+        &automation,
+        Trigger::Connects,
+        true,
+        prismforge_core::automation::RuleAction::LightsOff,
+    )
+    .await
+    .expect("connects");
+    assert_eq!(
+        lifecycle.view(&shell).await.start_profile,
+        StartProfile::LightsOff {
+            trigger: Trigger::Connects
+        }
+    );
+    marks::set_rule(
+        &shell,
+        &lifecycle,
+        &automation,
+        Trigger::Starts,
+        true,
+        prismforge_core::automation::RuleAction::LightsOff,
+    )
+    .await
+    .expect("starts");
+    assert_eq!(
+        lifecycle.view(&shell).await.start_profile,
+        StartProfile::LightsOff {
+            trigger: Trigger::Starts
+        }
+    );
+}

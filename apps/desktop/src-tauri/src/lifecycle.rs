@@ -60,7 +60,7 @@ pub struct LifecycleView {
     pub folder: String,
 }
 
-/// The profile a rule applies at the connect at start: "When PrismForge starts", or else "When PrismForge connects".
+/// What a rule does at the connect at start: "When PrismForge starts", or else "When PrismForge connects".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum StartProfile {
@@ -71,6 +71,10 @@ pub enum StartProfile {
     },
     Unreadable {
         problem: MarkProblem,
+        trigger: Trigger,
+    },
+    /// The rule switches the lights off instead of applying a profile.
+    LightsOff {
         trigger: Trigger,
     },
     Unavailable {
