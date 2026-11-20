@@ -13,7 +13,7 @@ The code is in `crates/prismforge-core/src/automation` (rules, lights off, the w
 ## The rules
 
 1. **One rule for each event.** The events are: PrismForge starts, PrismForge connects, the system goes to sleep or hibernates (one event, because Windows gives one signal for both), the system wakes, the user signs out or the system shuts down or restarts (session end), and PrismForge quits.
-2. **Three actions.** Apply a profile, by its id; switch the lights off; do nothing. Lights off is offered for sleep, session end and quit only, the events after which the lights should stay dark; the store refuses it for the others.
+2. **Three actions.** Apply a profile, by its id; switch the lights off; do nothing. Every event offers all three, as the brief lists them; "When the system wakes, switch the lights off" keeps the lights dark after a wake. At start and connect, lights off runs through the same trigger as a profile.
 3. **Every rule is off by default.** A rule acts only when the user switched it on, and only for its own event. A rule that is on with "do nothing" does nothing.
 4. **A missing profile is reported, never guessed.** Deleting a profile keeps the rules that name it; the screen says the profile was deleted, and the rule applies nothing. A rule that is switched on must name a profile the store has; a rule that is off may keep a deleted one, so the user can always switch it off.
 5. **Rules run only while PrismForge runs.** The screen says so above the rules.
@@ -72,7 +72,9 @@ At quit and session end, a rule that applies a profile ends the profile's effect
 6. `SetProcessShutdownParameters(0x300, 0)` at start, so Windows closes PrismForge before an OpenRGB at the default 0x280. No `SHUTDOWN_NORETRY`, no `ShutdownBlockReasonCreate`, no change to the system's timeouts.
 7. Start with the system is unchanged (`0004`).
 
-The Win32 calls need `unsafe`. The workspace forbids it; the desktop crate denies it instead and only `system_events/windows.rs` allows it.
+**The seam reports its start.** `EventSource::start` returns what it achieved: `Available`; `Limited` with the detail when the events arrive but a part failed (the shutdown level was refused, or the suspend registration failed, which loses sleep on Modern Standby PCs); `Failed` with the detail when the thread, the module handle, the window class or the window could not be made, or the window did not answer within 2 s; `NotOnThisSystem` on macOS and Linux. The Automation screen shows each state in words; with `Failed` the sleep, wake and session-end controls are off and no session-end rule runs. The message loop stops on an error (`GetMessageW` returning -1) instead of spinning.
+
+The Win32 calls need `unsafe`. The workspace lint denies it, and only `system_events/windows.rs` allows it; the test `tests/unsafe_code.rs` fails when any other file allows it. The desktop crate inherits the workspace lints.
 
 **macOS and Linux:** a source that reports the events as not available. The screen says that sleep, wake and session-end rules work on Windows only for now and turns their controls off. Starts, connects and quits work everywhere.
 
@@ -82,26 +84,28 @@ Every wait is a named constant with a test in simulated time.
 
 | Constant | Value | Where |
 |---|---|---|
-| `SLEEP_LIMIT` | 1 s | The sleep rule, lock wait included; the window thread waits at most this long. Windows allows about 2 s. |
+| `SLEEP_LIMIT` | 1 s | The whole sleep rule: opening the store, the session slot, the apply slot, the write and the record; the window thread waits at most this long. Windows allows about 2 s. |
 | `SESSION_END_LIMIT` | 1 s | The session-end rule. Then the stop of `0004` gets the rest of `LAST_STOP_LIMIT` (4 s in all), under the 5 s after which Windows ends a hidden app. |
 | `QUIT_RULE_LIMIT` | 2 s | The quit rule, before the quit's own stop (`QUIT_STOP_LIMIT`, 10 s). |
 | `RULE_LOCK_WAIT` | 250 ms | How long a rule waits for a profile apply of the user. |
+| `RECORD_LIMIT` | 200 ms | The end of each rule's limit kept for writing its run, so the work stops 200 ms earlier and the record still fits. |
+| `WAKE_STEP_LIMIT` | 4 s | Each wake step that needs the session slot (read the state, connect, read the devices). |
 | `WAKE_BACKOFF` | 0.5, 1, 2, 4 s, then 4 s | Between tries to reach OpenRGB after a wake. |
-| `WAKE_RECONNECT_LIMIT` | 30 s | After a wake, OpenRGB counts as not back. |
+| `WAKE_RECONNECT_LIMIT` | 30 s | One deadline for reaching OpenRGB and for the device list to settle, counted from the wake. |
 | `WAKE_SETTLE_INTERVAL` | 1 s | Between two reads of the device list. |
-| `WAKE_SETTLE_LIMIT` | 15 s | The device list is used as it is. |
+| `WAKE_SETTLE_LIMIT` | 15 s | The device list is used as it is, or earlier at the 30 s deadline. |
 | `WAKE_APPLY_LIMIT` | 10 s | The wake rule's own work. |
 
-A rule that does not finish in time is recorded as stopped at its limit; the work in the session may still finish after it.
+Every part of a rule runs under its one deadline, the read of the session slot included, so a disconnect or a connect that holds the slot cannot hold a rule past its limit. A rule that does not finish in time is recorded as stopped at its limit. Nothing is written after the event: a sleep rule checks before each write that no wake came and that its time (counted on the wall clock, which also runs while the PC sleeps) has not passed, and the session itself skips a lights-off command that reaches it after that time (`TooLate`).
 
 ## The wake sequence
 
 Only with the wake rule switched on; without one, a wake writes nothing.
 
-1. The session forgets the device state: the next tick sets Direct Mode and every colour again (`resync`), because OpenRGB may report Direct Mode for a device that came back in a firmware mode.
-2. Reach OpenRGB: ask the session to connect, with the backoff above, up to 30 s after the wake.
-3. Read the device list until two reads a second apart agree, up to 15 s. A failed read never counts as agreement; a connection lost again goes back to step 2, within the same 30 s.
-4. Apply the wake rule once. The devices that were there before the sleep and are not back are named in the result; the rule applies to the devices that are there.
+1. Reach OpenRGB: ask the session to connect, with the backoff above.
+2. Read the device list until two reads a second apart agree, up to 15 s. A failed read never counts as agreement; a connection lost again goes back to step 1. Steps 1 and 2 share one deadline, 30 s after the wake, so "within about 30 seconds" holds.
+3. Right before the rule, the session forgets the device state: the next tick sets Direct Mode and every colour again (`resync`), because OpenRGB may report Direct Mode for a device that came back in a firmware mode. Done earlier, the rewrite would reach devices that are not back yet.
+4. Apply the wake rule once, within `WAKE_APPLY_LIMIT`. The devices that were there before the sleep and are not back are named in the result; the rule applies to the devices that are there. A wake without a sleep before it names no device as missing.
 
 The sequence never holds a session handle while it waits, so a disconnect is never held up by it. A newer sleep, or a disconnect or a new connect by the user, cancels the wake rule. Not built: the short follow-up on `DBT_DEVNODES_CHANGED` after a wake (research 4b step 6); it is a later item.
 
@@ -110,14 +114,16 @@ The sequence never holds a session handle while it waits, so a disconnect is nev
 A rule takes the apply slot like a profile apply, after the session slot is released and before any store lock, so the lock order of `0002` holds (session slot, apply slot, output gate, on-connect report, store). It never waits on a lock without a bound: it waits at most `RULE_LOCK_WAIT` for the slot and the gate, inside the rule's own limit.
 
 - **A rule meets a user's profile apply:** the rule does not run, and its run says "PrismForge was applying a profile for you".
-- **A user command meets a running rule:** it is refused with "PrismForge is applying a profile", as during any apply; for a profile the view names the profile being applied by a rule. The status strip says "applying … by a rule".
-- **Two session-end signals:** the first runs the rule, the second does nothing.
+- **A user command meets a running rule:** a rule that applies a profile refuses it with "PrismForge is applying a profile", as during any apply, and the view names the profile; the status strip says "applying … by a rule". A rule that switches the lights off refuses it with its own reason: "An automation rule is switching the lights off" (`RuleRunning`).
+- **Two session-end signals:** the run is one shared future. The first signal starts it; the second waits for the same run, within its own limit, and gets its result. So the stop at `Exit` never starts while the rule still writes.
 
-`tests/command_locks.rs` drives `automation` and `set_rule` like every command, and the sleep, wake and session-end events and the quit rule beside a disconnect, a switch to OpenRGB, the window close and a profile apply in every poll order. A guard test reads the variants of `SystemEvent` from the source and fails when one has no row.
+`tests/command_locks.rs` drives `automation`, `set_rule` and `mark_runs_seen` like every command, and the sleep, wake and session-end events and the quit rule beside a disconnect, a switch to OpenRGB, the window close and a profile apply in every poll order. A guard test reads the variants of `SystemEvent` from the source and fails when one has no row.
 
 ## Two programs
 
 When the server advertises the settings-manager flag, PrismForge reads OpenRGB's `ProfileManager` settings with packet 250. It learns the flag by sending empty client flags (packet 52, value 0); the server answers with its own flags (packet 53). PrismForge never sends the packets that change settings (251 to 254) and never sets the ProfileManager client flag.
+
+Sources, OpenRGB `release_1.1` at `8e16de27858cf2be6af54a33ce003df74cb9fd3e`, read for this record: `NetworkProtocol.h:95` (`NET_SERVER_FLAG_SUPPORTS_SETTINGSMANAGER = ( 1 << 4 )`), `:116-117` (`NET_PACKET_ID_SET_CLIENT_FLAGS = 52`, `NET_PACKET_ID_SET_SERVER_FLAGS = 53`), `:167` (`NET_PACKET_ID_SETTINGSMANAGER_GET_SETTINGS = 250`); `NetworkServer.cpp:167` (the server sets the flag), `:1341-1344` (packet 52 is answered with `SendReply_ServerFlags`, then the usual acknowledge), `:3719-3745` (the reply is packet 53 with the 4-byte flags in the server's byte order, for clients at protocol 6 or later), `:1456` and `:2475` (the handler of packet 250). The same lines hold on `master` at `5bcfa9ae` for `NetworkProtocol.h`. PrismForge reads the flags as little-endian, which is the byte order of the x86 and ARM machines OpenRGB runs on. Packets 52 and 250 are sent once at each connect, also with no rule on, so the screen can say whether OpenRGB acts too. Whether a real server answers them as the source says is checked on the owner's PC (`docs/hardware-validation.md`).
 
 | PrismForge event | OpenRGB settings |
 |---|---|
@@ -138,10 +144,10 @@ Next to each rule, in the words of the screen:
 | Starts, connects | **Will**, while PrismForge runs. |
 | Quits | **Will**, before it ends, within 2 s. |
 | Sleep | **Tries to**, before the PC sleeps; Windows gives about 2 s and may skip the notice on low battery. |
-| Wake | Applies once the devices are back, within about 30 s. |
+| Wake | Acts once the devices are back, within about 30 s; the rule's own work then takes at most 10 s more. |
 | Session end | **Tries to**; Windows closes programs one by one and can end PrismForge or OpenRGB first; devices that keep power may stay lit. |
 
-A failed write at sleep or session end is recorded in `rule-runs.json` and shown at the next start. If the system ends PrismForge before the run is written, nothing is shown; the screen cannot tell a run that never started from one that was cut off.
+A failed sleep or session-end run is recorded in `rule-runs.json` and shown at the next start: the notices area shows each failed run the user has not seen yet, with Open Automation and Dismiss. Dismissing it, or opening Automation, marks it seen (`mark_runs_seen`, kept in the run file). A run the store could not write is still shown until PrismForge ends, and the failed write is a notice on Automation. When the store cannot be opened at all, the event publishes that no rule could run. If the system ends PrismForge before the run is written, nothing is shown; the screen cannot tell a run that never started from one that was cut off. A profile applied at quit or session end whose last frame could not be kept says so in its run.
 
 ## Not verified
 

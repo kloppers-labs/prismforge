@@ -89,12 +89,12 @@ After a connection, **Devices** shows the device list and identify. **Effects** 
 
 **Automation** holds one rule for each event, read as a sentence such as "When the system goes to sleep, switch the lights off." Every rule is off until you switch it on, and rules run only while PrismForge runs.
 
-- The events are: PrismForge starts, PrismForge connects, the system goes to sleep or hibernates, the system wakes, you sign out or the system shuts down or restarts, and PrismForge quits. The actions are: apply a profile, switch the lights off (sleep, session end and quit only), or do nothing.
+- The events are: PrismForge starts, PrismForge connects, the system goes to sleep or hibernates, the system wakes, you sign out or the system shuts down or restarts, and PrismForge quits. The actions are: apply a profile, switch the lights off, or do nothing.
 - Switching the lights off writes black through Direct Mode, or picks a device's own "Off" mode when that mode does not save to device memory. Other devices are left alone and named in the result.
-- What PrismForge can promise differs: it *will* act when it starts, connects and quits; it *tries to* act at sleep and session end, because Windows can end or freeze it first; after a wake it waits for the devices, up to about 30 seconds in all.
+- What PrismForge can promise differs: it *will* act when it starts, connects and quits; it *tries to* act at sleep and session end, because Windows can end or freeze it first; after a wake it acts once the devices are back, within about 30 seconds, and then needs at most 10 seconds for the rule itself.
 - Sleep, wake and session end are received on Windows only for now. On macOS and Linux those rules do nothing, and the screen says so.
 - When OpenRGB's own "load profile" settings act on the same event, the rule says so: two programs then write, and the last one wins. PrismForge reads those settings and never changes them.
-- Each rule shows its last run: when, what changed and which devices were skipped and why. `docs/decisions/0007-automation.md` has the details.
+- Each rule shows its last run: when, what changed and which devices were skipped and why. A failed run at sleep or session end is also a notice at the next start until you dismiss it or open Automation. `docs/decisions/0007-automation.md` has the details.
 
 Start with the system is always for your user only. Turn it off before you uninstall: the NSIS uninstaller removes the entry, the MSI does not. To remove it by hand on Windows, run `reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v PrismForge /f`; on macOS, `rm ~/Library/LaunchAgents/PrismForge.plist`. An earlier build run as administrator may have added an entry for every user; Settings says so, and removing it needs `reg delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v PrismForge /f` in a Command Prompt opened as administrator. `docs/decisions/0004-lifecycle.md` has the details.
 
