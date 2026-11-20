@@ -2,7 +2,7 @@
   import type { Component } from "../../lib/api/bindings/Component";
   import type { Placement } from "../../lib/api/bindings/Placement";
   import type { Rgb } from "../../lib/api/bindings/Rgb";
-  import { localLeds, outlineBox, viewLeds, type Point } from "./geometry";
+  import { localLeds, locate, outlineBox, viewLeds, type Point } from "./geometry";
 
   const LABEL_GAP = 22;
   const ARROW = 22;
@@ -34,10 +34,19 @@
   );
   let radius = $derived(Math.min(Math.max(gap * 0.36, 2.5), 9));
   let bounds = $derived.by(() => {
-    const xs = points.map((point) => point.x);
-    const ys = points.map((point) => point.y);
-    const frame = component.frame ? Math.max(component.frame.width, component.frame.height) / 100 : 0;
-    const half = { x: (Math.max(box.width, frame) * at.size) / 2, y: (Math.max(box.height, frame) * at.size) / 2 };
+    const frame = component.frame;
+    const corners = frame
+      ? [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ].map(([sx, sy]) => locate(at, { x: (sx! * frame.width) / 200, y: (sy! * frame.height) / 200 }))
+      : [];
+    const all = [...points, ...corners];
+    const xs = all.map((point) => point.x);
+    const ys = all.map((point) => point.y);
+    const half = { x: (box.width * at.size) / 2, y: (box.height * at.size) / 2 };
     return {
       left: Math.min(...xs, at.x - half.x) - radius,
       right: Math.max(...xs, at.x + half.x) + radius,

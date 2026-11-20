@@ -113,7 +113,8 @@ export function outputName(output: SetupOutput, names: Names, session: SessionSn
   if (!device) {
     return { device: output.label, zone: output.zone_name };
   }
-  return { device: names.device(device), zone: output.zone === null ? null : names.zone(device, output.zone) };
+  const changed = session !== null && output.zone !== null && capacity(session, output) === null;
+  return { device: names.device(device), zone: output.zone === null ? null : changed ? output.zone_name : names.zone(device, output.zone) };
 }
 
 export function outputLine(output: SetupOutput, names: Names, session: SessionSnapshot | null): string {
@@ -180,6 +181,16 @@ export function outputLines(setup: Setup, output: SetupOutput, view: ViewId, ses
   }
   lines.push(`Holds ${listText(components.map((component) => component.name))}.`);
   const room = session ? capacity(session, output) : null;
+  if (session && !deviceFor(session, output)) {
+    lines.push("Not found today. PrismForge sends it nothing until it is back.");
+    return lines;
+  }
+  if (session && room === null) {
+    lines.push(
+      `This zone is no longer ${output.zone_name ?? "the one placed in the setup"}, so the parts placed on it may not fit. Effects across the setup leave it out until you place them again.`,
+    );
+    return lines;
+  }
   const total = room?.available ?? output.first_led + span(setup, output);
   const placed = placedLeds(setup, output, view);
   const left = total - placed;
@@ -191,11 +202,6 @@ export function outputLines(setup: Setup, output: SetupOutput, view: ViewId, ses
         ? `${placed} of ${total} LEDs have a place. ${left} ${left === 1 ? "is" : "are"} not placed and stay${left === 1 ? "s" : ""} dark while an effect runs across the setup.`
         : `All ${total} LEDs have a place.`,
     );
-  }
-  if (session && !deviceFor(session, output)) {
-    lines.push("Not found today. PrismForge sends it nothing until it is back.");
-  } else if (session && room === null) {
-    lines.push("This zone changed since you placed it. PrismForge leaves it out of effects across the setup until you wire it again.");
   }
   return lines;
 }

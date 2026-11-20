@@ -2,7 +2,7 @@ import type { GroupsView } from "../lib/api/bindings/GroupsView";
 import type { SetupStoreView } from "../lib/api/bindings/SetupStoreView";
 import { acrossDemoSkipped } from "../test/fixtures/acrossReports";
 import { liveRealAcross } from "../test/fixtures/live";
-import { setupDemoEmpty, setupDemoTower, setupRealEmpty, setupRealTower } from "../test/fixtures/setups";
+import { setupDemoEmpty, setupDemoTower, setupDemoZoneChanged, setupRealEmpty, setupRealTower } from "../test/fixtures/setups";
 import type { LifecycleView } from "../lib/api/bindings/LifecycleView";
 import type { LiveOutput } from "../lib/api/bindings/LiveOutput";
 import { batchDuringIdentify } from "../test/fixtures/batches";
@@ -187,6 +187,30 @@ export const SCENARIOS: Record<string, Scenario> = {
   },
 };
 
+/** The demo tower with a case outline, the graphics card as a block and the board edge as a free line. */
+function demoLibrary(): SetupStoreView {
+  const view = structuredClone(setupDemoTower);
+  const pc = view.setup.views.find((each) => each.id === "v-pc")!;
+  pc.outlines = [{ id: "u-1", name: "Case", kind: "Case", x: 535, y: 350, width: 900, height: 640, rotation: 0 }];
+  const graphics = view.setup.components.find((component) => component.id === "c-graphics")!;
+  graphics.frame = { width: 112, height: 40 };
+  const edge = view.setup.components.find((component) => component.id === "c-board-edge")!;
+  edge.geometry = { Line: { leds: 6, points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 60 }], first: "AtStart" } };
+  return view;
+}
+
+/** The real tower whose desk view also draws the desk, the monitor and the PC. */
+function realDesk(): SetupStoreView {
+  const view = structuredClone(setupRealTower);
+  const desk = view.setup.views.find((each) => each.id === "v-desk")!;
+  desk.outlines = [
+    { id: "u-1", name: "Desk", kind: "Desk", x: 500, y: 660, width: 920, height: 40, rotation: 0 },
+    { id: "u-2", name: "Monitor", kind: "Monitor", x: 430, y: 200, width: 460, height: 280, rotation: 0 },
+    { id: "u-3", name: "PC", kind: "Pc", x: 840, y: 300, width: 170, height: 300, rotation: 0 },
+  ];
+  return view;
+}
+
 Object.assign(SCENARIOS, {
   "setup-empty": { ...openRgb, label: "Setup, an empty PC view", view: view(sessions.openRgbSetupDevices), area: "Setup", setup: setupRealEmpty },
   "setup-template": {
@@ -221,8 +245,25 @@ Object.assign(SCENARIOS, {
     label: "Setup, the desk view",
     view: view(sessions.openRgbAcrossRunning),
     area: "Setup",
-    setup: setupRealTower,
+    setup: realDesk(),
     setupTab: "Desk",
+  },
+  "setup-library": {
+    ...base,
+    label: "Setup, a case outline, a block and a free line",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: demoLibrary(),
+    setupSelect: ["c-graphics"],
+  },
+  "setup-points": {
+    ...base,
+    label: "Setup, the points of a free line edited with number fields",
+    view: view(sessions.demoConnected),
+    area: "Setup",
+    setup: demoLibrary(),
+    setupSelect: ["c-board-edge"],
+    scrollTo: "Points of the line",
   },
   "setup-draft": {
     ...base,
@@ -237,7 +278,7 @@ Object.assign(SCENARIOS, {
     label: "Setup, an apply with outputs that got nothing",
     view: view(sessions.demoAcrossSkipped),
     area: "Setup",
-    setup: setupDemoTower,
+    setup: setupDemoZoneChanged,
     setupEffect: "rainbow-wave",
     setupApply: true,
     handlers: { apply_across: () => acrossDemoSkipped },

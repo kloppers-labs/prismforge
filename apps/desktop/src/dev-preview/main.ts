@@ -104,7 +104,7 @@ async function setup() {
     document.querySelector<HTMLElement>(`[data-row="${id}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: index > 0 }));
     await tick();
   }
-  if (scenario.setupSelect?.length) {
+  if (scenario.setupSelect?.length && !scenario.scrollTo && scenario.label.includes("list twin")) {
     document.querySelector<HTMLElement>(`[data-row="${scenario.setupSelect[0]}"]`)?.scrollIntoView({ block: "start" });
   }
   if (scenario.setupEffect) {
@@ -120,13 +120,16 @@ async function setup() {
   }
   if (scenario.setupApply) {
     [...document.querySelectorAll<HTMLButtonElement>("button.primary")].find((candidate) => candidate.textContent?.startsWith("Apply across"))?.click();
-    await wait(100);
+    await wait(800);
   }
   if (scenario.scrollTo) {
     await wait(100);
     const name = scenario.scrollTo;
-    const region = [...document.querySelectorAll<HTMLElement>("section, aside, [role='status']")].find((each) => each.getAttribute("aria-label") === name || each.querySelector("h2")?.textContent === name);
-    region?.scrollIntoView({ block: "start" });
+    const region = [...document.querySelectorAll<HTMLElement>("section, aside, fieldset, [role='status']")].find(
+      (each) => each.getAttribute("aria-label") === name || each.querySelector("h2, legend")?.textContent === name,
+    );
+    const inner = name === "Components and editor" ? document.querySelector<HTMLElement>(".inspector") : null;
+    (inner ?? region)?.scrollIntoView({ block: "start" });
   }
 }
 

@@ -5,7 +5,7 @@ import type { Setup } from "../../lib/api/bindings/Setup";
 import { fakeShell, refuse } from "../../test/backend";
 import { errorSetupExceedsOutput } from "../../test/fixtures/errors";
 import { demoConnected } from "../../test/fixtures/sessions";
-import { setupDemoEmpty } from "../../test/fixtures/setups";
+import { setupDemoEmpty, setupDemoZoneChanged } from "../../test/fixtures/setups";
 import { componentRow, inspector, openSetup, setupHandlers } from "../../test/setup";
 
 function savedSetup(shell: ReturnType<typeof fakeShell>): Setup {
@@ -309,4 +309,16 @@ test("delete_says_undo_brings_it_back_also_after_a_save", async () => {
   await fireEvent.click(screen.getByRole("button", { name: "Undo" }));
 
   expect(within(screen.getByRole("listbox", { name: "Components in the PC view" })).getByRole("option", { name: "Rear fan" })).toBeTruthy();
+});
+
+test("an_output_whose_zone_changed_says_so_and_claims_no_places", async () => {
+  fakeShell(demoConnected, setupHandlers(setupDemoZoneChanged));
+  render(App);
+  await openSetup();
+
+  const outputs = screen.getByRole("list", { name: "Outputs in the setup" });
+  const changed = within(outputs).getByText(/^Board logo on Demo Motherboard/).closest("li")!;
+
+  expect(changed.textContent).toContain("This zone is no longer Board logo, so the parts placed on it may not fit. Effects across the setup leave it out until you place them again.");
+  expect(changed.textContent).not.toContain("have a place");
 });
