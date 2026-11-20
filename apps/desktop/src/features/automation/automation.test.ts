@@ -19,14 +19,13 @@ import {
 import * as errors from "../../test/fixtures/errors";
 import { demoConnected } from "../../test/fixtures/sessions";
 
-const SENTENCES = [
-  "When PrismForge starts, do nothing.",
-  "When PrismForge connects, do nothing.",
+const PRISMFORGE_SENTENCES = ["When PrismForge starts, do nothing.", "When PrismForge connects, do nothing.", "When PrismForge quits, do nothing."];
+const SYSTEM_SENTENCES = [
   "When the system goes to sleep, do nothing.",
   "When the system wakes, do nothing.",
   "When you sign out or the system shuts down or restarts, do nothing.",
-  "When PrismForge quits, do nothing.",
 ];
+const SENTENCES = [...PRISMFORGE_SENTENCES, ...SYSTEM_SENTENCES];
 
 async function openAutomation() {
   const screens = await screen.findByRole("navigation", { name: "Main" });
@@ -35,8 +34,30 @@ async function openAutomation() {
 }
 
 function rule(sentence: RegExp | string) {
-  const heading = screen.getByRole("heading", { level: 2, name: sentence });
-  return heading.closest("li") as HTMLElement;
+  return screen.getByRole("group", { name: sentence });
+}
+
+function rows(container: HTMLElement = document.body) {
+  return within(container)
+    .getAllByRole("listitem")
+    .map((item) => item.querySelector(":scope > [role=group]"))
+    .filter((row): row is HTMLElement => row !== null);
+}
+
+function detailsButton(row: HTMLElement) {
+  return within(row).getByRole("button", { name: /^Details/ });
+}
+
+function details(row: HTMLElement) {
+  return document.getElementById(detailsButton(row).getAttribute("aria-controls") ?? "") as HTMLElement;
+}
+
+function outsideDetails(element: HTMLElement) {
+  return element.closest("[data-details]") === null;
+}
+
+function lastRun(row: HTMLElement) {
+  return within(row).getByText(/^Last run/).closest("p") as HTMLElement;
 }
 
 function called(shell: ReturnType<typeof fakeShell>, command: string) {
@@ -55,15 +76,76 @@ test("automation_is_the_fifth_area_and_every_rule_reads_as_a_sentence_that_is_of
   await openAutomation();
 
   expect(screen.getByText("Rules run only while PrismForge runs.")).toBeTruthy();
-  const headings = await screen.findAllByRole("heading", { level: 2 });
-  expect(headings.map((heading) => heading.textContent?.trim())).toEqual(SENTENCES);
+  await screen.findByRole("region", { name: "System" });
+  expect(rows().map((row) => row.getAttribute("aria-label"))).toEqual(SENTENCES);
+  expect(screen.queryAllByRole("heading", { level: 2 }).map((heading) => heading.textContent?.trim())).toEqual(["PrismForge", "System"]);
   for (const sentence of SENTENCES) {
     const toggle = within(rule(sentence)).getByRole("switch");
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   }
 });
 
-test("lights_off_at_sleep_and_a_profile_at_wake_read_as_plain_sentences_with_their_promises", async () => {
+test("the_header_says_once_that_rules_run_only_while_prismforge_runs", async () => {
+  fakeShell(null, { automation: () => demoNoRules });
+  render(App);
+  await openAutomation();
+
+  await screen.findByText("Rules run only while PrismForge runs.");
+  expect(screen.queryByText(/Each rule changes your lighting only after you switch it on/)).toBeNull();
+  expect(screen.queryByText(/These are the rules of demo mode/)).toBeNull();
+});
+
+test("the_prismforge_events_and_the_system_events_are_two_groups", async () => {
+  fakeShell(null, { automation: () => demoNoRules });
+  render(App);
+  await openAutomation();
+
+  const prismforge = await screen.findByRole("region", { name: "PrismForge" });
+  const system = screen.getByRole("region", { name: "System" });
+  expect(rows(prismforge).map((row) => row.getAttribute("aria-label"))).toEqual(PRISMFORGE_SENTENCES);
+  expect(rows(system).map((row) => row.getAttribute("aria-label"))).toEqual(SYSTEM_SENTENCES);
+});
+
+test("every_promise_is_one_short_line_and_the_full_explanation_is_in_a_closed_details", async () => {
+  fakeShell(null, { automation: () => openRgbSleepAndWake });
+  render(App);
+  await openAutomation();
+
+  const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
+  const short = within(sleep).getByText("PrismForge tries to switch the lights off before the PC sleeps.");
+  expect(outsideDetails(short)).toBe(true);
+  expect(detailsButton(sleep).getAttribute("aria-expanded")).toBe("false");
+  expect(details(sleep).hidden).toBe(true);
+  expect(details(sleep).hasAttribute("data-details")).toBe(true);
+  await fireEvent.click(detailsButton(sleep));
+  expect(detailsButton(sleep).getAttribute("aria-expanded")).toBe("true");
+  expect(details(sleep).hidden).toBe(false);
+  expect(details(sleep).textContent).toContain("Windows gives about two seconds and may skip the notice on low battery");
+  expect(details(sleep).textContent).toContain("Switching the lights off writes black through Direct Mode");
+
+  const wake = rule("When the system wakes, apply the profile Evening.");
+  expect(within(wake).getByText("PrismForge applies the profile once devices return, within about 30 seconds.")).toBeTruthy();
+  expect(details(wake).textContent).toContain("it waits for OpenRGB and for the device list to stop changing");
+  expect(within(rule(/^When you sign out/)).getByText("PrismForge tries to act as the session ends.")).toBeTruthy();
+  expect(within(rule("When PrismForge starts, do nothing.")).getByText("PrismForge will do this once, after it starts and connects by itself.")).toBeTruthy();
+  expect(details(rule("When PrismForge starts, do nothing.")).textContent).toContain("Connect to OpenRGB when PrismForge starts");
+  expect(within(rule("When PrismForge connects, do nothing.")).getByText("PrismForge will do this once each time you connect.")).toBeTruthy();
+  expect(within(rule("When PrismForge quits, do nothing.")).getByText("PrismForge will act when you quit it.")).toBeTruthy();
+  expect(details(rule("When PrismForge quits, do nothing.")).textContent).toContain("It waits at most two seconds.");
+});
+
+test("no_short_promise_is_longer_than_twelve_words", async () => {
+  const { shortPromiseText } = await import("./wording");
+  const triggers = ["Starts", "Connects", "Sleeps", "Wakes", "SessionEnds", "Quits"] as const;
+  const actions = ["Nothing", "LightsOff", { ApplyProfile: { profile: "p" } }, "Newer"] as const;
+  for (const trigger of triggers) {
+    for (const action of actions) {
+      expect(shortPromiseText(trigger, action).split(" ").length).toBeLessThanOrEqual(12);
+    }
+  }
+});
+
+test("lights_off_at_sleep_and_a_profile_at_wake_read_as_plain_sentences_that_are_on", async () => {
   fakeShell(null, { automation: () => openRgbSleepAndWake });
   render(App);
   await openAutomation();
@@ -72,12 +154,8 @@ test("lights_off_at_sleep_and_a_profile_at_wake_read_as_plain_sentences_with_the
   const wake = rule("When the system wakes, apply the profile Evening.");
   expect(within(sleep).getByRole("switch").getAttribute("aria-checked")).toBe("true");
   expect(within(wake).getByRole("switch").getAttribute("aria-checked")).toBe("true");
-  expect(within(sleep).getByText(/PrismForge tries to switch the lights off before the PC sleeps/)).toBeTruthy();
-  expect(within(wake).getByText(/once your devices are back, within about 30 seconds/)).toBeTruthy();
-  const session = rule("When you sign out or the system shuts down or restarts, do nothing.");
-  expect(within(session).getByText(/PrismForge tries to/)).toBeTruthy();
-  const start = rule("When PrismForge starts, do nothing.");
-  expect(within(start).getByText(/PrismForge will do this while it runs/)).toBeTruthy();
+  expect(within(sleep).queryByRole("combobox", { name: /^Profile/ })).toBeNull();
+  expect(within(wake).getByRole("combobox", { name: /^Profile/ })).toBeTruthy();
 });
 
 test("switching_a_rule_on_and_choosing_its_action_are_explicit_commands", async () => {
@@ -90,7 +168,7 @@ test("switching_a_rule_on_and_choosing_its_action_are_explicit_commands", async 
   await openAutomation();
 
   const sleep = await waitFor(() => rule("When the system goes to sleep, do nothing."));
-  await fireEvent.change(within(sleep).getByRole("combobox", { name: /Action$/ }), { target: { value: "LightsOff" } });
+  await fireEvent.change(within(sleep).getByRole("combobox", { name: /^Action/ }), { target: { value: "LightsOff" } });
   await waitFor(() => expect(called(shell, "set_rule")).toHaveLength(1));
   expect(called(shell, "set_rule")[0]!.args).toEqual({ trigger: "Sleeps", enabled: false, action: "LightsOff" });
 
@@ -99,11 +177,11 @@ test("switching_a_rule_on_and_choosing_its_action_are_explicit_commands", async 
   expect(called(shell, "set_rule")[1]!.args).toEqual({ trigger: "Sleeps", enabled: true, action: "Nothing" });
 
   const wake = rule("When the system wakes, do nothing.");
-  const action = within(wake).getByRole("combobox", { name: /Action$/ }) as HTMLSelectElement;
+  const action = within(wake).getByRole("combobox", { name: /^Action/ }) as HTMLSelectElement;
   expect([...action.options].map((option) => option.textContent)).toEqual(["Do nothing", "Switch the lights off", "Apply a profile"]);
   await fireEvent.change(action, { target: { value: "ApplyProfile" } });
   expect(called(shell, "set_rule")).toHaveLength(2);
-  const profile = within(wake).getByRole("combobox", { name: /Profile$/ }) as HTMLSelectElement;
+  const profile = within(wake).getByRole("combobox", { name: /^Profile/ }) as HTMLSelectElement;
   const glow = demoNoRules.profiles[0]!;
   await fireEvent.change(profile, { target: { value: glow.id } });
   await waitFor(() => expect(called(shell, "set_rule")).toHaveLength(3));
@@ -114,19 +192,35 @@ test("switching_a_rule_on_and_choosing_its_action_are_explicit_commands", async 
   });
 });
 
-test("the_last_run_shows_its_time_what_changed_and_each_skipped_device_with_its_reason", async () => {
+test("the_last_run_is_one_line_with_its_time_and_result_and_each_skipped_device_stays_visible", async () => {
   fakeShell(null, { automation: () => openRgbAfterSleepAndWake });
   render(App);
   await openAutomation();
 
   const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
   const run = openRgbAfterSleepAndWake.rules.find((rule) => rule.trigger === "Sleeps")!.last_run!;
-  const last = within(sleep).getByRole("region", { name: "Last run" });
-  expect(last.textContent).toContain(new Date(run.at_ms).toLocaleString());
-  expect(last.textContent).toContain("Switched the lights off on 1 device.");
-  expect(last.textContent).toContain("Skipped Fixture Keyboard: it has no Direct Mode and no “Off” mode that leaves its memory alone.");
+  const time = new Date(run.at_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const line = lastRun(sleep);
+  expect(line.textContent?.replace(/\s+/g, " ").trim()).toBe(`Last run ${time} · Switched the lights off on 1 device.`);
+  expect(outsideDetails(line)).toBe(true);
+  expect(line.querySelector("svg")).toBeNull();
+  const skipped = within(sleep).getByText("Skipped Fixture Keyboard: it has no Direct Mode and no “Off” mode that leaves its memory alone.");
+  expect(outsideDetails(skipped)).toBe(true);
+  expect(within(sleep).queryByRole("region", { name: "Last run" })).toBeNull();
   const wake = rule("When the system wakes, apply the profile Evening.");
-  expect(within(wake).getByRole("region", { name: "Last run" }).textContent).toContain("Evening is applied.");
+  expect(lastRun(wake).textContent).toContain("Evening is applied.");
+});
+
+test("a_failed_last_run_shows_a_failure_icon_and_its_reason_in_the_row", async () => {
+  fakeShell(null, { automation: () => openRgbSleepFailed, mark_runs_seen: () => openRgbSleepFailed });
+  render(App);
+  await openAutomation();
+
+  const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
+  const line = lastRun(sleep);
+  expect(line.textContent).toContain("Stopped after 1 s, the time this event allows.");
+  expect(outsideDetails(line)).toBe(true);
+  expect(line.querySelector("svg")).not.toBeNull();
 });
 
 test("a_rule_whose_profile_was_deleted_says_so_and_never_names_another_profile", async () => {
@@ -136,33 +230,62 @@ test("a_rule_whose_profile_was_deleted_says_so_and_never_names_another_profile",
 
   const wake = await waitFor(() => rule("When the system wakes, apply a profile that was deleted."));
   expect(within(wake).queryByRole("alert")).toBeNull();
-  expect(
-    within(wake).getByText("The profile of this rule was deleted, so the rule applies nothing. Choose another profile or switch the rule off."),
-  ).toBeTruthy();
+  const problem = within(wake).getByText(
+    "The profile of this rule was deleted, so the rule applies nothing. Choose another profile or switch the rule off.",
+  );
+  expect(outsideDetails(problem)).toBe(true);
 });
 
-test("the_screen_warns_when_openrgb_also_acts_on_the_same_event", async () => {
+test("the_screen_warns_in_one_line_when_openrgb_also_acts_on_the_same_event", async () => {
   fakeShell(null, { automation: () => openRgbAlsoActs });
   render(App);
   await openAutomation();
 
   const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
-  expect(within(sleep).getByText(/OpenRGB also loads its profile “Dark” when the system goes to sleep/)).toBeTruthy();
-  expect(within(sleep).getByText(/Two programs will act; the one that writes last wins/)).toBeTruthy();
+  const warning = within(sleep).getByText("OpenRGB also loads its profile “Dark” on this event; the last to write wins.");
+  expect(outsideDetails(warning)).toBe(true);
+  expect(details(sleep).textContent).toContain("OpenRGB also loads its profile “Dark” when the system goes to sleep. Two programs will act");
   const wake = rule("When the system wakes, apply the profile Evening.");
-  expect(within(wake).getByText(/OpenRGB also loads its profile “Day” when the system wakes/)).toBeTruthy();
+  expect(within(wake).getByText("OpenRGB also loads its profile “Day” on this event; the last to write wins.")).toBeTruthy();
 });
 
-test("without_session_events_on_this_system_the_screen_says_the_rules_work_on_windows_only", async () => {
+test("without_session_events_on_this_system_the_system_group_says_so_once_and_its_rules_are_off", async () => {
   fakeShell(null, { automation: () => demoNotOnThisSystem });
   render(App);
   await openAutomation();
 
-  await screen.findByText(/sleep, wake and session-end rules work on Windows only for now/);
-  const sleep = rule("When the system goes to sleep, do nothing.");
-  expect((within(sleep).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
+  const system = await screen.findByRole("region", { name: "System" });
+  expect(within(system).getByText("Works on Windows only for now.")).toBeTruthy();
+  expect(screen.getAllByText(/Windows only/)).toHaveLength(1);
+  expect(screen.queryByText(/Not on this system/)).toBeNull();
+  for (const row of rows(system)) {
+    expect((within(row).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
+    expect((within(row).getByRole("combobox", { name: /^Action/ }) as HTMLSelectElement).disabled).toBe(true);
+  }
   const start = rule("When PrismForge starts, do nothing.");
   expect((within(start).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("limited_support_keeps_its_note_once_in_the_system_group_and_the_rules_stay_usable", async () => {
+  const limited = { ...structuredClone(demoNoRules), support: { Limited: { detail: "Session end could not be registered." } } };
+  fakeShell(null, { automation: () => limited });
+  render(App);
+  await openAutomation();
+
+  const system = await screen.findByRole("region", { name: "System" });
+  expect(within(system).getByText("Part of PrismForge's set-up for system events failed. Session end could not be registered.")).toBeTruthy();
+  expect(screen.getAllByText(/Session end could not be registered/)).toHaveLength(1);
+  expect((within(rule("When the system goes to sleep, do nothing.")).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("the_openrgb_check_is_one_line_at_the_bottom_of_the_screen", async () => {
+  fakeShell(null, { automation: () => demoNoRules });
+  render(App);
+  await openAutomation();
+
+  const system = await screen.findByRole("region", { name: "System" });
+  const check = screen.getByText(/PrismForge cannot check OpenRGB's own profile settings here/);
+  expect(system.compareDocumentPosition(check) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test("the_marked_profile_of_an_earlier_version_is_now_the_connects_rule", async () => {
@@ -210,14 +333,19 @@ test("a_new_rule_run_reloads_the_rules", async () => {
   await waitFor(() => expect(loads).toBe(before + 1));
 });
 
-test("each_rule_control_is_named_by_its_sentence", async () => {
+test("each_row_is_named_by_its_sentence_and_its_controls_by_the_event", async () => {
   fakeShell(null, { automation: () => openRgbSleepAndWake });
   render(App);
   await openAutomation();
 
-  await screen.findByRole("switch", { name: "When the system goes to sleep, switch the lights off. Use this rule" });
-  expect(screen.getByRole("combobox", { name: "When the system wakes, apply the profile Evening. Action" })).toBeTruthy();
-  expect(screen.getByRole("combobox", { name: "When the system wakes, apply the profile Evening. Profile" })).toBeTruthy();
+  const sleep = await screen.findByRole("group", { name: "When the system goes to sleep, switch the lights off." });
+  expect(within(sleep).getByRole("switch", { name: "When the system goes to sleep" })).toBeTruthy();
+  expect(within(sleep).queryByText("On")).toBeNull();
+  expect(screen.queryAllByRole("heading", { name: /^When / })).toHaveLength(0);
+  const wake = screen.getByRole("group", { name: "When the system wakes, apply the profile Evening." });
+  expect(within(wake).getByRole("switch", { name: "When the system wakes" })).toBeTruthy();
+  expect(within(wake).getByRole("combobox", { name: "Action when the system wakes" })).toBeTruthy();
+  expect(within(wake).getByRole("combobox", { name: "Profile when the system wakes" })).toBeTruthy();
 });
 
 test("a_seam_that_failed_to_start_is_shown_and_the_system_event_rules_are_off", async () => {
@@ -225,12 +353,13 @@ test("a_seam_that_failed_to_start_is_shown_and_the_system_event_rules_are_off", 
   render(App);
   await openAutomation();
 
-  const failed = await screen.findByText(/PrismForge could not start receiving sleep, wake and session end/);
+  const system = await screen.findByRole("region", { name: "System" });
+  const failed = within(system).getByText(/PrismForge could not start receiving sleep, wake and session end/);
   expect(failed.textContent).toContain("the event window could not be created: Access is denied.");
+  expect(screen.getAllByText(/could not start receiving/)).toHaveLength(1);
   const sleep = rule("When the system goes to sleep, do nothing.");
   expect((within(sleep).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
-  expect(within(sleep).getByText("Off: PrismForge could not start receiving this event. The note at the top says why.")).toBeTruthy();
-  expect(within(sleep).queryByText(/Windows only/)).toBeNull();
+  expect(screen.queryByText(/Windows only/)).toBeNull();
   expect((within(rule("When PrismForge quits, do nothing.")).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
 });
 

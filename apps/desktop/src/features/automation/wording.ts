@@ -25,11 +25,6 @@ export const EVENTS: Record<Trigger, string> = {
 
 export const NOTE = "Rules run only while PrismForge runs.";
 
-export const UNSUPPORTED =
-  "This system does not tell PrismForge when it sleeps, wakes or ends a session, so the sleep, wake and session-end rules work on Windows only for now.";
-
-export const NOT_HERE = "Not on this system: PrismForge receives this event on Windows only for now.";
-
 export const LIGHTS_OFF =
   "Switching the lights off writes black through Direct Mode, or selects a device's own “Off” mode when that mode does not save to device memory. Other devices are left as they are, and the last run names them.";
 
@@ -66,9 +61,13 @@ function actionText(rule: RuleView): string {
   return `apply the profile ${profile.Ready.name}`;
 }
 
+export function eventLabel(trigger: Trigger): string {
+  return `When ${EVENTS[trigger]}`;
+}
+
 /** "When <event>, <action>." */
 export function sentence(rule: RuleView): string {
-  return `When ${EVENTS[rule.trigger]}, ${actionText(rule)}.`;
+  return `${eventLabel(rule.trigger)}, ${actionText(rule)}.`;
 }
 
 function verb(kind: ActionKind): { infinitive: string; present: string } {
@@ -79,6 +78,25 @@ function verb(kind: ActionKind): { infinitive: string; present: string } {
     return { infinitive: "apply the profile", present: "applies the profile" };
   }
   return { infinitive: "act", present: "acts" };
+}
+
+/** The one-line promise under each rule; `promiseText` holds the full explanation. */
+export function shortPromiseText(trigger: Trigger, action: RuleAction): string {
+  const { infinitive, present } = verb(actionKind(action));
+  switch (trigger) {
+    case "Starts":
+      return "PrismForge will do this once, after it starts and connects by itself.";
+    case "Connects":
+      return "PrismForge will do this once each time you connect.";
+    case "Sleeps":
+      return `PrismForge tries to ${infinitive} before the PC sleeps.`;
+    case "Wakes":
+      return `PrismForge ${present} once devices return, within about 30 seconds.`;
+    case "SessionEnds":
+      return `PrismForge tries to ${infinitive} as the session ends.`;
+    case "Quits":
+      return `PrismForge will ${infinitive} when you quit it.`;
+  }
 }
 
 /** What PrismForge can promise for each event: "will" where PrismForge decides, "tries to" where the system does. */
@@ -129,6 +147,10 @@ const SETTING_WHEN: Record<OpenRgbSetting, string> = {
   Exit: "when OpenRGB closes",
   ServiceShutdown: "when the OpenRGB service stops",
 };
+
+export function openRgbAlsoShortText(act: OpenRgbAct): string {
+  return `OpenRGB also loads its profile “${act.profile}” on this event; the last to write wins.`;
+}
 
 export function openRgbAlsoText(act: OpenRgbAct): string {
   return `OpenRGB also loads its profile “${act.profile}” ${SETTING_WHEN[act.setting]}. Two programs will act; the one that writes last wins. Turn one of them off to choose.`;
@@ -191,7 +213,7 @@ export function failureText(failure: RunFailure): string {
 }
 
 export function runTime(run: RuleRun): string {
-  return new Date(run.at_ms).toLocaleString();
+  return new Date(run.at_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** One line per result: what changed first, then each device that did not change and why. */
@@ -269,7 +291,7 @@ export function supportText(support: EventSupport): string | null {
     return null;
   }
   if (support === "NotOnThisSystem") {
-    return UNSUPPORTED;
+    return "Works on Windows only for now.";
   }
   if ("Failed" in support) {
     return `PrismForge could not start receiving sleep, wake and session end, so those rules do nothing until PrismForge starts again: ${support.Failed.detail}`;
@@ -277,15 +299,8 @@ export function supportText(support: EventSupport): string | null {
   return `Part of PrismForge's set-up for system events failed. ${support.Limited.detail}`;
 }
 
-/** Why the sleep, wake and session-end rules cannot run here, or `null` when they can. */
-export function blockedText(support: EventSupport): string | null {
-  if (support === "NotOnThisSystem") {
-    return NOT_HERE;
-  }
-  if (typeof support === "object" && "Failed" in support) {
-    return "Off: PrismForge could not start receiving this event. The note at the top says why.";
-  }
-  return null;
+export function systemEventsBlocked(support: EventSupport): boolean {
+  return support === "NotOnThisSystem" || (typeof support === "object" && "Failed" in support);
 }
 
 export function runNoticeText(notice: StoreNotice): string {
