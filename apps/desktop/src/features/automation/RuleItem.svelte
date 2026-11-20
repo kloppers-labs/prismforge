@@ -7,16 +7,17 @@
   import type { AutomationState } from "./state.svelte";
   import {
     LIGHTS_OFF,
+    OPENRGB_CHOOSE,
     actionKind,
     endingProfileText,
     eventLabel,
-    openRgbAlsoShortText,
+    leftAloneText,
     openRgbAlsoText,
     profileOf,
     profileProblemText,
-    promiseText,
+    promiseDetailText,
     runFailed,
-    runLines,
+    runSummary,
     runTime,
     sentence,
     shortPromiseText,
@@ -43,8 +44,9 @@
   let failure = $derived(automation.failure?.trigger === rule.trigger ? failureText(automation.failure.error) : null);
   let problem = $derived(profileProblemText(rule));
   let ending = $derived(endingProfileText(rule.trigger, rule.action));
-  let lines = $derived(rule.last_run ? runLines(rule.last_run) : []);
+  let summary = $derived(rule.last_run ? runSummary(rule.last_run) : null);
   let failed = $derived(rule.last_run ? runFailed(rule.last_run) : false);
+  let unfinished = $derived(failed && rule.last_run !== null && !("Failed" in rule.last_run.outcome));
   let open = $state(false);
 
   $effect(() => {
@@ -114,33 +116,40 @@
         </button>
       </p>
       <div id="{id}-details" class="details" data-details hidden={!open}>
-        <p>{promiseText(rule.trigger, rule.action)}</p>
+        <p>{promiseDetailText(rule.trigger, rule.action)}</p>
         {#if ending}
           <p>{ending}</p>
         {/if}
         {#if kind === "LightsOff"}
           <p>{LIGHTS_OFF}</p>
         {/if}
-        {#each rule.openrgb_also as act (act.setting)}
-          <p>{openRgbAlsoText(act)}</p>
+        {#if rule.openrgb_also.length > 0}
+          <p>{OPENRGB_CHOOSE}</p>
+        {/if}
+        {#each summary?.leftAlone ?? [] as line, index (index)}
+          <p>{line}</p>
         {/each}
       </div>
       {#if problem}
         <p class="notice"><ToneIcon tone="problem" /><span>{problem}</span></p>
       {/if}
       {#each rule.openrgb_also as act (act.setting)}
-        <p class="notice"><ToneIcon tone="warning" /><span>{openRgbAlsoShortText(act)}</span></p>
+        <p class="notice"><ToneIcon tone="warning" /><span>{openRgbAlsoText(act)}</span></p>
       {/each}
       {#if failure}
         <p class="notice" role="alert"><ToneIcon tone="problem" /><span>{failure}</span></p>
       {/if}
-      {#if rule.last_run}
+      {#if rule.last_run && summary}
         <p class="last" class:failed>
           {#if failed}<ToneIcon tone="problem" />{/if}
-          <span>Last run {runTime(rule.last_run)} · {lines[0]}</span>
+          <span>
+            Last run {runTime(rule.last_run)} · {#if unfinished}<span class="visually-hidden">Did not finish:</span>{/if}
+            {summary.headline}
+            {#if summary.leftAlone.length > 0}{leftAloneText(summary.leftAlone.length)}{/if}
+          </span>
         </p>
-        {#each lines.slice(1) as line, index (index)}
-          <p class="extra">{line}</p>
+        {#each summary.problems as line, index (index)}
+          <p>{line}</p>
         {/each}
       {/if}
     </div>
@@ -181,7 +190,7 @@
   .body {
     display: grid;
     gap: var(--space-1);
-    padding-left: calc(34px + var(--space-2));
+    padding-left: calc(var(--switch-track-w) + var(--space-2));
     font-size: var(--font-s);
     color: var(--text-dim);
   }
@@ -252,7 +261,7 @@
 
   @media (max-width: 700px) {
     .selects {
-      margin-left: calc(34px + var(--space-2));
+      margin-left: calc(var(--switch-track-w) + var(--space-2));
     }
   }
 </style>

@@ -2,7 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/sve
 import { expect, test } from "vitest";
 import App from "../../App.svelte";
 import type { AutomationView } from "../../lib/api/bindings/AutomationView";
+import type { DeviceLightsOff } from "../../lib/api/bindings/DeviceLightsOff";
 import type { RuleRun } from "../../lib/api/bindings/RuleRun";
+import type { RuleView } from "../../lib/api/bindings/RuleView";
 import { fakeShell, refuse } from "../../test/backend";
 import {
   demoEventsFailed,
@@ -58,6 +60,21 @@ function outsideDetails(element: HTMLElement) {
 
 function lastRun(row: HTMLElement) {
   return within(row).getByText(/^Last run/).closest("p") as HTMLElement;
+}
+
+function withRule(view: AutomationView, trigger: RuleView["trigger"], change: (rule: RuleView) => void): AutomationView {
+  const copy = structuredClone(view);
+  change(copy.rules.find((each) => each.trigger === trigger)!);
+  return copy;
+}
+
+function sleepDevices(view: AutomationView, change: (devices: DeviceLightsOff[]) => void) {
+  return withRule(view, "Sleeps", (sleep) => {
+    const outcome = sleep.last_run!.outcome;
+    if ("LightsOff" in outcome) {
+      change(outcome.LightsOff.report.devices);
+    }
+  });
 }
 
 function called(shell: ReturnType<typeof fakeShell>, command: string) {
@@ -121,17 +138,19 @@ test("every_promise_is_one_short_line_and_the_full_explanation_is_in_a_closed_de
   expect(detailsButton(sleep).getAttribute("aria-expanded")).toBe("true");
   expect(details(sleep).hidden).toBe(false);
   expect(details(sleep).textContent).toContain("Windows gives about two seconds and may skip the notice on low battery");
+  expect(details(sleep).textContent).not.toContain("PrismForge tries to switch the lights off before the PC sleeps.");
   expect(details(sleep).textContent).toContain("Switching the lights off writes black through Direct Mode");
 
   const wake = rule("When the system wakes, apply the profile Evening.");
   expect(within(wake).getByText("PrismForge applies the profile once devices return, within about 30 seconds.")).toBeTruthy();
-  expect(details(wake).textContent).toContain("it waits for OpenRGB and for the device list to stop changing");
+  expect(details(wake).textContent).toContain("waits for OpenRGB and for the device list to stop changing");
+  expect(details(wake).textContent).not.toContain("within about 30 seconds");
   expect(within(rule(/^When you sign out/)).getByText("PrismForge tries to act as the session ends.")).toBeTruthy();
   expect(within(rule("When PrismForge starts, do nothing.")).getByText("PrismForge will do this once, after it starts and connects by itself.")).toBeTruthy();
   expect(details(rule("When PrismForge starts, do nothing.")).textContent).toContain("Connect to OpenRGB when PrismForge starts");
   expect(within(rule("When PrismForge connects, do nothing.")).getByText("PrismForge will do this once each time you connect.")).toBeTruthy();
   expect(within(rule("When PrismForge quits, do nothing.")).getByText("PrismForge will act when you quit it.")).toBeTruthy();
-  expect(details(rule("When PrismForge quits, do nothing.")).textContent).toContain("It waits at most two seconds.");
+  expect(details(rule("When PrismForge quits, do nothing.")).textContent).toContain("waits at most two seconds");
 });
 
 test("no_short_promise_is_longer_than_twelve_words", async () => {
@@ -219,8 +238,61 @@ test("a_failed_last_run_shows_a_failure_icon_and_its_reason_in_the_row", async (
   const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
   const line = lastRun(sleep);
   expect(line.textContent).toContain("Stopped after 1 s, the time this event allows.");
+  expect(line.textContent).not.toContain("Did not finish");
   expect(outsideDetails(line)).toBe(true);
   expect(line.querySelector("svg")).not.toBeNull();
+});
+
+test("devices_left_to_other_programs_or_not_there_are_counted_in_the_row_and_named_in_details", async () => {
+  const view = sleepDevices(openRgbAfterSleepAndWake, (devices) => {
+    devices.push(
+      { device: "dev-x", name: "Case Fans", outcome: { Skipped: { reason: { DeclaredExternal: { label: "iCUE" } } } } },
+      { device: "dev-y", name: "Mouse", outcome: { Skipped: { reason: "NotAvailable" } } },
+    );
+  });
+  fakeShell(null, { automation: () => view });
+  render(App);
+  await openAutomation();
+
+  const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
+  expect(lastRun(sleep).textContent).toContain("2 devices left as they are, named in Details.");
+  expect(outsideDetails(within(sleep).getByText("Skipped Case Fans: you said iCUE controls it."))).toBe(false);
+  expect(outsideDetails(within(sleep).getByText("Skipped Mouse: it was not there."))).toBe(false);
+  const problem = within(sleep).getByText("Skipped Fixture Keyboard: it has no Direct Mode and no “Off” mode that leaves its memory alone.");
+  expect(outsideDetails(problem)).toBe(true);
+});
+
+test("a_lights_off_run_that_came_too_late_says_it_did_not_finish_on_the_run_line", async () => {
+  const late = sleepDevices(openRgbAfterSleepAndWake, (devices) => {
+    for (const device of devices) {
+      if (device.outcome === "Black") {
+        device.outcome = { Skipped: { reason: "TooLate" } };
+      }
+    }
+  });
+  fakeShell(null, { automation: () => late });
+  render(App);
+  await openAutomation();
+
+  const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
+  const line = lastRun(sleep);
+  expect(line.querySelector("svg")).not.toBeNull();
+  expect(line.textContent).toContain("Did not finish: Switched the lights off on 0 devices.");
+  expect(outsideDetails(within(sleep).getByText("Skipped Fixture Strip: the event was over before PrismForge came to it."))).toBe(true);
+});
+
+test("a_profile_applied_as_prismforge_ends_explains_the_kept_frame_in_details", async () => {
+  const profile = openRgbSleepAndWake.profiles[0]!;
+  const view = withRule(openRgbSleepAndWake, "Quits", (rule) => {
+    rule.action = { ApplyProfile: { profile: profile.id } };
+    rule.profile = { Ready: { name: profile.name } };
+  });
+  fakeShell(null, { automation: () => view });
+  render(App);
+  await openAutomation();
+
+  const quits = await waitFor(() => rule(`When PrismForge quits, apply the profile ${profile.name}.`));
+  expect(details(quits).textContent).toContain("each device keeps the frame it showed last.");
 });
 
 test("a_rule_whose_profile_was_deleted_says_so_and_never_names_another_profile", async () => {
@@ -242,11 +314,29 @@ test("the_screen_warns_in_one_line_when_openrgb_also_acts_on_the_same_event", as
   await openAutomation();
 
   const sleep = await waitFor(() => rule("When the system goes to sleep, switch the lights off."));
-  const warning = within(sleep).getByText("OpenRGB also loads its profile “Dark” on this event; the last to write wins.");
+  const warning = within(sleep).getByText("OpenRGB also loads “Dark” when the system goes to sleep; whichever writes last wins.");
   expect(outsideDetails(warning)).toBe(true);
-  expect(details(sleep).textContent).toContain("OpenRGB also loads its profile “Dark” when the system goes to sleep. Two programs will act");
+  expect(details(sleep).textContent).not.toContain("OpenRGB also loads");
+  expect(details(sleep).textContent).toContain("Turn PrismForge's rule or OpenRGB's profile setting off to choose which one acts.");
   const wake = rule("When the system wakes, apply the profile Evening.");
-  expect(within(wake).getByText("OpenRGB also loads its profile “Day” on this event; the last to write wins.")).toBeTruthy();
+  expect(within(wake).getByText("OpenRGB also loads “Day” when the system wakes; whichever writes last wins.")).toBeTruthy();
+});
+
+test("the_openrgb_line_of_a_quits_rule_names_the_moment_openrgb_acts", async () => {
+  const quits = withRule(openRgbAlsoActs, "Quits", (rule) => {
+    rule.openrgb_also = [
+      { setting: "Exit", profile: "Night" },
+      { setting: "ServiceShutdown", profile: "Night" },
+    ];
+  });
+  fakeShell(null, { automation: () => quits });
+  render(App);
+  await openAutomation();
+
+  const row = await waitFor(() => rule("When PrismForge quits, do nothing."));
+  expect(within(row).getByText("OpenRGB also loads “Night” when OpenRGB closes; whichever writes last wins.")).toBeTruthy();
+  expect(within(row).getByText("OpenRGB also loads “Night” when the OpenRGB service stops; whichever writes last wins.")).toBeTruthy();
+  expect(screen.queryByText(/on this event/)).toBeNull();
 });
 
 test("without_session_events_on_this_system_the_system_group_says_so_once_and_its_rules_are_off", async () => {
@@ -357,8 +447,10 @@ test("a_seam_that_failed_to_start_is_shown_and_the_system_event_rules_are_off", 
   const failed = within(system).getByText(/PrismForge could not start receiving sleep, wake and session end/);
   expect(failed.textContent).toContain("the event window could not be created: Access is denied.");
   expect(screen.getAllByText(/could not start receiving/)).toHaveLength(1);
-  const sleep = rule("When the system goes to sleep, do nothing.");
-  expect((within(sleep).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
+  for (const row of rows(system)) {
+    expect((within(row).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
+    expect((within(row).getByRole("combobox", { name: /^Action/ }) as HTMLSelectElement).disabled).toBe(true);
+  }
   expect(screen.queryByText(/Windows only/)).toBeNull();
   expect((within(rule("When PrismForge quits, do nothing.")).getByRole("switch") as HTMLButtonElement).disabled).toBe(false);
 });

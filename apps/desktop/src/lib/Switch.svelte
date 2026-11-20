@@ -62,7 +62,7 @@
   }
 
   .track {
-    width: 34px;
+    width: var(--switch-track-w);
     height: 20px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--line-control);
@@ -88,7 +88,7 @@
   }
 
   [aria-checked="true"] .thumb {
-    transform: translateX(14px);
+    transform: translateX(calc(var(--switch-track-w) - 20px));
     background: var(--ok);
   }
 

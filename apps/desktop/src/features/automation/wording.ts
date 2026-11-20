@@ -80,7 +80,7 @@ function verb(kind: ActionKind): { infinitive: string; present: string } {
   return { infinitive: "act", present: "acts" };
 }
 
-/** The one-line promise under each rule; `promiseText` holds the full explanation. */
+/** The one-line promise under each rule; `promiseDetailText` holds the rest. */
 export function shortPromiseText(trigger: Trigger, action: RuleAction): string {
   const { infinitive, present } = verb(actionKind(action));
   switch (trigger) {
@@ -99,22 +99,21 @@ export function shortPromiseText(trigger: Trigger, action: RuleAction): string {
   }
 }
 
-/** What PrismForge can promise for each event: "will" where PrismForge decides, "tries to" where the system does. */
-export function promiseText(trigger: Trigger, action: RuleAction): string {
-  const { infinitive, present } = verb(actionKind(action));
+/** What the short promise leaves out: "will" where PrismForge decides, "tries to" where the system does. */
+export function promiseDetailText(trigger: Trigger, action: RuleAction): string {
   switch (trigger) {
     case "Starts":
-      return "PrismForge will do this while it runs: once, after it starts and connects by itself. That needs “Connect to OpenRGB when PrismForge starts” in Settings. At that connect this rule takes the place of the rule for “PrismForge connects”.";
+      return "That needs “Connect to OpenRGB when PrismForge starts” in Settings. At that connect this rule takes the place of the rule for “PrismForge connects”.";
     case "Connects":
-      return "PrismForge will do this while it runs: once each time you connect, as soon as the devices are read. A connection that PrismForge restores by itself after a loss does not count.";
+      return "It acts as soon as the devices are read. A connection that PrismForge restores by itself after a loss does not count.";
     case "Sleeps":
-      return `PrismForge tries to ${infinitive} before the PC sleeps. Sleep and hibernate are one event in Windows. Windows gives about two seconds and may skip the notice on low battery; PrismForge gives up after one second.`;
+      return "Sleep and hibernate are one event in Windows. Windows gives about two seconds and may skip the notice on low battery; PrismForge gives up after one second.";
     case "Wakes":
-      return `PrismForge ${present} once your devices are back, within about 30 seconds: it waits for OpenRGB and for the device list to stop changing, and uses the devices that are back by then.${actionKind(action) === "ApplyProfile" ? " It sets every mode and colour again." : ""}`;
+      return `It waits for OpenRGB and for the device list to stop changing, and uses the devices that are back by then.${actionKind(action) === "ApplyProfile" ? " It sets every mode and colour again." : ""}`;
     case "SessionEnds":
-      return `PrismForge tries to ${infinitive}. Windows closes programs one by one and can end PrismForge or OpenRGB before the change reaches your devices. Devices that keep power after a shutdown may stay lit.`;
+      return "Windows closes programs one by one and can end PrismForge or OpenRGB before the change reaches your devices. Devices that keep power after a shutdown may stay lit.";
     case "Quits":
-      return `PrismForge will ${infinitive} when you quit it, before it ends. It waits at most two seconds.`;
+      return "It does this before it ends, and waits at most two seconds.";
   }
 }
 
@@ -148,13 +147,11 @@ const SETTING_WHEN: Record<OpenRgbSetting, string> = {
   ServiceShutdown: "when the OpenRGB service stops",
 };
 
-export function openRgbAlsoShortText(act: OpenRgbAct): string {
-  return `OpenRGB also loads its profile “${act.profile}” on this event; the last to write wins.`;
+export function openRgbAlsoText(act: OpenRgbAct): string {
+  return `OpenRGB also loads “${act.profile}” ${SETTING_WHEN[act.setting]}; whichever writes last wins.`;
 }
 
-export function openRgbAlsoText(act: OpenRgbAct): string {
-  return `OpenRGB also loads its profile “${act.profile}” ${SETTING_WHEN[act.setting]}. Two programs will act; the one that writes last wins. Turn one of them off to choose.`;
-}
+export const OPENRGB_CHOOSE = "Turn PrismForge's rule or OpenRGB's profile setting off to choose which one acts.";
 
 const SKIPS: Record<string, string> = {
   NotResolved: "PrismForge cannot tell it apart from an identical device",
@@ -216,38 +213,50 @@ export function runTime(run: RuleRun): string {
   return new Date(run.at_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-/** One line per result: what changed first, then each device that did not change and why. */
-export function runLines(run: RuleRun): string[] {
+export type RunSummary = { headline: string; problems: string[]; leftAlone: string[] };
+
+/** A device the user gave to another program, or one that was not there, is not a problem. */
+function leftAlone(reason: LightsOffSkip): boolean {
+  return reason === "NotAvailable" || typeof reason === "object";
+}
+
+/** The headline, the lines that need attention, and the devices left as they are on purpose. */
+export function runSummary(run: RuleRun): RunSummary {
   const outcome = run.outcome;
   if ("Failed" in outcome) {
-    return [failureText(outcome.Failed.failure)];
+    return { headline: failureText(outcome.Failed.failure), problems: [], leftAlone: [] };
   }
   if ("Applied" in outcome) {
     const { name, report, missing, not_kept } = outcome.Applied;
-    const lines = [applyHeadline(name, report)];
+    const problems: string[] = [];
     if (missing.length > 0) {
-      lines.push(`Not back after the wake, so not changed: ${missing.join(", ")}.`);
+      problems.push(`Not back after the wake, so not changed: ${missing.join(", ")}.`);
     }
     if (not_kept) {
       const detail = "Session" in not_kept ? sessionErrorText(not_kept.Session) : "PrismForge refused the change.";
-      lines.push(`PrismForge could not keep the profile's last frame as it ended, so the stop may have put back the earlier lighting. ${detail}`);
+      problems.push(`PrismForge could not keep the profile's last frame as it ended, so the stop may have put back the earlier lighting. ${detail}`);
     }
-    return lines;
+    return { headline: applyHeadline(name, report), problems, leftAlone: [] };
   }
   const devices = outcome.LightsOff.report.devices;
   const off = devices.filter((device) => done(device.outcome)).length;
-  const lines = [`Switched the lights off on ${count(off, "device", "devices")}.`];
+  const summary: RunSummary = { headline: `Switched the lights off on ${count(off, "device", "devices")}.`, problems: [], leftAlone: [] };
   for (const device of devices) {
     const result = device.outcome;
     if (typeof result === "object" && "Skipped" in result) {
-      lines.push(`Skipped ${device.name}: ${skipText(result.Skipped.reason)}.`);
+      const line = `Skipped ${device.name}: ${skipText(result.Skipped.reason)}.`;
+      (leftAlone(result.Skipped.reason) ? summary.leftAlone : summary.problems).push(line);
     } else if (typeof result === "object" && "Failed" in result) {
       const error = result.Failed.error;
       const detail = "Session" in error ? sessionErrorText(error.Session) : "PrismForge refused the change.";
-      lines.push(`Not switched off: ${device.name}. ${detail}`);
+      summary.problems.push(`Not switched off: ${device.name}. ${detail}`);
     }
   }
-  return lines;
+  return summary;
+}
+
+export function leftAloneText(devices: number): string {
+  return `${count(devices, "device", "devices")} left as they are, named in Details.`;
 }
 
 /** Skips the session made for a step PrismForge had planned, as opposed to devices left out of the plan. */
@@ -283,7 +292,7 @@ const PAST: Partial<Record<Trigger, string>> = {
 
 /** The notice at start for a failed sleep or session-end run the user has not seen. */
 export function failedRunTitle(run: RuleRun): string {
-  return `${PAST[run.trigger] ?? `When ${EVENTS[run.trigger]}`}, the rule did not do what it should: ${runLines(run)[0] ?? ""}`;
+  return `${PAST[run.trigger] ?? `When ${EVENTS[run.trigger]}`}, the rule did not do what it should: ${runSummary(run).headline}`;
 }
 
 export function supportText(support: EventSupport): string | null {
