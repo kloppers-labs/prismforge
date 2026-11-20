@@ -41,6 +41,8 @@ The Profiles screen no longer has the switch or the menu item; it says whether t
 
 ## Starts and connects
 
+Either rule can apply a profile or switch the lights off. Settings step 4 and the start path name what the rule does at the connect at start: "applies <profile>" or "switches the lights off" (`StartProfile::LightsOff`).
+
 The connects rule is the earlier apply on connect: it applies once each time the session becomes live after a user connect (`ConnectTrigger`), and not again after a loss that the session restores by itself. The starts rule applies at the connect at start (`Shell::start_at_launch`) **in place of** the connects rule, when it applies a profile; otherwise the connects rule applies there as before. Without "Connect to OpenRGB when PrismForge starts" the starts rule never runs, and the screen says so. Both record a run.
 
 ## Lights off
@@ -60,7 +62,7 @@ At quit and session end, a rule that applies a profile ends the profile's effect
 
 ## The event seam
 
-`system_events` has one small trait, `EventSource`, and one module per platform; the rules live elsewhere and are tested with a fake source.
+The crate `crates/prismforge-system-events` has one small trait, `EventSource`, and one module per platform; the rules live in the app and are tested with a fake source.
 
 **Windows** (research `os-events-research.md` section 5, "The seam on Windows"):
 
@@ -68,13 +70,13 @@ At quit and session end, a rule that applies a profile ends the profile's effect
 2. `RegisterSuspendResumeNotification(hwnd, DEVICE_NOTIFY_WINDOW_HANDLE)`, needed for the suspend message on Modern Standby. `GUID_SESSION_DISPLAY_STATUS` is not registered, because display-off triggers are out of scope.
 3. `PBT_APMSUSPEND` runs the sleep rule and blocks the window thread for at most [`SLEEP_LIMIT`]. `PBT_APMRESUMEAUTOMATIC` posts the wake to the app and returns at once. `PBT_APMRESUMESUSPEND` is ignored.
 4. **Deviation from the research:** the research proposes a separate, pre-opened blocking connection to OpenRGB for the sleep write. PrismForge writes through its session instead, and blocks the window thread on the async work with a hard limit. A second connection would write behind the session: running effects would overwrite the dark frame on the next tick, and the write would bypass the apply lock and the lock order. The session's runtime is multi-threaded and is not frozen when `PBT_APMSUSPEND` arrives. What is prepared before the event: the rules and the profiles are in memory, and the lights-off plan comes from the last device list; nothing is read from disk or from the devices at the event.
-5. Session end: Tauri's final `Exit` event (tao raises it from `WM_ENDSESSION(TRUE)` and then ends the process), and a redundant `WM_ENDSESSION` handler on the event window. Both run the same idempotent action: the first runs the rule, the second does nothing.
+5. Session end: Tauri's final `Exit` event (tao raises it from `WM_ENDSESSION(TRUE)` and then ends the process), and a redundant `WM_ENDSESSION` handler on the event window. Both await one shared run: the first signal starts it, the second waits for the same run and gets its result.
 6. `SetProcessShutdownParameters(0x300, 0)` at start, so Windows closes PrismForge before an OpenRGB at the default 0x280. No `SHUTDOWN_NORETRY`, no `ShutdownBlockReasonCreate`, no change to the system's timeouts.
 7. Start with the system is unchanged (`0004`).
 
 **The seam reports its start.** `EventSource::start` returns what it achieved: `Available`; `Limited` with the detail when the events arrive but a part failed (the shutdown level was refused, or the suspend registration failed, which loses sleep on Modern Standby PCs); `Failed` with the detail when the thread, the module handle, the window class or the window could not be made, or the window did not answer within 2 s; `NotOnThisSystem` on macOS and Linux. The Automation screen shows each state in words; with `Failed` the sleep, wake and session-end controls are off and no session-end rule runs. The message loop stops on an error (`GetMessageW` returning -1) instead of spinning.
 
-The Win32 calls need `unsafe`. The workspace lint denies it, and only `system_events/windows.rs` allows it; the test `tests/unsafe_code.rs` fails when any other file allows it. The desktop crate inherits the workspace lints.
+The Win32 calls need `unsafe`. The seam is its own crate so that the rest of the workspace keeps `unsafe_code = "forbid"`. Only this crate sets the lint to `deny` in its `Cargo.toml`, and only its `src/windows.rs` allows it. The guard `crates/prismforge-system-events/tests/unsafe_code.rs` checks three things: the workspace forbids the lint; every other `Cargo.toml` takes the workspace lints unchanged; no other `.rs` file in the workspace names the lint, `build.rs` included.
 
 **macOS and Linux:** a source that reports the events as not available. The screen says that sleep, wake and session-end rules work on Windows only for now and turns their controls off. Starts, connects and quits work everywhere.
 
@@ -88,6 +90,7 @@ Every wait is a named constant with a test in simulated time.
 | `SESSION_END_LIMIT` | 1 s | The session-end rule. Then the stop of `0004` gets the rest of `LAST_STOP_LIMIT` (4 s in all), under the 5 s after which Windows ends a hidden app. |
 | `QUIT_RULE_LIMIT` | 2 s | The quit rule, before the quit's own stop (`QUIT_STOP_LIMIT`, 10 s). |
 | `RULE_LOCK_WAIT` | 250 ms | How long a rule waits for a profile apply of the user. |
+| `SESSION_END_WAIT` | 1.25 s | How long the final `Exit` waits for the session-end run; longer than `SESSION_END_LIMIT`, so the wait never cancels the run. |
 | `RECORD_LIMIT` | 200 ms | The end of each rule's limit kept for writing its run, so the work stops 200 ms earlier and the record still fits. |
 | `WAKE_STEP_LIMIT` | 4 s | Each wake step that needs the session slot (read the state, connect, read the devices). |
 | `WAKE_BACKOFF` | 0.5, 1, 2, 4 s, then 4 s | Between tries to reach OpenRGB after a wake. |
@@ -96,7 +99,7 @@ Every wait is a named constant with a test in simulated time.
 | `WAKE_SETTLE_LIMIT` | 15 s | The device list is used as it is, or earlier at the 30 s deadline. |
 | `WAKE_APPLY_LIMIT` | 10 s | The wake rule's own work. |
 
-Every part of a rule runs under its one deadline, the read of the session slot included, so a disconnect or a connect that holds the slot cannot hold a rule past its limit. A rule that does not finish in time is recorded as stopped at its limit. Nothing is written after the event: a sleep rule checks before each write that no wake came and that its time (counted on the wall clock, which also runs while the PC sleeps) has not passed, and the session itself skips a lights-off command that reaches it after that time (`TooLate`).
+A rule whose store or rules could not be read in time is not shown as run, because PrismForge does not know whether it is on. A store that cannot open at all is shown as "no rule could run". Every part of a rule runs under its one deadline, the read of the session slot included, so a disconnect or a connect that holds the slot cannot hold a rule past its limit. A rule that does not finish in time is recorded as stopped at its limit. Nothing is written after the event: a sleep rule checks before each write that no wake came and that its time (counted on the wall clock, which also runs while the PC sleeps) has not passed, and the session itself skips a lights-off command that reaches it after that time (`TooLate`).
 
 ## The wake sequence
 
@@ -115,7 +118,7 @@ A rule takes the apply slot like a profile apply, after the session slot is rele
 
 - **A rule meets a user's profile apply:** the rule does not run, and its run says "PrismForge was applying a profile for you".
 - **A user command meets a running rule:** a rule that applies a profile refuses it with "PrismForge is applying a profile", as during any apply, and the view names the profile; the status strip says "applying … by a rule". A rule that switches the lights off refuses it with its own reason: "An automation rule is switching the lights off" (`RuleRunning`).
-- **Two session-end signals:** the run is one shared future. The first signal starts it; the second waits for the same run, within its own limit, and gets its result. So the stop at `Exit` never starts while the rule still writes.
+- **Two session-end signals:** the run is one shared future. The first signal starts it; the second waits for the same run and gets its result. `end_of_session` waits `SESSION_END_WAIT` (1.25 s), longer than the rule's own 1 s limit, so its wait never cancels the shared run. A signal that comes later gets the same run and starts nothing. So the stop at `Exit` never starts while the rule still writes.
 
 `tests/command_locks.rs` drives `automation`, `set_rule` and `mark_runs_seen` like every command, and the sleep, wake and session-end events and the quit rule beside a disconnect, a switch to OpenRGB, the window close and a profile apply in every poll order. A guard test reads the variants of `SystemEvent` from the source and fails when one has no row.
 
@@ -147,7 +150,7 @@ Next to each rule, in the words of the screen:
 | Wake | Acts once the devices are back, within about 30 s; the rule's own work then takes at most 10 s more. |
 | Session end | **Tries to**; Windows closes programs one by one and can end PrismForge or OpenRGB first; devices that keep power may stay lit. |
 
-A failed sleep or session-end run is recorded in `rule-runs.json` and shown at the next start: the notices area shows each failed run the user has not seen yet, with Open Automation and Dismiss. Dismissing it, or opening Automation, marks it seen (`mark_runs_seen`, kept in the run file). A run the store could not write is still shown until PrismForge ends, and the failed write is a notice on Automation. When the store cannot be opened at all, the event publishes that no rule could run. If the system ends PrismForge before the run is written, nothing is shown; the screen cannot tell a run that never started from one that was cut off. A profile applied at quit or session end whose last frame could not be kept says so in its run.
+A failed sleep or session-end run is recorded in `rule-runs.json` and shown at the next start. Failed means: a failure, a frame that was not kept, a lights-off that reached the session too late, or a lights-off where devices were planned and none went dark. A failed run that could not be recorded in time is still shown while PrismForge runs. The notice: the notices area shows each failed run the user has not seen yet, with Open Automation and Dismiss. Dismissing it, or opening Automation, marks it seen (`mark_runs_seen`, kept in the run file). A run the store could not write is still shown until PrismForge ends, and the failed write is a notice on Automation. When the store cannot be opened at all, the event publishes that no rule could run. If the system ends PrismForge before the run is written, nothing is shown; the screen cannot tell a run that never started from one that was cut off. A profile applied at quit or session end whose last frame could not be kept says so in its run.
 
 ## Not verified
 
