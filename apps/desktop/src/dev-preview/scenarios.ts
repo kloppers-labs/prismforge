@@ -315,6 +315,18 @@ function lateLightsOff(): AutomationView {
   return late;
 }
 
+function leftAloneLightsOff(): AutomationView {
+  const view = structuredClone(automations.openRgbAfterSleepAndWake);
+  const run = view.rules.find((rule) => rule.trigger === "Sleeps")?.last_run;
+  if (run && "LightsOff" in run.outcome) {
+    run.outcome.LightsOff.report.devices.push(
+      { device: "dev-fans", name: "Case Fans", outcome: { Skipped: { reason: { DeclaredExternal: { label: "iCUE" } } } } },
+      { device: "dev-mouse", name: "Mouse", outcome: { Skipped: { reason: "NotAvailable" } } },
+    );
+  }
+  return view;
+}
+
 Object.assign(SCENARIOS, {
   "automation-off": { ...base, label: "Automation, no rule on", view: view(sessions.demoConnected), area: "Automation", automation: automations.demoNoRules },
   "automation-sleep-wake": {
@@ -338,6 +350,14 @@ Object.assign(SCENARIOS, {
     view: view(sessions.openRgbConnected),
     area: "Automation",
     automation: lateLightsOff(),
+    rule: "sleeps",
+  },
+  "automation-left-alone": {
+    ...openRgb,
+    label: "Automation, a lights-off run with devices left to other programs",
+    view: view(sessions.openRgbConnected),
+    area: "Automation",
+    automation: leftAloneLightsOff(),
     rule: "sleeps",
   },
   "automation-deleted-profile": {
