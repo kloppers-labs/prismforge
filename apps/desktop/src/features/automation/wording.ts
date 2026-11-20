@@ -25,11 +25,6 @@ export const EVENTS: Record<Trigger, string> = {
 
 export const NOTE = "Rules run only while PrismForge runs.";
 
-export const UNSUPPORTED =
-  "This system does not tell PrismForge when it sleeps, wakes or ends a session, so the sleep, wake and session-end rules work on Windows only for now.";
-
-export const NOT_HERE = "Not on this system: PrismForge receives this event on Windows only for now.";
-
 export const LIGHTS_OFF =
   "Switching the lights off writes black through Direct Mode, or selects a device's own “Off” mode when that mode does not save to device memory. Other devices are left as they are, and the last run names them.";
 
@@ -66,9 +61,13 @@ function actionText(rule: RuleView): string {
   return `apply the profile ${profile.Ready.name}`;
 }
 
+export function eventLabel(trigger: Trigger): string {
+  return `When ${EVENTS[trigger]}`;
+}
+
 /** "When <event>, <action>." */
 export function sentence(rule: RuleView): string {
-  return `When ${EVENTS[rule.trigger]}, ${actionText(rule)}.`;
+  return `${eventLabel(rule.trigger)}, ${actionText(rule)}.`;
 }
 
 function verb(kind: ActionKind): { infinitive: string; present: string } {
@@ -81,22 +80,40 @@ function verb(kind: ActionKind): { infinitive: string; present: string } {
   return { infinitive: "act", present: "acts" };
 }
 
-/** What PrismForge can promise for each event: "will" where PrismForge decides, "tries to" where the system does. */
-export function promiseText(trigger: Trigger, action: RuleAction): string {
+/** The one-line promise under each rule; `promiseDetailText` holds the rest. */
+export function shortPromiseText(trigger: Trigger, action: RuleAction): string {
   const { infinitive, present } = verb(actionKind(action));
   switch (trigger) {
     case "Starts":
-      return "PrismForge will do this while it runs: once, after it starts and connects by itself. That needs “Connect to OpenRGB when PrismForge starts” in Settings. At that connect this rule takes the place of the rule for “PrismForge connects”.";
+      return "PrismForge will do this once, after it starts and connects by itself.";
     case "Connects":
-      return "PrismForge will do this while it runs: once each time you connect, as soon as the devices are read. A connection that PrismForge restores by itself after a loss does not count.";
+      return "PrismForge will do this once each time you connect.";
     case "Sleeps":
-      return `PrismForge tries to ${infinitive} before the PC sleeps. Sleep and hibernate are one event in Windows. Windows gives about two seconds and may skip the notice on low battery; PrismForge gives up after one second.`;
+      return `PrismForge tries to ${infinitive} before the PC sleeps.`;
     case "Wakes":
-      return `PrismForge ${present} once your devices are back, within about 30 seconds: it waits for OpenRGB and for the device list to stop changing, and uses the devices that are back by then.${actionKind(action) === "ApplyProfile" ? " It sets every mode and colour again." : ""}`;
+      return `PrismForge ${present} once devices return, within about 30 seconds.`;
     case "SessionEnds":
-      return `PrismForge tries to ${infinitive}. Windows closes programs one by one and can end PrismForge or OpenRGB before the change reaches your devices. Devices that keep power after a shutdown may stay lit.`;
+      return `PrismForge tries to ${infinitive} as the session ends.`;
     case "Quits":
-      return `PrismForge will ${infinitive} when you quit it, before it ends. It waits at most two seconds.`;
+      return `PrismForge will ${infinitive} when you quit it.`;
+  }
+}
+
+/** What the short promise leaves out: "will" where PrismForge decides, "tries to" where the system does. */
+export function promiseDetailText(trigger: Trigger, action: RuleAction): string {
+  switch (trigger) {
+    case "Starts":
+      return "That needs “Connect to OpenRGB when PrismForge starts” in Settings. At that connect this rule takes the place of the rule for “PrismForge connects”.";
+    case "Connects":
+      return "It acts as soon as the devices are read. A connection that PrismForge restores by itself after a loss does not count.";
+    case "Sleeps":
+      return "Sleep and hibernate are one event in Windows. Windows gives about two seconds and may skip the notice on low battery; PrismForge gives up after one second.";
+    case "Wakes":
+      return `It waits for OpenRGB and for the device list to stop changing, and uses the devices that are back by then.${actionKind(action) === "ApplyProfile" ? " It sets every mode and colour again." : ""}`;
+    case "SessionEnds":
+      return "Windows closes programs one by one and can end PrismForge or OpenRGB before the change reaches your devices. Devices that keep power after a shutdown may stay lit.";
+    case "Quits":
+      return "It does this before it ends, and waits at most two seconds.";
   }
 }
 
@@ -131,8 +148,10 @@ const SETTING_WHEN: Record<OpenRgbSetting, string> = {
 };
 
 export function openRgbAlsoText(act: OpenRgbAct): string {
-  return `OpenRGB also loads its profile “${act.profile}” ${SETTING_WHEN[act.setting]}. Two programs will act; the one that writes last wins. Turn one of them off to choose.`;
+  return `OpenRGB also loads “${act.profile}” ${SETTING_WHEN[act.setting]}; whichever writes last wins.`;
 }
+
+export const OPENRGB_CHOOSE = "Turn PrismForge's rule or OpenRGB's profile setting off to choose which one acts.";
 
 const SKIPS: Record<string, string> = {
   NotResolved: "PrismForge cannot tell it apart from an identical device",
@@ -191,41 +210,53 @@ export function failureText(failure: RunFailure): string {
 }
 
 export function runTime(run: RuleRun): string {
-  return new Date(run.at_ms).toLocaleString();
+  return new Date(run.at_ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-/** One line per result: what changed first, then each device that did not change and why. */
-export function runLines(run: RuleRun): string[] {
+export type RunSummary = { headline: string; problems: string[]; leftAlone: string[] };
+
+/** A device the user gave to another program, or one that was not there, is not a problem. */
+function leftAlone(reason: LightsOffSkip): boolean {
+  return reason === "NotAvailable" || typeof reason === "object";
+}
+
+/** The headline, the lines that need attention, and the devices left as they are on purpose. */
+export function runSummary(run: RuleRun): RunSummary {
   const outcome = run.outcome;
   if ("Failed" in outcome) {
-    return [failureText(outcome.Failed.failure)];
+    return { headline: failureText(outcome.Failed.failure), problems: [], leftAlone: [] };
   }
   if ("Applied" in outcome) {
     const { name, report, missing, not_kept } = outcome.Applied;
-    const lines = [applyHeadline(name, report)];
+    const problems: string[] = [];
     if (missing.length > 0) {
-      lines.push(`Not back after the wake, so not changed: ${missing.join(", ")}.`);
+      problems.push(`Not back after the wake, so not changed: ${missing.join(", ")}.`);
     }
     if (not_kept) {
       const detail = "Session" in not_kept ? sessionErrorText(not_kept.Session) : "PrismForge refused the change.";
-      lines.push(`PrismForge could not keep the profile's last frame as it ended, so the stop may have put back the earlier lighting. ${detail}`);
+      problems.push(`PrismForge could not keep the profile's last frame as it ended, so the stop may have put back the earlier lighting. ${detail}`);
     }
-    return lines;
+    return { headline: applyHeadline(name, report), problems, leftAlone: [] };
   }
   const devices = outcome.LightsOff.report.devices;
   const off = devices.filter((device) => done(device.outcome)).length;
-  const lines = [`Switched the lights off on ${count(off, "device", "devices")}.`];
+  const summary: RunSummary = { headline: `Switched the lights off on ${count(off, "device", "devices")}.`, problems: [], leftAlone: [] };
   for (const device of devices) {
     const result = device.outcome;
     if (typeof result === "object" && "Skipped" in result) {
-      lines.push(`Skipped ${device.name}: ${skipText(result.Skipped.reason)}.`);
+      const line = `Skipped ${device.name}: ${skipText(result.Skipped.reason)}.`;
+      (leftAlone(result.Skipped.reason) ? summary.leftAlone : summary.problems).push(line);
     } else if (typeof result === "object" && "Failed" in result) {
       const error = result.Failed.error;
       const detail = "Session" in error ? sessionErrorText(error.Session) : "PrismForge refused the change.";
-      lines.push(`Not switched off: ${device.name}. ${detail}`);
+      summary.problems.push(`Not switched off: ${device.name}. ${detail}`);
     }
   }
-  return lines;
+  return summary;
+}
+
+export function leftAloneText(devices: number): string {
+  return `${count(devices, "device", "devices")} left as ${devices === 1 ? "it is" : "they are"}, named in Details.`;
 }
 
 /** Skips the session made for a step PrismForge had planned, as opposed to devices left out of the plan. */
@@ -237,7 +268,12 @@ function sessionSkip(outcome: LightsOffOutcome): LightsOffSkip | null {
   return reason === "TooLate" || reason === "Identifying" || typeof reason === "object" ? reason : null;
 }
 
-/** A run that did not do what the rule says: a failure, a frame not kept, a write too late, or no planned device switched off. */
+function plannedSkip(outcome: LightsOffOutcome): boolean {
+  const reason = sessionSkip(outcome);
+  return reason !== null && !leftAlone(reason);
+}
+
+/** A run that did not do what the rule says: a failure, a frame not kept, a write too late, or no planned device switched off; devices left to another program do not count. */
 export function runFailed(run: RuleRun): boolean {
   const outcome = run.outcome;
   if ("Failed" in outcome) {
@@ -249,7 +285,7 @@ export function runFailed(run: RuleRun): boolean {
   const results = outcome.LightsOff.report.devices.map((device) => device.outcome);
   const failed = results.some((result) => typeof result === "object" && "Failed" in result);
   const late = results.some((result) => sessionSkip(result) === "TooLate");
-  const planned = results.filter((result) => done(result) || sessionSkip(result) !== null || (typeof result === "object" && "Failed" in result)).length;
+  const planned = results.filter((result) => done(result) || plannedSkip(result) || (typeof result === "object" && "Failed" in result)).length;
   const off = results.filter(done).length;
   return failed || late || (planned > 0 && off === 0);
 }
@@ -261,7 +297,7 @@ const PAST: Partial<Record<Trigger, string>> = {
 
 /** The notice at start for a failed sleep or session-end run the user has not seen. */
 export function failedRunTitle(run: RuleRun): string {
-  return `${PAST[run.trigger] ?? `When ${EVENTS[run.trigger]}`}, the rule did not do what it should: ${runLines(run)[0] ?? ""}`;
+  return `${PAST[run.trigger] ?? `When ${EVENTS[run.trigger]}`}, the rule did not do what it should: ${runSummary(run).headline}`;
 }
 
 export function supportText(support: EventSupport): string | null {
@@ -269,7 +305,7 @@ export function supportText(support: EventSupport): string | null {
     return null;
   }
   if (support === "NotOnThisSystem") {
-    return UNSUPPORTED;
+    return "Works on Windows only for now.";
   }
   if ("Failed" in support) {
     return `PrismForge could not start receiving sleep, wake and session end, so those rules do nothing until PrismForge starts again: ${support.Failed.detail}`;
@@ -277,15 +313,8 @@ export function supportText(support: EventSupport): string | null {
   return `Part of PrismForge's set-up for system events failed. ${support.Limited.detail}`;
 }
 
-/** Why the sleep, wake and session-end rules cannot run here, or `null` when they can. */
-export function blockedText(support: EventSupport): string | null {
-  if (support === "NotOnThisSystem") {
-    return NOT_HERE;
-  }
-  if (typeof support === "object" && "Failed" in support) {
-    return "Off: PrismForge could not start receiving this event. The note at the top says why.";
-  }
-  return null;
+export function systemEventsBlocked(support: EventSupport): boolean {
+  return support === "NotOnThisSystem" || (typeof support === "object" && "Failed" in support);
 }
 
 export function runNoticeText(notice: StoreNotice): string {

@@ -5,14 +5,16 @@
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { AppState } from "../../lib/state/app.svelte";
   import RuleItem from "./RuleItem.svelte";
-  import { NOTE, blockedText, runNoticeText, supportText } from "./wording";
+  import { NOTE, isSystemEvent, runNoticeText, supportText, systemEventsBlocked } from "./wording";
 
   let { app }: { app: AppState } = $props();
 
   let automation = $derived(app.automation);
   let view = $derived(automation.view);
-  let blocked = $derived(view ? blockedText(view.support) : null);
+  let blocked = $derived(view ? systemEventsBlocked(view.support) : false);
   let support = $derived(view ? supportText(view.support) : null);
+  let prismforgeRules = $derived(view ? view.rules.filter((rule) => !isSystemEvent(rule.trigger)) : []);
+  let systemRules = $derived(view ? view.rules.filter((rule) => isSystemEvent(rule.trigger)) : []);
 
   onMount(() => {
     void opened();
@@ -40,10 +42,7 @@
 <div class="automation">
   <header class="intro">
     <h1>Automation</h1>
-    <p><strong>{NOTE}</strong> Each rule changes your lighting only after you switch it on, and only for its own event.</p>
-    {#if view?.store === "Demo"}
-      <p>These are the rules of demo mode. The rules for your OpenRGB devices are kept apart.</p>
-    {/if}
+    <p>{NOTE}</p>
   </header>
 
   {#if automation.loadFailure}
@@ -54,26 +53,37 @@
   {/if}
 
   {#if view}
-    {#if support}
-      <div class="notice warning" role="status">
-        <ToneIcon tone="warning" />
-        <p>{support}</p>
-      </div>
-    {/if}
     {#each view.notices as notice, index (index)}
       <div class="notice warning">
         <ToneIcon tone="warning" />
         <p>{runNoticeText(notice)}</p>
       </div>
     {/each}
+    <section class="group" aria-labelledby="automation-prismforge">
+      <h2 id="automation-prismforge">PrismForge</h2>
+      <ul class="rules">
+        {#each prismforgeRules as rule (rule.trigger)}
+          <RuleItem {rule} profiles={view.profiles} {automation} available />
+        {/each}
+      </ul>
+    </section>
+    <section class="group" aria-labelledby="automation-system">
+      <h2 id="automation-system">System</h2>
+      {#if support}
+        <p class="note">
+          {#if view.support !== "NotOnThisSystem"}<ToneIcon tone="warning" />{/if}
+          <span>{support}</span>
+        </p>
+      {/if}
+      <ul class="rules">
+        {#each systemRules as rule (rule.trigger)}
+          <RuleItem {rule} profiles={view.profiles} {automation} available={!blocked} />
+        {/each}
+      </ul>
+    </section>
     {#if checkText(view.openrgb)}
       <p class="check">{checkText(view.openrgb)}</p>
     {/if}
-    <ol class="rules" aria-label="Rules">
-      {#each view.rules as rule (rule.trigger)}
-        <RuleItem {rule} profiles={view.profiles} {automation} {blocked} />
-      {/each}
-    </ol>
   {/if}
 </div>
 
@@ -83,7 +93,7 @@
     margin: 0 auto;
     padding: var(--space-6) var(--space-6) var(--space-7);
     display: grid;
-    gap: var(--space-4);
+    gap: var(--space-5);
   }
 
   .intro {
@@ -92,24 +102,34 @@
   }
 
   .intro p,
-  .check {
+  .check,
+  .note {
     color: var(--text-dim);
     max-width: 72ch;
   }
 
-  .intro strong {
-    color: var(--text);
-  }
-
-  .check {
+  .check,
+  .note {
     font-size: var(--font-s);
   }
 
-  .notice {
+  .notice,
+  .note {
     display: flex;
     gap: var(--space-2);
     align-items: flex-start;
     max-width: 72ch;
+  }
+
+  .group {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .group h2 {
+    font-size: var(--font-m);
+    font-weight: var(--weight-strong);
+    color: var(--text-dim);
   }
 
   .rules {

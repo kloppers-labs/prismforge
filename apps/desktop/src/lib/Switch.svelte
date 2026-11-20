@@ -8,6 +8,7 @@
     describedby,
     labelledby,
     mirror,
+    badge = true,
     onchange,
   }: {
     label: string;
@@ -16,6 +17,7 @@
     describedby: string;
     labelledby?: string;
     mirror?: MirrorId;
+    badge?: boolean;
     onchange: (on: boolean) => void;
   } = $props();
 
@@ -34,7 +36,9 @@
 >
   <span class="track" aria-hidden="true"><span class="thumb"></span></span>
   <span class="label" id={labelId}>{label}</span>
-  <span class="state" aria-hidden="true">{on ? "On" : "Off"}</span>
+  {#if badge}
+    <span class="state" aria-hidden="true">{on ? "On" : "Off"}</span>
+  {/if}
 </button>
 
 <style>
@@ -58,7 +62,7 @@
   }
 
   .track {
-    width: 34px;
+    width: var(--switch-track-w);
     height: 20px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--line-control);
@@ -84,7 +88,7 @@
   }
 
   [aria-checked="true"] .thumb {
-    transform: translateX(14px);
+    transform: translateX(calc(var(--switch-track-w) - 20px));
     background: var(--ok);
   }
 

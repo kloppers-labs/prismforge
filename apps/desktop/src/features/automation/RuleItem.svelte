@@ -1,23 +1,26 @@
 <script lang="ts">
   import type { ProfileChoice } from "../../lib/api/bindings/ProfileChoice";
   import type { RuleView } from "../../lib/api/bindings/RuleView";
-  import Details from "../../lib/Details.svelte";
   import { failureText } from "../../lib/errors";
   import Switch from "../../lib/Switch.svelte";
   import ToneIcon from "../../lib/ToneIcon.svelte";
   import type { AutomationState } from "./state.svelte";
   import {
     LIGHTS_OFF,
+    OPENRGB_CHOOSE,
     actionKind,
     endingProfileText,
-    isSystemEvent,
+    eventLabel,
+    leftAloneText,
     openRgbAlsoText,
     profileOf,
     profileProblemText,
-    promiseText,
-    runLines,
+    promiseDetailText,
+    runFailed,
+    runSummary,
     runTime,
     sentence,
+    shortPromiseText,
     type ActionKind,
   } from "./wording";
 
@@ -25,21 +28,26 @@
     rule,
     profiles,
     automation,
-    blocked,
-  }: { rule: RuleView; profiles: ProfileChoice[]; automation: AutomationState; blocked: string | null } = $props();
+    available,
+  }: { rule: RuleView; profiles: ProfileChoice[]; automation: AutomationState; available: boolean } = $props();
 
   let id = $derived(`rule-${rule.trigger.toLowerCase()}`);
+  let label = $derived(eventLabel(rule.trigger));
+  let event = $derived(label.charAt(0).toLowerCase() + label.slice(1));
   let chosen = $state<ActionKind | null>(null);
   let stored = $derived(actionKind(rule.action));
   let kind = $derived(chosen ?? stored);
   let profile = $derived(profileOf(rule.action));
   let known = $derived(profile !== null && profiles.some((choice) => choice.id === profile));
-  let available = $derived(blocked === null || !isSystemEvent(rule.trigger));
   let busy = $derived(automation.pending === rule.trigger);
   let locked = $derived(!available || busy || stored === "Newer");
   let failure = $derived(automation.failure?.trigger === rule.trigger ? failureText(automation.failure.error) : null);
   let problem = $derived(profileProblemText(rule));
   let ending = $derived(endingProfileText(rule.trigger, rule.action));
+  let summary = $derived(rule.last_run ? runSummary(rule.last_run) : null);
+  let failed = $derived(rule.last_run ? runFailed(rule.last_run) : false);
+  let unfinished = $derived(failed && rule.last_run !== null && !("Failed" in rule.last_run.outcome));
+  let open = $state(false);
 
   $effect(() => {
     void rule.action;
@@ -64,149 +72,196 @@
   }
 </script>
 
-<li class="rule" class:on={rule.enabled}>
-  <h2 id="{id}-title">{sentence(rule)}</h2>
-  <div class="controls">
-    <Switch
-      label="Use this rule"
-      labelledby="{id}-title"
-      on={rule.enabled}
-      disabled={locked}
-      describedby="{id}-promise"
-      onchange={(on) => automation.setRule(rule.trigger, on, rule.action)}
-    />
-    <label class="field">
-      <span id="{id}-action">Action</span>
-      <select value={kind} disabled={locked} aria-labelledby="{id}-title {id}-action" onchange={chooseAction}>
-        <option value="Nothing">Do nothing</option>
-        <option value="LightsOff">Switch the lights off</option>
-        <option value="ApplyProfile">Apply a profile</option>
-        {#if stored === "Newer"}
-          <option value="Newer" disabled>Set by a newer PrismForge</option>
-        {/if}
-      </select>
-    </label>
-    {#if kind === "ApplyProfile"}
-      <label class="field">
-        <span id="{id}-profile">Profile</span>
-        <select
-          value={known && chosen === null ? profile : ""}
-          disabled={locked || profiles.length === 0}
-          aria-labelledby="{id}-title {id}-profile"
-          onchange={chooseProfile}
-        >
-          <option value="" disabled>{profiles.length === 0 ? "No profiles saved yet" : "Choose a profile"}</option>
-          {#each profiles as choice (choice.id)}
-            <option value={choice.id}>{choice.name}</option>
-          {/each}
+<li class="rule" {id}>
+  <div class="row" role="group" aria-label={sentence(rule)}>
+    <div class="head">
+      <Switch
+        {label}
+        badge={false}
+        on={rule.enabled}
+        disabled={locked}
+        describedby="{id}-promise"
+        onchange={(on) => automation.setRule(rule.trigger, on, rule.action)}
+      />
+      <div class="selects">
+        <select value={kind} disabled={locked} aria-label="Action {event}" onchange={chooseAction}>
+          <option value="Nothing">Do nothing</option>
+          <option value="LightsOff">Switch the lights off</option>
+          <option value="ApplyProfile">Apply a profile</option>
+          {#if stored === "Newer"}
+            <option value="Newer" disabled>Set by a newer PrismForge</option>
+          {/if}
         </select>
-      </label>
-    {/if}
-  </div>
+        {#if kind === "ApplyProfile"}
+          <select
+            value={known && chosen === null ? profile : ""}
+            disabled={locked || profiles.length === 0}
+            aria-label="Profile {event}"
+            onchange={chooseProfile}
+          >
+            <option value="" disabled>{profiles.length === 0 ? "No profiles saved yet" : "Choose a profile"}</option>
+            {#each profiles as choice (choice.id)}
+              <option value={choice.id}>{choice.name}</option>
+            {/each}
+          </select>
+        {/if}
+      </div>
+    </div>
 
-  <p id="{id}-promise" class="promise">{promiseText(rule.trigger, rule.action)}</p>
-  {#if ending}
-    <p class="hint">{ending}</p>
-  {/if}
-  {#if !available}
-    <p class="hint unavailable">{blocked}</p>
-  {/if}
-  {#if kind === "LightsOff"}
-    <Details summary="What switching the lights off does">
-      <p>{LIGHTS_OFF}</p>
-    </Details>
-  {/if}
-  {#if problem}
-    <div class="notice problem"><ToneIcon tone="problem" /><p>{problem}</p></div>
-  {/if}
-  {#each rule.openrgb_also as act (act.setting)}
-    <div class="notice warning"><ToneIcon tone="warning" /><p>{openRgbAlsoText(act)}</p></div>
-  {/each}
-  {#if failure}
-    <p class="failure" role="alert">{failure}</p>
-  {/if}
-  {#if rule.last_run}
-    <section class="last" aria-label="Last run">
-      <p class="when">Last run: {runTime(rule.last_run)}</p>
-      {#each runLines(rule.last_run) as line, index (index)}
-        <p>{line}</p>
+    <div class="body">
+      <p class="promise">
+        <span id="{id}-promise">{shortPromiseText(rule.trigger, rule.action)}</span>
+        <button type="button" class="quiet more" aria-expanded={open} aria-controls="{id}-details" onclick={() => (open = !open)}>
+          Details<span class="visually-hidden"> {event}</span>
+        </button>
+      </p>
+      <div id="{id}-details" class="details" data-details hidden={!open}>
+        <p>{promiseDetailText(rule.trigger, rule.action)}</p>
+        {#if ending}
+          <p>{ending}</p>
+        {/if}
+        {#if kind === "LightsOff"}
+          <p>{LIGHTS_OFF}</p>
+        {/if}
+        {#if rule.openrgb_also.length > 0}
+          <p>{OPENRGB_CHOOSE}</p>
+        {/if}
+        {#each summary?.leftAlone ?? [] as line, index (index)}
+          <p>{line}</p>
+        {/each}
+      </div>
+      {#if problem}
+        <p class="notice"><ToneIcon tone="problem" /><span>{problem}</span></p>
+      {/if}
+      {#each rule.openrgb_also as act (act.setting)}
+        <p class="notice"><ToneIcon tone="warning" /><span>{openRgbAlsoText(act)}</span></p>
       {/each}
-    </section>
-  {/if}
+      {#if failure}
+        <p class="notice" role="alert"><ToneIcon tone="problem" /><span>{failure}</span></p>
+      {/if}
+      {#if rule.last_run && summary}
+        <p class="last" class:failed>
+          {#if failed}<ToneIcon tone="problem" />{/if}
+          <span>
+            Last run {runTime(rule.last_run)} · {#if unfinished}<span class="visually-hidden">Did not finish:</span>{/if}
+            {summary.headline}
+            {#if summary.leftAlone.length > 0}{leftAloneText(summary.leftAlone.length)}{/if}
+          </span>
+        </p>
+        {#each summary.problems as line, index (index)}
+          <p>{line}</p>
+        {/each}
+      {/if}
+    </div>
+  </div>
 </li>
 
 <style>
   .rule {
-    display: grid;
-    gap: var(--space-2);
-    padding: var(--space-4) 0;
+    padding: var(--space-3) 0;
     border-top: 1px solid var(--line-subtle);
   }
 
-  h2 {
-    font-size: var(--font-l);
-    color: var(--text-dim);
+  .row {
+    display: grid;
+    gap: var(--space-1);
   }
 
-  .on h2 {
-    color: var(--text);
-  }
-
-  .controls {
+  .head {
     display: flex;
     flex-wrap: wrap;
-    align-items: end;
+    align-items: center;
+    justify-content: space-between;
     gap: var(--space-2) var(--space-4);
   }
 
-  .field {
-    display: grid;
-    gap: var(--space-1);
-    font-size: var(--font-s);
-    color: var(--text-dim);
+  .selects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-left: auto;
   }
 
-  .field select {
-    min-width: 14rem;
+  .selects select {
+    min-width: 12rem;
     max-width: 100%;
   }
 
-  .promise,
-  .hint {
-    color: var(--text-dim);
+  .body {
+    display: grid;
+    gap: var(--space-1);
+    padding-left: calc(var(--switch-track-w) + var(--space-2));
     font-size: var(--font-s);
+    color: var(--text-dim);
+  }
+
+  .body p {
     max-width: 72ch;
   }
 
-  .unavailable {
+  .head :global(button[role="switch"]:disabled) {
+    border-color: transparent;
+  }
+
+  .promise {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-2);
+  }
+
+  .more {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0 var(--space-1);
+    font-size: var(--font-s);
+    color: var(--text-dim);
+  }
+
+  .more::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+  }
+
+  .more[aria-expanded="true"]::after {
+    transform: translateY(2px) rotate(-135deg);
+  }
+
+  .more:hover {
     color: var(--text);
   }
 
-  .notice {
+  .details {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-1) 0 var(--space-2) var(--space-3);
+    border-left: 1px solid var(--line-subtle);
+  }
+
+  .details[hidden] {
+    display: none;
+  }
+
+  .notice,
+  .last {
     display: flex;
     gap: var(--space-2);
     align-items: flex-start;
-    max-width: 72ch;
-    font-size: var(--font-s);
   }
 
-  .failure {
-    color: var(--problem);
-    font-size: var(--font-s);
+  .notice,
+  .failed {
+    color: var(--text);
   }
 
-  .last {
-    display: grid;
-    gap: var(--space-1);
-    max-width: 72ch;
-    padding: var(--space-2) var(--space-3);
-    border-left: 3px solid var(--line-control);
-    background: var(--surface-1);
-    border-radius: 0 var(--radius-s) var(--radius-s) 0;
-    font-size: var(--font-s);
-  }
-
-  .when {
-    font-weight: var(--weight-strong);
+  @media (max-width: 700px) {
+    .selects {
+      margin-left: calc(var(--switch-track-w) + var(--space-2));
+    }
   }
 </style>
