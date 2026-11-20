@@ -12,8 +12,7 @@ use prismforge_core::session::{ReconnectPolicy, SessionConfig};
 use prismforge_core::{DeviceRef, OutputTarget, Rgb};
 use prismforge_desktop::{
     Automation, Dispatcher, EventSink, EventSupport, ExitGuard, LAST_STOP_LIMIT, OpenRgbCheck,
-    RuleProfile, Shell, ShellConfig, Stores, SystemEvent, end_of_session, platform_source,
-    quit_with_rule,
+    RuleProfile, Shell, ShellConfig, Stores, SystemEvent, end_of_session, quit_with_rule,
 };
 use prismforge_effects::EffectInstance;
 use prismforge_openrgb::{ClientConfig, Connector, OpenRgbBackend};
@@ -361,7 +360,7 @@ fn macos_and_linux_say_that_sleep_wake_and_session_end_are_not_reported() {
         |_| Box::pin(async {}),
     );
     assert_eq!(
-        platform_source().start(Arc::new(sink)),
+        prismforge_desktop::platform_source().start(Arc::new(sink)),
         EventSupport::NotOnThisSystem
     );
 }
